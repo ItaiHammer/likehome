@@ -20,7 +20,7 @@ export default function ReservePage() {
         <p className="text-sm font-semibold tracking-wider text-blue uppercase">
           Secure checkout
         </p>
-        <h1 className="mt-2 text-[32px] leading-10 font-bold text-ink">
+        <h1 className="mt-2 font-serif text-[32px] leading-10 text-ink">
           Complete your booking
         </h1>
         <p className="mt-2 text-base text-slate">
@@ -151,6 +151,23 @@ export default function ReservePage() {
                 <dd>$1,168 USD</dd>
               </div>
             </dl>
+
+            {/* Only signed-in users with a balance will see this. The server calculates the discount. */}
+            <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border border-edge p-4 has-checked:border-blue has-checked:bg-blue/10 has-focus-visible:ring-2 has-focus-visible:ring-blue">
+              <input
+                type="checkbox"
+                name="useRewardPoints"
+                className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-blue focus:outline-none"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-ink">
+                  Use rewards points
+                </span>
+                <span className="block text-sm text-slate">
+                  You have 2,400 points (worth $24)
+                </span>
+              </span>
+            </label>
 
             <div className="mt-5 rounded-lg bg-blue/10 p-4">
               <h3 className="text-sm font-semibold text-ink">
