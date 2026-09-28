@@ -1,4 +1,46 @@
 @import "tailwindcss";
+@import "react-day-picker/style.css";
+
+.likehome-calendar.rdp-root {
+  --rdp-accent-color: #4C79BD;
+  --rdp-accent-background-color: #E7EEF8;
+
+  --rdp-range_start-background: #4C79BD;
+  --rdp-range_start-color: #ffffff;
+
+  --rdp-range_end-background: #4C79BD;
+  --rdp-range_end-color: #ffffff;
+
+  --rdp-range_middle-background-color: #E7EEF8;
+  --rdp-range_middle-color: #070D2F;
+}
+
+.likehome-calendar .rdp-month_caption {
+  display: none;
+}
+
+.likehome-calendar .rdp-range_start {
+  background:
+          linear-gradient(
+                  to right,
+                  transparent 0 50%,
+                  #E7EEF8 50% 100%
+          );
+}
+
+.likehome-calendar .rdp-range_end {
+  background:
+          linear-gradient(
+                  to left,
+                  transparent 0 50%,
+                  #E7EEF8 50% 100%
+          );
+}
+
+.likehome-calendar .rdp-range_start .rdp-day_button,
+.likehome-calendar .rdp-range_end .rdp-day_button {
+  border-radius: 10px !important;
+}
 
 :root {
   --background: #ffffff;
@@ -23,4 +65,48 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Add this to the bottom of app/globals.css for the dual-handle price slider. */
+.likehome-dual-range {
+  appearance: none;
+  -webkit-appearance: none;
+  pointer-events: none;
+  height: 28px;
+  background: transparent;
+}
+
+.likehome-dual-range::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+}
+
+.likehome-dual-range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 20px;
+  height: 20px;
+  margin-top: -8px;
+  border: 2px solid #ffffff;
+  border-radius: 9999px;
+  background: #4C79BD;
+  box-shadow: 0 1px 4px rgb(7 13 47 / 22%);
+  cursor: pointer;
+}
+
+.likehome-dual-range::-moz-range-track {
+  height: 4px;
+  background: transparent;
+}
+
+.likehome-dual-range::-moz-range-thumb {
+  pointer-events: auto;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #ffffff;
+  border-radius: 9999px;
+  background: #4C79BD;
+  box-shadow: 0 1px 4px rgb(7 13 47 / 22%);
+  cursor: pointer;
 }
