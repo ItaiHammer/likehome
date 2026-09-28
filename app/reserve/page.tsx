@@ -106,7 +106,7 @@ export default function ReservePage() {
                   name="specialRequests"
                   rows={3}
                   placeholder="Late check-in, extra pillows…"
-                  className={`${inputClass} h-auto py-3`}
+                  className={`${inputClass} h-auto resize-none py-3`}
                 />
               </div>
             </section>
