@@ -6,7 +6,7 @@ type PaymentMethod = "card" | "stripe";
 
 const labelClass = "mb-2 block text-base font-semibold text-ink";
 const inputClass =
-  "h-[46px] w-full rounded-[6.4px] border border-edge bg-white px-4 text-base text-slate placeholder:text-slate focus:border-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-blue";
+  "h-[46px] w-full rounded-[6.4px] border border-edge bg-white px-4 text-base text-ink placeholder:text-slate focus:placeholder:text-transparent focus:border-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-blue";
 const tileClass =
   "flex h-[46px] cursor-pointer items-center justify-center gap-2 rounded-[6.4px] border text-base font-semibold has-checked:ring-2 has-checked:ring-blue has-checked:ring-offset-2 has-focus-visible:outline-2 has-focus-visible:outline-offset-4 has-focus-visible:outline-blue";
 

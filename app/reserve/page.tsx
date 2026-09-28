@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 const cardClass = "rounded-xl border border-edge bg-white p-6";
 const labelClass = "mb-2 block text-base font-semibold text-ink";
 const inputClass =
-  "h-[46px] w-full rounded-[6.4px] border border-edge bg-white px-4 text-base text-slate placeholder:text-slate focus:border-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-blue";
+  "h-[46px] w-full rounded-[6.4px] border border-edge bg-white px-4 text-base text-ink placeholder:text-slate focus:placeholder:text-transparent focus:border-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-blue";
 
 // Step 4: static page with hardcoded data. Real data comes from the URL + lib/data in step 6.
 export default function ReservePage() {
@@ -50,7 +50,7 @@ export default function ReservePage() {
                     id="firstName"
                     name="firstName"
                     autoComplete="given-name"
-                    defaultValue="Alex"
+                    placeholder="Alex"
                     className={inputClass}
                   />
                 </div>
@@ -62,7 +62,7 @@ export default function ReservePage() {
                     id="lastName"
                     name="lastName"
                     autoComplete="family-name"
-                    defaultValue="Morgan"
+                    placeholder="Morgan"
                     className={inputClass}
                   />
                 </div>
@@ -77,7 +77,7 @@ export default function ReservePage() {
                   name="email"
                   type="email"
                   autoComplete="email"
-                  defaultValue="alex@example.com"
+                  placeholder="alex@example.com"
                   className={inputClass}
                 />
               </div>
@@ -91,7 +91,7 @@ export default function ReservePage() {
                   name="phone"
                   type="tel"
                   autoComplete="tel"
-                  defaultValue="+1 415 555 0142"
+                  placeholder="+1 415 555 0142"
                   className={inputClass}
                 />
               </div>
