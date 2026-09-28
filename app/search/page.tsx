@@ -52,6 +52,7 @@ export default function SearchPage() {
     const [searchedDestination, setSearchedDestination] = useState("");
     const [selectedDates, setSelectedDates] = useState<DateRange | undefined>();
     const [guests, setGuests] = useState("");
+    const [searchedGuests, setSearchedGuests] = useState("");
     const [hasSearched, setHasSearched] = useState(false);
     const [searchUiResetKey, setSearchUiResetKey] = useState(0);
 
@@ -161,8 +162,9 @@ export default function SearchPage() {
         // This prevents "Clear filters" from showing stays that no longer
         // match the guest count already entered in the search bar.
         const matchesGuests =
-            guests === "" || stay.maxGuests >= Number(guests);
-
+            !hasSearched ||
+            searchedGuests === "" ||
+            stay.maxGuests >= Number(searchedGuests);
         return (
             matchesPrice &&
             matchesRating &&
@@ -238,6 +240,7 @@ export default function SearchPage() {
         setBrowseResultsMode(null);
         setCurrentPage(1);
         setSearchUiResetKey((current) => current + 1);
+        setSearchedGuests("");
 
         requestAnimationFrame(() => {
             window.scrollTo({ top: 0, behavior: "smooth" });
@@ -289,6 +292,7 @@ export default function SearchPage() {
          * guests, filters, sort, and pagination in the agreed request format.
          */
         setSearchedDestination(trimmedDestination);
+        setSearchedGuests(guests.trim());
         setHasSearched(true);
         setBrowseResultsMode(null);
         setCurrentPage(1);
@@ -304,6 +308,7 @@ export default function SearchPage() {
     const handlePopularDestination = (searchValue: string) => {
         setDestination(searchValue);
         setSearchedDestination(searchValue);
+        setSearchedGuests("");
 
         // Destination cards are browsing shortcuts, so dates/guests are not
         // required before showing their listings.
@@ -339,6 +344,7 @@ export default function SearchPage() {
         setSearchedDestination("");
         setSelectedDates(undefined);
         setGuests("");
+        setSearchedGuests("");
 
         setDestinationError("");
         setDateError("");
@@ -406,57 +412,24 @@ export default function SearchPage() {
                  * spacious version of the page. The full headline and curved
                  * white hero distinguish browsing from an active results view.
                  */
-                <header className="relative z-30 overflow-visible bg-white pb-12">
-                    {/* The light-blue surround is its own layer instead of the
-                     * header background. Because it fades to transparent over a
-                     * white header, the side panels visibly disappear before the
-                     * Popular destinations section begins. */}
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 top-[64px] z-0 bg-[linear-gradient(to_bottom,#E7EEF8_0%,#E7EEF8_52%,rgba(231,238,248,0.68)_70%,rgba(231,238,248,0)_100%)]" />
-
+                <header className="relative z-30 overflow-visible bg-white pb-2">
                     <div className="relative z-20 bg-white">
                         <Navbar onReturnToStays={handleReturnToStays} />
                     </div>
-                    {/*
-                     * Curved side connectors keep the full-width navbar visually
-                     * attached to the inset hero. The surrounding light blue
-                     * fades into white instead of ending in a hard line.
-                     */}
-                    <div className="pointer-events-none absolute inset-x-0 top-[64px] z-10 h-32 sm:top-[64px] lg:h-36">
-                        <svg
-                            viewBox="0 0 100 140"
-                            preserveAspectRatio="none"
-                            aria-hidden="true"
-                            className="absolute left-0 top-0 h-full w-4 sm:w-8 lg:w-20"
-                        >
-                            <path
-                                d="M0 0 H100 V140 C100 92 84 62 58 38 C37 19 16 6 0 0 Z"
-                                fill="white"
-                            />
-                        </svg>
-
-                        <svg
-                            viewBox="0 0 100 140"
-                            preserveAspectRatio="none"
-                            aria-hidden="true"
-                            className="absolute right-0 top-0 h-full w-4 sm:w-8 lg:w-20"
-                        >
-                            <path
-                                d="M100 0 H0 V140 C0 92 16 62 42 38 C63 19 84 6 100 0 Z"
-                                fill="white"
-                            />
-                        </svg>
-                    </div>
 
                     {/*
-                     * Fade the bottom of the white hero itself so it dissolves
-                     * into the same light-blue-to-white background behind it.
+                     * Decorative side panels are independent of the hero width.
+                     * Keeping them as narrow edge elements prevents them from
+                     * drifting away from the layout at wide/zoomed viewports.
+                     * They extend slightly farther down and then fade before the browse content.
                      */}
-                    <div
-                        className="relative z-10 mx-4 sm:mx-8 lg:mx-20"                        style={{
-                            background:
-                                "linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 72%, rgba(255, 255, 255, 0) 100%)",                        }}
-                    >
-                        <div className="mx-auto max-w-7xl px-6 pb-10 pt-8 lg:px-10 lg:pb-12 lg:pt-10">
+                    <div className="pointer-events-none absolute left-0 top-[64px] z-0 -bottom-5 w-4 rounded-tr-[999px] bg-[linear-gradient(to_bottom,#E7EEF8_0%,#E7EEF8_52%,rgba(231,238,248,0.76)_70%,rgba(231,238,248,0)_100%)] sm:w-8 lg:w-20" />
+                    <div className="pointer-events-none absolute right-0 top-[64px] z-0 -bottom-5 w-4 rounded-tl-[999px] bg-[linear-gradient(to_bottom,#E7EEF8_0%,#E7EEF8_52%,rgba(231,238,248,0.76)_70%,rgba(231,238,248,0)_100%)] sm:w-8 lg:w-20" />
+
+                    {/* White hero; spacing below is intentionally compact so the
+                     * browse content starts soon after the search controls. */}
+                    <div className="relative z-10 mx-4 bg-white sm:mx-8 lg:mx-20">
+                        <div className="mx-auto max-w-7xl px-6 pb-4 pt-8 lg:px-10 lg:pb-5 lg:pt-10">
                             <section className="mb-7">
                                 <h1
                                     className={`${dmSerif.className} max-w-4xl text-4xl leading-tight text-[#070D2F] sm:text-5xl`}
@@ -501,54 +474,19 @@ export default function SearchPage() {
                  * only the compact search controls. Filters remain available only
                  * in SearchForm.
                  */
-                <header className="relative z-30 overflow-visible bg-white pb-10">
-                    {/* Results use a shorter blue surround than the browse page.
-                     * It fades completely before the results heading begins. */}
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 top-[64px] z-0 bg-[linear-gradient(to_bottom,#E7EEF8_0%,rgba(231,238,248,0.78)_34%,rgba(231,238,248,0.42)_54%,rgba(231,238,248,0)_82%,rgba(231,238,248,0)_100%)]" />
-
+                <header className="relative z-30 overflow-visible bg-white pb-2">
                     <div className="relative z-20 bg-white">
                         <Navbar onReturnToStays={handleReturnToStays} />
                     </div>
 
-                    {/*
-                     * Results use the same header language as the browse page:
-                     * full-width white navigation, shallow flowing side curves,
-                     * and a light-blue background that fades into the page. The
-                     * hero itself stays compact so results remain the focus.
-                     */}
-                    <div className="pointer-events-none absolute inset-x-0 top-[64px] z-10 h-20 sm:h-24 lg:h-28">
-                        <svg
-                            viewBox="0 0 100 140"
-                            preserveAspectRatio="none"
-                            aria-hidden="true"
-                            className="absolute left-0 top-0 h-full w-4 sm:w-8 lg:w-20"
-                        >
-                            <path
-                                d="M0 0 H100 V140 C100 92 84 62 58 38 C37 19 16 6 0 0 Z"
-                                fill="white"
-                            />
-                        </svg>
+                    {/* Results keep the same edge treatment as the browse page,
+                     * but the panels extend below the compact search bar and fade
+                     * before the results content takes over. */}
+                    <div className="pointer-events-none absolute left-0 top-[64px] z-0 -bottom-7 w-4 rounded-tr-[999px] bg-[linear-gradient(to_bottom,#E7EEF8_0%,rgba(231,238,248,0.82)_48%,rgba(231,238,248,0.52)_72%,rgba(231,238,248,0)_100%)] sm:w-8 lg:w-20" />
+                    <div className="pointer-events-none absolute right-0 top-[64px] z-0 -bottom-7 w-4 rounded-tl-[999px] bg-[linear-gradient(to_bottom,#E7EEF8_0%,rgba(231,238,248,0.82)_48%,rgba(231,238,248,0.52)_72%,rgba(231,238,248,0)_100%)] sm:w-8 lg:w-20" />
 
-                        <svg
-                            viewBox="0 0 100 140"
-                            preserveAspectRatio="none"
-                            aria-hidden="true"
-                            className="absolute right-0 top-0 h-full w-4 sm:w-8 lg:w-20"
-                        >
-                            <path
-                                d="M100 0 H0 V140 C0 92 16 62 42 38 C63 19 84 6 100 0 Z"
-                                fill="white"
-                            />
-                        </svg>
-                    </div>
-
-                    {/* Keep the compact results hero fade consistent with home. */}
-                    <div
-                        className="relative z-10 mx-4 sm:mx-8 lg:mx-20"                        style={{
-                            background:
-                                "linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 72%, rgba(255, 255, 255, 0) 100%)",                        }}
-                    >
-                        <div className="mx-auto max-w-7xl px-6 pb-7 pt-4 lg:px-10 lg:pb-8 lg:pt-5">
+                    <div className="relative z-10 mx-4 bg-white sm:mx-8 lg:mx-20">
+                        <div className="mx-auto max-w-7xl px-6 pb-4 pt-4 lg:px-10 lg:pb-5 lg:pt-5">
                             <SearchForm
                                 key={searchUiResetKey}
                                 destination={destination}
@@ -578,7 +516,7 @@ export default function SearchPage() {
 
             <div
                 className={`mx-auto max-w-7xl px-6 pb-12 lg:px-10 ${
-                    isBrowseHome ? "pt-6" : "pt-10"
+                    isBrowseHome ? "pt-5" : "pt-7"
                 }`}
             >
                 {isBrowseHome ? (

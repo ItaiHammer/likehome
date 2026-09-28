@@ -72,7 +72,7 @@ export default function Navbar({ onReturnToStays }: NavbarProps) {
                                     onClick={() => setMobileMenuOpen(false)}
                                     className="block w-full px-4 py-3 text-left text-sm font-medium text-[#070D2F] transition hover:bg-[#E7EEF8] hover:text-[#4C79BD]"
                                 >
-                                    My bookings
+                                    myBookings
                                 </Link>
                             </div>
                         )}
@@ -109,7 +109,7 @@ export default function Navbar({ onReturnToStays }: NavbarProps) {
                             href="/dashboard"
                             className="font-medium text-[#070D2F] transition hover:text-[#4C79BD]"
                         >
-                            My bookings
+                            myBookings
                         </Link>
                     </nav>
                 </div>

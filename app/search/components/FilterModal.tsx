@@ -211,7 +211,7 @@ export default function FilterModal({
 
     return (
         <div
-            className="fixed inset-0 z-[70] flex items-end justify-center bg-[#070D2F]/30 sm:items-center sm:px-4 sm:py-8"
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-[#070D2F]/30 px-3 py-5 sm:px-4 sm:py-8"
             onMouseDown={(event) => {
                 if (event.target === event.currentTarget) {
                     onClose();
@@ -222,7 +222,7 @@ export default function FilterModal({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="filters-title"
-                className="flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-t-[24px] bg-white shadow-2xl sm:rounded-[20px]"
+                className="flex max-h-[88dvh] w-full max-w-xl flex-col overflow-hidden rounded-[20px] bg-white shadow-2xl"
             >
                 <div className="flex shrink-0 items-center justify-between border-b border-[#BACBDF] px-5 py-4 sm:px-6">
                     <div>

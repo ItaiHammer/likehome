@@ -19,10 +19,23 @@ const scopeOptions: { value: DestinationScope; label: string }[] = [
     { value: "international", label: "International" },
 ];
 
-const VISIBLE_DESTINATION_COUNT = 3;
 const ROTATION_INTERVAL_MS = 5200;
 const SLIDE_DURATION_MS = 750;
 const CARD_GAP_PX = 16;
+
+function getVisibleDestinationCount(width: number) {
+    // Phone widths get one full card instead of three narrow cards. Small
+    // tablets / landscape phones get two; larger layouts keep three.
+    if (width < 520) {
+        return 1;
+    }
+
+    if (width < 900) {
+        return 2;
+    }
+
+    return 3;
+}
 
 export default function PopularDestinations({
     destinations,
@@ -32,6 +45,7 @@ export default function PopularDestinations({
 }: PopularDestinationsProps) {
     const viewportRef = useRef<HTMLDivElement>(null);
 
+    const [visibleCount, setVisibleCount] = useState(3);
     const [slideIndex, setSlideIndex] = useState(0);
     const [slideStep, setSlideStep] = useState(0);
     const [transitionEnabled, setTransitionEnabled] = useState(true);
@@ -48,22 +62,19 @@ export default function PopularDestinations({
      * every destination card directly clickable.
      */
     const carouselDestinations = useMemo(() => {
-        if (destinations.length <= VISIBLE_DESTINATION_COUNT) {
+        if (destinations.length <= visibleCount) {
             return destinations;
         }
 
-        // Duplicate the first three cards so the final slide can loop smoothly
-        // back to the beginning without a visible jump.
-        return [
-            ...destinations,
-            ...destinations.slice(0, VISIBLE_DESTINATION_COUNT),
-        ];
-    }, [destinations]);
+        // Duplicate only as many cards as are currently visible so the final
+        // slide can loop smoothly on desktop, tablet, and phone widths.
+        return [...destinations, ...destinations.slice(0, visibleCount)];
+    }, [destinations, visibleCount]);
 
     useEffect(() => {
         setSlideIndex(0);
         setTransitionEnabled(true);
-    }, [destinationScope, destinations]);
+    }, [destinationScope, destinations, visibleCount]);
 
     useEffect(() => {
         const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -80,32 +91,43 @@ export default function PopularDestinations({
     }, []);
 
     useEffect(() => {
-        const updateSlideStep = () => {
+        const updateCarouselSizing = () => {
             const viewportWidth = viewportRef.current?.clientWidth ?? 0;
 
             if (viewportWidth === 0) {
                 return;
             }
 
+            const nextVisibleCount = getVisibleDestinationCount(viewportWidth);
+            setVisibleCount(nextVisibleCount);
+
             const cardWidth =
-                (viewportWidth -
-                    CARD_GAP_PX * (VISIBLE_DESTINATION_COUNT - 1)) /
-                VISIBLE_DESTINATION_COUNT;
+                (viewportWidth - CARD_GAP_PX * (nextVisibleCount - 1)) /
+                nextVisibleCount;
 
             setSlideStep(cardWidth + CARD_GAP_PX);
         };
 
-        updateSlideStep();
-        window.addEventListener("resize", updateSlideStep);
+        updateCarouselSizing();
 
-        return () => window.removeEventListener("resize", updateSlideStep);
+        const resizeObserver = new ResizeObserver(updateCarouselSizing);
+        if (viewportRef.current) {
+            resizeObserver.observe(viewportRef.current);
+        }
+
+        window.addEventListener("resize", updateCarouselSizing);
+
+        return () => {
+            resizeObserver.disconnect();
+            window.removeEventListener("resize", updateCarouselSizing);
+        };
     }, []);
 
     useEffect(() => {
         if (
             paused ||
             prefersReducedMotion ||
-            destinations.length <= VISIBLE_DESTINATION_COUNT ||
+            destinations.length <= visibleCount ||
             slideStep === 0
         ) {
             return;
@@ -117,16 +139,19 @@ export default function PopularDestinations({
         }, ROTATION_INTERVAL_MS);
 
         return () => window.clearInterval(interval);
-    }, [destinations.length, paused, prefersReducedMotion, slideStep]);
+    }, [
+        destinations.length,
+        paused,
+        prefersReducedMotion,
+        slideStep,
+        visibleCount,
+    ]);
 
     const handleTransitionEnd = () => {
         if (slideIndex < destinations.length) {
             return;
         }
 
-        // We are currently showing the duplicated first three cards. Reset the
-        // track to the real first card with transitions disabled, then restore
-        // animation on the following frame.
         setTransitionEnabled(false);
         setSlideIndex(0);
 
@@ -138,7 +163,7 @@ export default function PopularDestinations({
     };
 
     return (
-        <section className="mb-10">
+        <section className="mb-8">
             <div>
                 <h2 className={`${dmSerif.className} text-3xl`}>
                     Popular destinations
@@ -180,9 +205,10 @@ export default function PopularDestinations({
                     onTransitionEnd={handleTransitionEnd}
                     style={{
                         transform: `translate3d(-${slideIndex * slideStep}px, 0, 0)`,
-                        transition: transitionEnabled && !prefersReducedMotion
-                            ? `transform ${SLIDE_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
-                            : "none",
+                        transition:
+                            transitionEnabled && !prefersReducedMotion
+                                ? `transform ${SLIDE_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
+                                : "none",
                     }}
                 >
                     {carouselDestinations.map((place, index) => (
@@ -191,9 +217,8 @@ export default function PopularDestinations({
                             className="min-w-0 shrink-0"
                             style={{
                                 width: `calc((100% - ${
-                                    CARD_GAP_PX *
-                                    (VISIBLE_DESTINATION_COUNT - 1)
-                                }px) / ${VISIBLE_DESTINATION_COUNT})`,
+                                    CARD_GAP_PX * (visibleCount - 1)
+                                }px) / ${visibleCount})`,
                             }}
                         >
                             <DestinationCard
