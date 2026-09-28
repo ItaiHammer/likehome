@@ -1,77 +1,17 @@
-export type PropertyType =
-    | "Hotel"
-    | "Resort"
-    | "Motel"
-    | "Bed & Breakfast"
-    | "Apartment"
-    | "Condo"
-    | "Vacation home"
-    | "Villa"
-    | "Townhome"
-    | "Cabin / Cottage";
+import type { Listing, PopularDestination } from "./types";
 
-export type GoodFor =
-    | "Couples"
-    | "Families"
-    | "Groups";
-
-export type Listing = {
-    id: number;
-    name: string;
-    city: string;
-    region?: string;
-    country: string;
-
-    pricePerNight: number;
-    rating: number;
-
-    propertyType: PropertyType;
-
-    amenities: string[];
-
-    /*
-     * Short selling points shown directly
-     * on the listing card.
-     */
-    highlights: string[];
-
-    maxGuests: number;
-    beds: number;
-
-    /*
-     * Kept for compatibility with the earlier
-     * frontend/backend listing shape.
-     */
-    kidFriendly: boolean;
-
-    connectingRooms: boolean;
-    goodFor: GoodFor[];
-
-    /*
-     * Backend/API can eventually provide one or
-     * more listing photos here.
-     */
-    imageUrls?: string[];
-};
-
-export type DestinationScope =
-    | "nearby"
-    | "national"
-    | "international";
-
-export type PopularDestination = {
-    name: string;
-    searchValue: string;
-    scope: DestinationScope;
-
-    /*
-     * Backend/API can eventually provide the
-     * destination photo here.
-     */
-    imageUrl?: string;
-};
+/**
+ * Temporary frontend data used until the real listing data source is wired in.
+ *
+ * TODO(BACKEND): Replace these arrays with data returned by the project API.
+ * TODO(DATABASE): Ensure the final database schema supports every field used by
+ * the filters and listing cards below.
+ * TODO(ERROR): When API loading is added, distinguish request failures from a
+ * valid zero-results response.
+ */
 
 export const popularDestinations: PopularDestination[] = [
+    // TODO(API): "Nearby" is mock data until real location-aware suggestions exist.
     // Nearby
     {
         name: "Monterey",

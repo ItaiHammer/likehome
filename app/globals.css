@@ -1,112 +1,114 @@
 @import "tailwindcss";
 @import "react-day-picker/style.css";
 
+:root {
+    --background: #ffffff;
+    --foreground: #070d2f;
+    color-scheme: light;
+}
+
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --font-sans: var(--font-geist-sans);
+    --font-mono: var(--font-geist-mono);
+}
+
+
+body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Search calendar                                                            */
+/* -------------------------------------------------------------------------- */
+
 .likehome-calendar.rdp-root {
-  --rdp-accent-color: #4C79BD;
-  --rdp-accent-background-color: #E7EEF8;
+    --rdp-accent-color: #4c79bd;
+    --rdp-accent-background-color: #e7eef8;
 
-  --rdp-range_start-background: #4C79BD;
-  --rdp-range_start-color: #ffffff;
+    --rdp-range_start-background: #4c79bd;
+    --rdp-range_start-color: #ffffff;
 
-  --rdp-range_end-background: #4C79BD;
-  --rdp-range_end-color: #ffffff;
+    --rdp-range_end-background: #4c79bd;
+    --rdp-range_end-color: #ffffff;
 
-  --rdp-range_middle-background-color: #E7EEF8;
-  --rdp-range_middle-color: #070D2F;
+    --rdp-range_middle-background-color: #e7eef8;
+    --rdp-range_middle-color: #070d2f;
 }
 
+/* The page renders its own clickable month/year heading. */
 .likehome-calendar .rdp-month_caption {
-  display: none;
+    display: none;
 }
 
+/* Keep the light range fill connected to each rounded endpoint. */
 .likehome-calendar .rdp-range_start {
-  background:
-          linear-gradient(
-                  to right,
-                  transparent 0 50%,
-                  #E7EEF8 50% 100%
-          );
+    background: linear-gradient(
+        to right,
+        transparent 0 50%,
+        #e7eef8 50% 100%
+    );
 }
 
 .likehome-calendar .rdp-range_end {
-  background:
-          linear-gradient(
-                  to left,
-                  transparent 0 50%,
-                  #E7EEF8 50% 100%
-          );
+    background: linear-gradient(
+        to left,
+        transparent 0 50%,
+        #e7eef8 50% 100%
+    );
 }
 
 .likehome-calendar .rdp-range_start .rdp-day_button,
 .likehome-calendar .rdp-range_end .rdp-day_button {
-  border-radius: 10px !important;
+    border-radius: 10px !important;
 }
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* -------------------------------------------------------------------------- */
+/* Dual-handle price slider                                                   */
+/* -------------------------------------------------------------------------- */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-/* Add this to the bottom of app/globals.css for the dual-handle price slider. */
 .likehome-dual-range {
-  appearance: none;
-  -webkit-appearance: none;
-  pointer-events: none;
-  height: 28px;
-  background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    pointer-events: none;
+    height: 28px;
+    background: transparent;
 }
 
 .likehome-dual-range::-webkit-slider-runnable-track {
-  height: 4px;
-  background: transparent;
+    height: 4px;
+    background: transparent;
 }
 
 .likehome-dual-range::-webkit-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  pointer-events: auto;
-  width: 20px;
-  height: 20px;
-  margin-top: -8px;
-  border: 2px solid #ffffff;
-  border-radius: 9999px;
-  background: #4C79BD;
-  box-shadow: 0 1px 4px rgb(7 13 47 / 22%);
-  cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    pointer-events: auto;
+    width: 20px;
+    height: 20px;
+    margin-top: -8px;
+    border: 2px solid #ffffff;
+    border-radius: 9999px;
+    background: #4c79bd;
+    box-shadow: 0 1px 4px rgb(7 13 47 / 22%);
+    cursor: pointer;
 }
 
 .likehome-dual-range::-moz-range-track {
-  height: 4px;
-  background: transparent;
+    height: 4px;
+    background: transparent;
 }
 
 .likehome-dual-range::-moz-range-thumb {
-  pointer-events: auto;
-  width: 20px;
-  height: 20px;
-  border: 2px solid #ffffff;
-  border-radius: 9999px;
-  background: #4C79BD;
-  box-shadow: 0 1px 4px rgb(7 13 47 / 22%);
-  cursor: pointer;
+    pointer-events: auto;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #ffffff;
+    border-radius: 9999px;
+    background: #4c79bd;
+    box-shadow: 0 1px 4px rgb(7 13 47 / 22%);
+    cursor: pointer;
 }
