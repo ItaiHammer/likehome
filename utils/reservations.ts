@@ -11,6 +11,26 @@ export async function listReservationsByAccount(accountId: string) {
   return { data, error }
 }
 
+export async function getReservationsByHotel(hotelId: string) {
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*')
+    .eq('hotel_id', hotelId)
+  return { data, error }
+}
+
+export async function getReservationsByRoom(roomId: string) {
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*')
+    .eq('room_id', roomId)
+  return { data, error }
+}
+
 export async function getReservation(id: string) {
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)
