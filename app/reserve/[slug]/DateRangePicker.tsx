@@ -7,9 +7,9 @@ import { labelClass } from "../../_components/ui";
 
 // Field look shared with inputClass: Edge border, blue border + ring while open, danger on error.
 const fieldClass = (active: boolean, error: boolean, filled: boolean) =>
-  `flex h-[46px] w-full items-center rounded-control border bg-surface px-4 text-left text-base outline-none transition focus-visible:border-brand focus-visible:ring-1 focus-visible:ring-brand ${
-    active ? "border-brand ring-1 ring-brand" : error ? "border-danger" : "border-line"
-  } ${filled ? "text-ink" : "text-muted"}`;
+  `flex h-[46px] w-full items-center rounded-control border bg-surface px-4 text-left text-base outline-none transition focus-visible:border-blue focus-visible:ring-1 focus-visible:ring-blue ${
+    active ? "border-blue ring-1 ring-blue" : error ? "border-danger" : "border-edge"
+  } ${filled ? "text-ink" : "text-slate"}`;
 
 export function DateRangePicker({
   checkIn,
@@ -108,13 +108,13 @@ export function DateRangePicker({
         aria-label="Choose your dates"
         data-open={open}
         inert={!open}
-        className="dropdown absolute -left-3 -right-3 top-full z-30 mt-3 rounded-2xl border border-line bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)]"
+        className="dropdown absolute -left-3 -right-3 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)]"
       >
         {/* Notch pointing at the field being filled, so the calendar reads as that field's. */}
         <span
           aria-hidden
           style={{ left: pickingOut ? "calc(75% - 3px)" : "calc(25% - 3px)" }}
-          className="absolute -top-[7px] h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-line bg-surface transition-[left] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
+          className="absolute -top-[7px] h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-edge bg-surface transition-[left] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
         />
         <RangeCalendar
           resetKey={session}

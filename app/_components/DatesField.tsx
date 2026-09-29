@@ -51,7 +51,7 @@ export function DatesField({ className = "" }: { className?: string }) {
 
   return (
     <div ref={ref} className={`relative ${className}`}>
-      <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-slate" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
         <rect x="4" y="5" width="16" height="15" rx="2" />
         <path d="M4 10h16M9 3v4M15 3v4" strokeLinecap="round" />
       </svg>
@@ -61,7 +61,7 @@ export function DatesField({ className = "" }: { className?: string }) {
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={label ? `Dates: ${label}` : "Dates"}
-        className={`min-w-0 flex-1 truncate text-left text-base outline-none ${label ? "text-ink" : "text-muted"}`}
+        className={`min-w-0 flex-1 truncate text-left text-base outline-none ${label ? "text-ink" : "text-slate"}`}
       >
         {label || <RotatingPlaceholder kind="when" paused={open} />}
       </button>
@@ -74,7 +74,7 @@ export function DatesField({ className = "" }: { className?: string }) {
         aria-label="Choose your dates"
         data-open={open}
         inert={!open}
-        className="dropdown absolute left-0 right-0 top-full z-30 mt-3 rounded-2xl border border-line bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:right-auto md:w-[23rem]"
+        className="dropdown absolute left-0 right-0 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:right-auto md:w-[23rem]"
       >
         <RangeCalendar
           resetKey={session}

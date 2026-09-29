@@ -103,7 +103,7 @@ export function DestinationInput({ className = "" }: { className?: string }) {
 
   return (
     <div className={`relative ${className}`}>
-      <PinIcon className="h-5 w-5 shrink-0 text-muted" />
+      <PinIcon className="h-5 w-5 shrink-0 text-slate" />
       {/* The placeholder is drawn over the empty field so it can roll */}
       <span className="relative flex min-w-0 flex-1 items-center">
         <input
@@ -124,21 +124,21 @@ export function DestinationInput({ className = "" }: { className?: string }) {
           aria-autocomplete="list"
           aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
           autoComplete="off"
-          className="w-full min-w-0 bg-transparent text-base text-ink placeholder:text-muted outline-none"
+          className="w-full min-w-0 bg-transparent text-base text-ink placeholder:text-slate outline-none"
         />
         {!query && (
           <span className="pointer-events-none absolute inset-0 flex items-center">
-            <RotatingPlaceholder kind="where" paused={focused} className="w-full text-base text-muted" />
+            <RotatingPlaceholder kind="where" paused={focused} className="w-full text-base text-slate" />
           </span>
         )}
       </span>
 
       <div
         data-open={open}
-        className="dropdown absolute left-0 right-0 top-full z-30 mt-3 rounded-2xl border border-line bg-surface p-2 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:right-auto md:w-[26rem]"
+        className="dropdown absolute left-0 right-0 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-2 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:right-auto md:w-[26rem]"
       >
         {!query.trim() && (
-          <p className="cascade px-3 pb-1 pt-2 text-sm font-semibold text-muted">Popular destinations</p>
+          <p className="cascade px-3 pb-1 pt-2 text-sm font-semibold text-slate">Popular destinations</p>
         )}
         <ul role="listbox" id={listId} aria-label="Destinations">
           {results.map((d, i) => (
@@ -152,22 +152,22 @@ export function DestinationInput({ className = "" }: { className?: string }) {
               onClick={() => choose(d)}
               onMouseEnter={() => setActive(i)}
               style={{ "--i": i + 1 } as React.CSSProperties}
-              className={`cascade flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 ${i === active ? "bg-brand/10" : ""}`}
+              className={`cascade flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 ${i === active ? "bg-blue/10" : ""}`}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue/10 text-blue">
                 <PinIcon className="h-4 w-4" />
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-base font-medium text-ink">
                   <Highlight text={d.name} query={query} />
                 </span>
-                <span className="block truncate text-sm text-muted">{d.region}</span>
+                <span className="block truncate text-sm text-slate">{d.region}</span>
               </span>
             </li>
           ))}
         </ul>
         {query.trim() && results.length === 0 && (
-          <p className="px-3 py-3 text-sm text-muted">No matches yet. Try a city, region or country.</p>
+          <p className="px-3 py-3 text-sm text-slate">No matches yet. Try a city, region or country.</p>
         )}
       </div>
     </div>

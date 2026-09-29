@@ -172,7 +172,7 @@ export function RangeCalendar({
         </button>
       </div>
 
-      <div className="cascade mt-3 grid grid-cols-7 text-center text-sm text-muted" style={cascadeAt(1)} aria-hidden>
+      <div className="cascade mt-3 grid grid-cols-7 text-center text-sm text-slate" style={cascadeAt(1)} aria-hidden>
         {WEEKDAYS.map((w) => (
           <span key={w}>{w}</span>
         ))}
@@ -196,11 +196,11 @@ export function RangeCalendar({
               // Selected ends use the action color; nights in between use Edge, like the logo block.
               let tone: string;
               if (isStart || isEnd)
-                tone = `border-brand bg-brand font-semibold text-white ${isStart && rangeEnd ? "rounded-l-control" : isEnd ? "rounded-r-control" : "rounded-control"}`;
-              else if (inRange) tone = "border-line bg-line text-ink";
-              else if (isPreviewEnd) tone = "rounded-r-control border-brand bg-line text-ink";
-              else if (disabled) tone = "cursor-not-allowed rounded-control border-transparent text-muted";
-              else tone = `rounded-control text-ink hover:border-brand ${day === today ? "border-line" : "border-transparent"}`;
+                tone = `border-blue bg-blue font-semibold text-white ${isStart && rangeEnd ? "rounded-l-control" : isEnd ? "rounded-r-control" : "rounded-control"}`;
+              else if (inRange) tone = "border-edge bg-edge text-ink";
+              else if (isPreviewEnd) tone = "rounded-r-control border-blue bg-edge text-ink";
+              else if (disabled) tone = "cursor-not-allowed rounded-control border-transparent text-slate";
+              else tone = `rounded-control text-ink hover:border-blue ${day === today ? "border-edge" : "border-transparent"}`;
     
               return (
                 <button
@@ -212,7 +212,7 @@ export function RangeCalendar({
                   onPointerEnter={() => setHover(day)}
                   aria-pressed={isStart || isEnd}
                   aria-label={`${formatLong(day)}${isBooked ? ", booked" : ""}${isStart ? ", check-in" : ""}${isEnd ? ", check-out" : ""}`}
-                  className={`relative h-[46px] border text-base tabular-nums transition-colors outline-none focus-visible:z-10 focus-visible:border-brand focus-visible:ring-1 focus-visible:ring-brand ${tone} ${
+                  className={`relative h-[46px] border text-base tabular-nums transition-colors outline-none focus-visible:z-10 focus-visible:border-blue focus-visible:ring-1 focus-visible:ring-blue ${tone} ${
                     isBooked ? "line-through" : ""
                   }`}
                 >
@@ -232,7 +232,7 @@ export function RangeCalendar({
       {/* Moved dates are good news, not an error: plain text with an info mark */}
       {notice?.tone === "info" && (
         <p role="status" className="mt-3 flex gap-2 text-sm text-ink">
-          <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-brand" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-blue" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
             <circle cx="12" cy="12" r="9" />
             <path d="M12 11v5M12 7.5v.5" strokeLinecap="round" />
           </svg>
@@ -240,11 +240,11 @@ export function RangeCalendar({
         </p>
       )}
 
-      <div className="cascade mt-3 border-t border-line pt-3" style={cascadeAt(2 + weeks.length)}>
+      <div className="cascade mt-3 border-t border-edge pt-3" style={cascadeAt(2 + weeks.length)}>
         <p className="text-sm text-ink" aria-live="polite">
           {hint}
         </p>
-        {blockedOffsets.length > 0 && <p className="text-sm text-muted">Struck-through dates are already booked.</p>}
+        {blockedOffsets.length > 0 && <p className="text-sm text-slate">Struck-through dates are already booked.</p>}
         <div className="mt-3 grid grid-cols-2 gap-3">
           <button
             type="button"

@@ -125,13 +125,13 @@ export function StayReservation({ stay }: { stay: Stay }) {
 
   return (
     <>
-      <Link href="/#stays" className="inline-flex items-center gap-1 text-base font-semibold text-brand hover:text-brand-dark">
+      <Link href="/#stays" className="inline-flex items-center gap-1 text-base font-semibold text-blue hover:text-blue-dark">
         <span aria-hidden>←</span> Back to stays
       </Link>
 
       <div className="mt-4">
         <h1 className="font-serif text-[56px] leading-[64px] text-ink">{stay.name}</h1>
-        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-muted">
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-slate">
           <span>{stay.location}</span>
           <span aria-hidden>·</span>
           <Stars rating={stay.rating} reviews={stay.reviews} />
@@ -153,12 +153,12 @@ export function StayReservation({ stay }: { stay: Stay }) {
                 <label
                   key={r.id}
                   // Room options follow the sheet's field states: default, selected (focus look), disabled.
-                  className={`flex items-center gap-4 rounded-control border p-4 transition sm:gap-6 sm:px-5 has-[:focus-visible]:border-brand has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-brand ${
+                  className={`flex items-center gap-4 rounded-control border p-4 transition sm:gap-6 sm:px-5 has-[:focus-visible]:border-blue has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-blue ${
                     off
                       ? "cursor-not-allowed border-disabled bg-disabled"
                       : on
-                        ? "cursor-pointer border-brand bg-surface ring-1 ring-brand"
-                        : "cursor-pointer border-line bg-surface hover:border-brand"
+                        ? "cursor-pointer border-blue bg-surface ring-1 ring-blue"
+                        : "cursor-pointer border-edge bg-surface hover:border-blue"
                   }`}
                 >
                   <input
@@ -174,20 +174,20 @@ export function StayReservation({ stay }: { stay: Stay }) {
                     className="sr-only"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className={`text-base font-semibold leading-5 ${off ? "text-muted" : "text-ink"}`}>{r.name}</p>
-                    <p className="mt-1 text-sm text-muted">
+                    <p className={`text-base font-semibold leading-5 ${off ? "text-slate" : "text-ink"}`}>{r.name}</p>
+                    <p className="mt-1 text-sm text-slate">
                       {r.description} · Sleeps {r.sleeps}
                     </p>
-                    <p className="text-sm text-muted">{off ? "Sold out right now" : "Free cancellation"}</p>
+                    <p className="text-sm text-slate">{off ? "Sold out right now" : "Free cancellation"}</p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className={`text-base font-semibold ${off ? "text-muted line-through" : "text-ink"}`}>{money(r.nightly)}</p>
-                    <p className="text-sm text-muted">per night</p>
+                    <p className={`text-base font-semibold ${off ? "text-slate line-through" : "text-ink"}`}>{money(r.nightly)}</p>
+                    <p className="text-sm text-slate">per night</p>
                   </div>
                   <span
                     aria-hidden
                     className={`hidden h-[46px] w-28 shrink-0 items-center justify-center rounded-control text-base font-semibold sm:inline-flex ${
-                      off ? "border border-line text-muted" : on ? "bg-brand text-white" : "border border-line bg-surface text-ink"
+                      off ? "border border-edge text-slate" : on ? "bg-blue text-white" : "border border-edge bg-surface text-ink"
                     }`}
                   >
                     {off ? "Sold out" : on ? "Selected" : "Select"}
@@ -202,7 +202,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
           ref={cardRef}
           aria-label="Reserve"
           // Form card from the sheet: white surface, pale blue edge, 50px horizontal inset.
-          className={`scroll-mt-6 rounded-2xl border border-line bg-surface p-5 sm:p-6 lg:p-7 ${step === "stay" ? "lg:sticky lg:top-6" : ""}`}
+          className={`scroll-mt-6 rounded-2xl border border-edge bg-surface p-5 sm:p-6 lg:p-7 ${step === "stay" ? "lg:sticky lg:top-6" : ""}`}
         >
           {step === "stay" && (
             <div className="space-y-5">
@@ -212,9 +212,9 @@ export function StayReservation({ stay }: { stay: Stay }) {
               <div className="flex items-baseline justify-between gap-3">
                 <p>
                   <span className="text-[32px] font-bold leading-10 text-ink">{money(room.nightly)}</span>
-                  <span className="text-base text-muted"> / night</span>
+                  <span className="text-base text-slate"> / night</span>
                 </p>
-                <p className="truncate text-sm text-muted">{room.name}</p>
+                <p className="truncate text-sm text-slate">{room.name}</p>
               </div>
 
               <DateRangePicker
@@ -244,10 +244,10 @@ export function StayReservation({ stay }: { stay: Stay }) {
               />
 
               <div className="flex items-center justify-between gap-3 text-base">
-                <span className="text-muted">Room</span>
+                <span className="text-slate">Room</span>
                 <span className="flex items-baseline gap-3">
                   <span className="font-semibold text-ink">{room.name}</span>
-                  <a href="#rooms" className="text-base font-semibold text-brand hover:text-brand-dark">
+                  <a href="#rooms" className="text-base font-semibold text-blue hover:text-blue-dark">
                     Change
                   </a>
                 </span>
@@ -258,19 +258,19 @@ export function StayReservation({ stay }: { stay: Stay }) {
                   <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
                   <Line label="Cleaning fee" value={money(cleaning)} />
                   <Line label="Taxes and fees" value={money(taxes)} />
-                  <div className="flex justify-between border-t border-line pt-3 text-base font-bold text-ink">
+                  <div className="flex justify-between border-t border-edge pt-3 text-base font-bold text-ink">
                     <dt>Total</dt>
                     <dd>{money(total)}</dd>
                   </div>
                 </dl>
               ) : (
-                <p className="text-sm text-muted">Add your dates to see the total for your stay.</p>
+                <p className="text-sm text-slate">Add your dates to see the total for your stay.</p>
               )}
 
               <button type="button" onClick={reserve} className={`${buttonPrimary} w-full`}>
                 {nights > 0 ? "Reserve" : "Check availability"}
               </button>
-              <p className="text-center text-sm text-muted">You won’t be charged yet.</p>
+              <p className="text-center text-sm text-slate">You won’t be charged yet.</p>
             </div>
           )}
 
@@ -282,7 +282,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
                   setErrors({});
                   setStep("stay");
                 }}
-                className="inline-flex h-11 items-center gap-1.5 text-base font-semibold text-brand hover:text-brand-dark"
+                className="inline-flex h-11 items-center gap-1.5 text-base font-semibold text-blue hover:text-blue-dark"
               >
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M15 6l-6 6 6 6" />
@@ -293,7 +293,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
                 Your details
               </h2>
 
-              <div className="rounded-control border border-line bg-bg p-4 text-sm text-muted">
+              <div className="rounded-control border border-edge bg-paper p-4 text-sm text-slate">
                 <p className="text-base font-semibold leading-5 text-ink">{room.name}</p>
                 <p className="mt-1">
                   {formatShort(checkIn)} – {formatShort(checkOut)} · {nights} {nights === 1 ? "night" : "nights"}
@@ -312,7 +312,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
               <Field id="email" name="email" label="Email address" type="email" placeholder="you@example.com" autoComplete="email" hint="We’ll send your confirmation here." error={errors.email} onChange={() => clear("email")} />
               <Field id="phone" name="phone" label="Phone (optional)" type="tel" placeholder="+1 555 010 0000" autoComplete="tel" />
 
-              <div className="space-y-5 border-t border-line pt-5">
+              <div className="space-y-5 border-t border-edge pt-5">
                 <h3 className="text-base font-semibold leading-5 text-ink">Payment</h3>
                 <Field
                   id="cardNumber"
@@ -360,7 +360,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
                 <Field id="postalCode" name="postalCode" label="Billing postal code" autoComplete="postal-code" placeholder="94107" error={errors.postalCode} onChange={() => clear("postalCode")} />
               </div>
 
-              <p className="text-sm text-muted">
+              <p className="text-sm text-slate">
                 Free cancellation until {formatDate(fromUTC(toUTC(checkIn) - 2 * DAY))}. After that, the first night is non-refundable.
               </p>
               <button type="submit" disabled={submitting} className={`${buttonPrimary} w-full`}>
@@ -376,7 +376,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
                   `Confirm reservation · ${money(total)}`
                 )}
               </button>
-              <p className="text-center text-sm text-muted">By confirming, you agree to the house rules and cancellation policy.</p>
+              <p className="text-center text-sm text-slate">By confirming, you agree to the house rules and cancellation policy.</p>
             </form>
           )}
 
@@ -386,11 +386,11 @@ export function StayReservation({ stay }: { stay: Stay }) {
                 <h2 ref={headingRef} tabIndex={-1} className="text-[32px] font-bold leading-10 text-ink outline-none">
                   You’re booked.
                 </h2>
-                <p className="mt-2 text-base text-muted">
+                <p className="mt-2 text-base text-slate">
                   Confirmation <span className="font-semibold text-ink">{confirmation}</span> is on its way to {guestEmail}.
                 </p>
               </div>
-              <dl className="space-y-3 border-y border-line py-4 text-base">
+              <dl className="space-y-3 border-y border-edge py-4 text-base">
                 <Row label="Room" value={room.name} />
                 <Row label="Check-in" value={formatDate(checkIn)} />
                 <Row label="Check-out" value={formatDate(checkOut)} />
@@ -413,7 +413,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
 
 function Line({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between text-muted">
+    <div className="flex justify-between text-slate">
       <dt>{label}</dt>
       <dd className="text-ink">{value}</dd>
     </div>
@@ -423,7 +423,7 @@ function Line({ label, value }: { label: string; value: string }) {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
-      <dt className="text-muted">{label}</dt>
+      <dt className="text-slate">{label}</dt>
       <dd className="text-right font-semibold text-ink">{value}</dd>
     </div>
   );

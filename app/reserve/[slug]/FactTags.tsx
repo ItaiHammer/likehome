@@ -88,7 +88,7 @@ export function FactTags({ groups, stayName, location }: { groups: FactGroup[]; 
           type="button"
           onClick={() => dialogRef.current?.showModal()}
           aria-haspopup="dialog"
-          className="inline-flex items-center gap-2 text-base font-semibold text-brand hover:text-brand-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          className="inline-flex items-center gap-2 text-base font-semibold text-blue hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
         >
           <Icon>
             <rect x="4" y="4" width="6" height="6" rx="1" />
@@ -110,8 +110,8 @@ export function FactTags({ groups, stayName, location }: { groups: FactGroup[]; 
               aria-expanded={on}
               aria-controls="stay-facts"
               // Same shape as the sheet's outline button; the open tag takes the focus look (blue border).
-              className={`inline-flex h-[46px] shrink-0 items-center gap-2 rounded-control border bg-surface px-4 text-base font-semibold text-ink transition-colors focus-visible:border-brand focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand ${
-                on ? "border-brand ring-1 ring-brand" : "border-line hover:border-brand"
+              className={`inline-flex h-[46px] shrink-0 items-center gap-2 rounded-control border bg-surface px-4 text-base font-semibold text-ink transition-colors focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue ${
+                on ? "border-blue ring-1 ring-blue" : "border-edge hover:border-blue"
               }`}
             >
               <Icon>{ICONS[g.id]}</Icon>
@@ -127,7 +127,7 @@ export function FactTags({ groups, stayName, location }: { groups: FactGroup[]; 
         className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${active ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
       >
         <div className="overflow-hidden">
-          <section aria-labelledby="stay-facts-title" className="mt-4 rounded-2xl border border-line bg-surface p-6 sm:px-8">
+          <section aria-labelledby="stay-facts-title" className="mt-4 rounded-2xl border border-edge bg-surface p-6 sm:px-8">
             <div className="flex items-center justify-between gap-4">
               <h2 id="stay-facts-title" className="text-xl font-semibold leading-7 text-ink">
                 {group.title}
@@ -136,9 +136,9 @@ export function FactTags({ groups, stayName, location }: { groups: FactGroup[]; 
             </div>
             <dl className="mt-5 grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
               {group.items.map((it) => (
-                <div key={it.label} className="border-t border-line pt-3">
+                <div key={it.label} className="border-t border-edge pt-3">
                   <dt className="text-base font-semibold leading-5 text-ink">{it.label}</dt>
-                  <dd className="mt-1 text-sm text-muted">{it.value}</dd>
+                  <dd className="mt-1 text-sm text-slate">{it.value}</dd>
                 </div>
               ))}
             </dl>
@@ -150,7 +150,7 @@ export function FactTags({ groups, stayName, location }: { groups: FactGroup[]; 
         ref={dialogRef}
         aria-labelledby="all-facts-title"
         onClick={(e) => e.target === e.currentTarget && e.currentTarget.close()}
-        className="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-5xl overflow-y-auto rounded-2xl border border-line bg-surface p-0 text-ink backdrop:bg-[#070d2f]/60"
+        className="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-5xl overflow-y-auto rounded-2xl border border-edge bg-surface p-0 text-ink backdrop:bg-[#070d2f]/60"
       >
         <div className="p-6 sm:p-10">
           <div className="flex items-start justify-between gap-6">
@@ -158,7 +158,7 @@ export function FactTags({ groups, stayName, location }: { groups: FactGroup[]; 
               <h2 id="all-facts-title" className="text-[32px] font-bold leading-10">
                 Good to know before you book
               </h2>
-              <p className="mt-1 text-base text-muted">
+              <p className="mt-1 text-base text-slate">
                 {stayName} · {location}
               </p>
             </div>
@@ -166,7 +166,7 @@ export function FactTags({ groups, stayName, location }: { groups: FactGroup[]; 
           </div>
           <div className="mt-8 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
             {groups.map((g) => (
-              <section key={g.id} aria-labelledby={`all-${g.id}`} className="border-t border-line pt-4">
+              <section key={g.id} aria-labelledby={`all-${g.id}`} className="border-t border-edge pt-4">
                 <h3 id={`all-${g.id}`} className="flex items-center gap-2 text-base font-semibold leading-5">
                   <Icon>{ICONS[g.id]}</Icon>
                   {g.title}
@@ -175,7 +175,7 @@ export function FactTags({ groups, stayName, location }: { groups: FactGroup[]; 
                   {g.items.map((it) => (
                     <div key={it.label}>
                       <dt className="text-base leading-5">{it.label}</dt>
-                      <dd className="text-sm text-muted">{it.value}</dd>
+                      <dd className="text-sm text-slate">{it.value}</dd>
                     </div>
                   ))}
                 </dl>

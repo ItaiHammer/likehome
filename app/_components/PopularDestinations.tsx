@@ -294,7 +294,7 @@ export function PopularDestinations() {
 
   // Arrow look when inactive (mirrors iconButton's disabled: styles)
   const arrowInactive =
-    "aria-disabled:cursor-not-allowed aria-disabled:border-disabled aria-disabled:bg-disabled aria-disabled:text-muted aria-disabled:hover:border-disabled";
+    "aria-disabled:cursor-not-allowed aria-disabled:border-disabled aria-disabled:bg-disabled aria-disabled:text-slate aria-disabled:hover:border-disabled";
 
   return (
     <section
@@ -313,7 +313,7 @@ export function PopularDestinations() {
       <h2 id={`${baseId}-title`} className="font-serif text-[40px] leading-[48px] text-ink">
         Popular destinations
       </h2>
-      <p className="mt-1 text-base text-muted">The places guests are booking most, close by, across the country and around the world.</p>
+      <p className="mt-1 text-base text-slate">The places guests are booking most, close by, across the country and around the world.</p>
 
       {/* relative z-[1]: stays clickable above the track's top bleed padding */}
       <div className="relative z-[1] mt-5 flex flex-wrap items-center justify-between gap-3">
@@ -331,7 +331,7 @@ export function PopularDestinations() {
                 tabIndex={selected ? 0 : -1}
                 onClick={() => selectTab(t.id)}
                 onKeyDown={(e) => onTabKey(e, i)}
-                className={selected ? `${buttonPrimary} border border-brand` : buttonSecondary}
+                className={selected ? `${buttonPrimary} border border-blue` : buttonSecondary}
               >
                 {t.label}
               </button>
@@ -418,7 +418,7 @@ export function PopularDestinations() {
                   onPointerMove={tilt}
                   onPointerLeave={untilt}
                   aria-label={`Search stays in ${d.name}, ${d.region}`}
-                  className={`tilt theme-fade-keep group relative block h-80 w-full overflow-hidden rounded-lg border border-line text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand sm:h-96 lg:h-[420px] ${
+                  className={`tilt theme-fade-keep group relative block h-80 w-full overflow-hidden rounded-lg border border-edge text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue sm:h-96 lg:h-[420px] ${
                     dragging ? "cursor-grabbing" : "cursor-grab"
                   }`}
                 >
@@ -455,7 +455,7 @@ export function PopularDestinations() {
           }}
           aria-label={autoplay ? "Pause the carousel" : "Play the carousel"}
           title={autoplay ? "Pause" : "Play"}
-          className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-ink transition-colors hover:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-edge bg-surface text-ink transition-colors hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
         >
           {/* Countdown to the next move */}
           <svg viewBox="0 0 28 28" className={`absolute -inset-px -rotate-90 transition-opacity ${playing ? "opacity-100" : "opacity-0"}`} aria-hidden>
@@ -470,7 +470,7 @@ export function PopularDestinations() {
               strokeLinecap="round"
               strokeDasharray={RING}
               strokeDashoffset={RING}
-              className="text-brand"
+              className="text-blue"
             />
           </svg>
           <svg viewBox="0 0 20 20" className="h-3 w-3" fill="currentColor" aria-hidden>
@@ -489,7 +489,7 @@ export function PopularDestinations() {
               tabIndex={-1}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => goTo(i)}
-              className={`h-2 rounded-full transition-all duration-300 ${visible.includes(i) ? "w-6 bg-brand" : "w-2 bg-muted hover:bg-ink"}`}
+              className={`h-2 rounded-full transition-all duration-300 ${visible.includes(i) ? "w-6 bg-blue" : "w-2 bg-slate hover:bg-ink"}`}
             />
           ))}
         </div>

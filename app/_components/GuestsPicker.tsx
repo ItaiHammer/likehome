@@ -35,7 +35,7 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
 
   return (
     <div ref={ref} className={`relative ${className}`}>
-      <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-slate" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
         <circle cx="12" cy="8" r="3.5" />
         <path d="M5 20a7 7 0 0 1 14 0" strokeLinecap="round" />
       </svg>
@@ -49,7 +49,7 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
         <span className="truncate">
           {total} {total === 1 ? "guest" : "guests"}
         </span>
-        <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-muted transition ${open ? "rotate-180" : ""}`} fill="currentColor" aria-hidden>
+        <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-slate transition ${open ? "rotate-180" : ""}`} fill="currentColor" aria-hidden>
           <path d="M5.5 7.5L10 12l4.5-4.5" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
@@ -62,7 +62,7 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
         aria-label="Choose guests"
         data-open={open}
         inert={!open}
-        className="dropdown absolute right-0 left-0 top-full z-30 mt-3 rounded-2xl border border-line bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:left-auto md:w-80"
+        className="dropdown absolute right-0 left-0 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:left-auto md:w-80"
       >
         {rows.map((r, i) => (
           <div
@@ -72,7 +72,7 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
           >
             <div>
               <p className="text-sm font-semibold text-ink">{r.label}</p>
-              <p className="text-xs text-muted">{r.hint}</p>
+              <p className="text-xs text-slate">{r.hint}</p>
             </div>
             <div className="flex items-center gap-3">
               <StepButton label={`Fewer ${r.label.toLowerCase()}`} disabled={counts[r.key] <= r.min} onClick={() => step(r.key, -1)}>
@@ -90,7 +90,7 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="cascade mt-2 h-[46px] w-full rounded-control bg-brand text-base font-semibold text-white hover:bg-brand-dark"
+          className="cascade mt-2 h-[46px] w-full rounded-control bg-blue text-base font-semibold text-white hover:bg-blue-dark"
           style={{ "--i": rows.length } as React.CSSProperties}
         >
           Done
@@ -117,7 +117,7 @@ function StepButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center rounded-control border border-line text-ink transition hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-line disabled:hover:text-ink"
+      className="flex h-8 w-8 items-center justify-center rounded-control border border-edge text-ink transition hover:border-blue hover:text-blue disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-edge disabled:hover:text-ink"
     >
       <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
         {children}

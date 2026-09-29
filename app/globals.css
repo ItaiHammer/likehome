@@ -22,13 +22,13 @@
  * the artwork.
  */
 :root {
-  --bg: #faf7f2; /* Paper: page background */
+  --paper: #faf7f2; /* Paper: page background */
   --surface: #ffffff; /* White: cards */
   --ink: #070d2f; /* Ink: headings and field labels */
-  --muted: #536383; /* Slate: body, helper and input text */
-  --line: #bac8df; /* Edge: borders, rules, logo block */
-  --brand: #4c79bd; /* Blue: primary action and links */
-  --brand-dark: #3d66a6; /* Blue, hover */
+  --slate: #536383; /* Slate: body, helper and input text */
+  --edge: #bac8df; /* Edge: borders, rules, logo block */
+  --blue: #4c79bd; /* Blue: primary action and links */
+  --blue-dark: #3d66a6; /* Blue, hover */
   --danger: #c9474f; /* Field error */
   --disabled: #e6ebf3; /* Disabled field / button fill */
   --mark: #bac8df; /* Logo placeholder */
@@ -39,13 +39,13 @@
 }
 
 [data-theme="dark"] {
-  --bg: #0b1022;
+  --paper: #0b1022;
   --surface: #141b33;
   --ink: #eef1f8;
-  --muted: #9aa6bf;
-  --line: #2c3857;
-  --brand: #6e95d6;
-  --brand-dark: #87a7de;
+  --slate: #9aa6bf;
+  --edge: #2c3857;
+  --blue: #6e95d6;
+  --blue-dark: #87a7de;
   --danger: #e2777d;
   --disabled: #1d2542;
   --mark: #3a4a70;
@@ -60,31 +60,31 @@
  * page changes in step over --theme-fade. (Per-element transitions lagged:
  * inherited text restarted its fade every frame as its parent changed.)
  */
-@property --bg { syntax: "<color>"; inherits: true; initial-value: #faf7f2; }
+@property --paper { syntax: "<color>"; inherits: true; initial-value: #faf7f2; }
 @property --surface { syntax: "<color>"; inherits: true; initial-value: #ffffff; }
 @property --ink { syntax: "<color>"; inherits: true; initial-value: #070d2f; }
-@property --muted { syntax: "<color>"; inherits: true; initial-value: #536383; }
-@property --line { syntax: "<color>"; inherits: true; initial-value: #bac8df; }
-@property --brand { syntax: "<color>"; inherits: true; initial-value: #4c79bd; }
-@property --brand-dark { syntax: "<color>"; inherits: true; initial-value: #3d66a6; }
+@property --slate { syntax: "<color>"; inherits: true; initial-value: #536383; }
+@property --edge { syntax: "<color>"; inherits: true; initial-value: #bac8df; }
+@property --blue { syntax: "<color>"; inherits: true; initial-value: #4c79bd; }
+@property --blue-dark { syntax: "<color>"; inherits: true; initial-value: #3d66a6; }
 @property --danger { syntax: "<color>"; inherits: true; initial-value: #c9474f; }
 @property --disabled { syntax: "<color>"; inherits: true; initial-value: #e6ebf3; }
 @property --mark { syntax: "<color>"; inherits: true; initial-value: #bac8df; }
 @property --bar-edge { syntax: "<color>"; inherits: true; initial-value: rgb(255 255 255 / 0.7); }
 :root {
-  transition-property: --bg, --surface, --ink, --muted, --line, --brand, --brand-dark, --danger, --disabled, --mark, --bar-edge;
+  transition-property: --paper, --surface, --ink, --slate, --edge, --blue, --blue-dark, --danger, --disabled, --mark, --bar-edge;
   transition-duration: var(--theme-fade);
   transition-timing-function: var(--theme-ease);
 }
 
 @theme inline {
-  --color-bg: var(--bg);
+  --color-paper: var(--paper);
   --color-surface: var(--surface);
   --color-ink: var(--ink);
-  --color-muted: var(--muted);
-  --color-line: var(--line);
-  --color-brand: var(--brand);
-  --color-brand-dark: var(--brand-dark);
+  --color-slate: var(--slate);
+  --color-edge: var(--edge);
+  --color-blue: var(--blue);
+  --color-blue-dark: var(--blue-dark);
   --color-danger: var(--danger);
   --color-disabled: var(--disabled);
   --color-mark: var(--mark);
@@ -95,7 +95,7 @@
 
 body {
   color: var(--ink);
-  background: var(--bg);
+  background: var(--paper);
 }
 
 /*

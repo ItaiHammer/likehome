@@ -44,10 +44,10 @@ export function PhotoGallery({ stayName }: { stayName: string }) {
           type="button"
           onClick={() => setIndex(0)}
           aria-label={`Open photo 1 of ${PHOTO_COUNT} of ${stayName}`}
-          className="group relative aspect-[664/464] overflow-hidden rounded-2xl border border-line bg-surface outline-none transition-colors hover:border-brand focus-visible:border-brand focus-visible:ring-1 focus-visible:ring-brand lg:col-span-2 lg:row-span-2 lg:aspect-auto lg:rounded-r-control"
+          className="group relative aspect-[664/464] overflow-hidden rounded-2xl border border-edge bg-surface outline-none transition-colors hover:border-blue focus-visible:border-blue focus-visible:ring-1 focus-visible:ring-blue lg:col-span-2 lg:row-span-2 lg:aspect-auto lg:rounded-r-control"
         >
           <Placeholder n={1} large />
-          <span className="absolute bottom-3 right-3 rounded-control border border-line bg-surface px-2.5 py-1 text-sm font-semibold text-ink lg:hidden">
+          <span className="absolute bottom-3 right-3 rounded-control border border-edge bg-surface px-2.5 py-1 text-sm font-semibold text-ink lg:hidden">
             {PHOTO_COUNT} photos
           </span>
         </button>
@@ -57,7 +57,7 @@ export function PhotoGallery({ stayName }: { stayName: string }) {
             type="button"
             onClick={() => setIndex(i + 1)}
             aria-label={`Open photo ${i + 2} of ${PHOTO_COUNT} of ${stayName}`}
-            className={`group relative hidden overflow-hidden border border-line bg-surface outline-none transition-colors hover:border-brand focus-visible:border-brand focus-visible:ring-1 focus-visible:ring-brand lg:block ${corners}`}
+            className={`group relative hidden overflow-hidden border border-edge bg-surface outline-none transition-colors hover:border-blue focus-visible:border-blue focus-visible:ring-1 focus-visible:ring-blue lg:block ${corners}`}
           >
             <Placeholder n={i + 2} />
           </button>
@@ -75,7 +75,7 @@ export function PhotoGallery({ stayName }: { stayName: string }) {
       >
         {open && (
           <div className="pointer-events-none flex h-full flex-col items-center justify-center gap-4 px-4 py-6 sm:px-20">
-            <div className="pointer-events-auto relative aspect-[3/2] w-full max-w-5xl max-h-[calc(100dvh-8rem)] overflow-hidden rounded-2xl border border-line bg-surface">
+            <div className="pointer-events-auto relative aspect-[3/2] w-full max-w-5xl max-h-[calc(100dvh-8rem)] overflow-hidden rounded-2xl border border-edge bg-surface">
               <Placeholder n={index + 1} large />
             </div>
             <p className="pointer-events-auto text-base font-semibold tabular-nums text-white" aria-live="polite">
@@ -118,7 +118,7 @@ export function PhotoGallery({ stayName }: { stayName: string }) {
 
 function Placeholder({ n, large }: { n: number; large?: boolean }) {
   return (
-    <span className="flex h-full w-full items-center justify-center text-muted transition-colors group-hover:text-brand">
+    <span className="flex h-full w-full items-center justify-center text-slate transition-colors group-hover:text-blue">
       <svg
         viewBox="0 0 24 24"
         className={large ? "h-12 w-12" : "h-6 w-6"}
@@ -134,7 +134,7 @@ function Placeholder({ n, large }: { n: number; large?: boolean }) {
       </svg>
       <span
         aria-hidden
-        className="absolute left-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-line px-1.5 text-sm font-semibold tabular-nums text-ink"
+        className="absolute left-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-edge px-1.5 text-sm font-semibold tabular-nums text-ink"
       >
         {n}
       </span>
