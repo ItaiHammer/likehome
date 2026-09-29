@@ -6,7 +6,7 @@ import { GuestsPicker } from "./_components/GuestsPicker";
 import { PopularDestinations } from "./_components/PopularDestinations";
 import { SearchDrift } from "./_components/SearchDrift";
 import { SkyBackground } from "./_components/SkyBackground";
-import { Stars } from "./_components/ui";
+import { buttonPrimary, Stars } from "./_components/ui";
 import { WindowScene } from "./_components/WindowScene";
 import { STAYS } from "./_data/stays";
 import coastalRoom from "./_assets/coastal-room.webp";
@@ -127,12 +127,9 @@ export default function Home() {
                 ))}
               </ul>
               <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-                <Link
-                  href="/signup"
-                  className="group inline-flex h-[46px] items-center gap-2 rounded-control bg-blue pl-6 pr-5 text-base font-semibold text-white shadow-[0_12px_24px_-12px_rgba(76,121,189,0.9)] transition duration-200 hover:-translate-y-0.5 hover:bg-blue-dark hover:shadow-[0_16px_30px_-12px_rgba(76,121,189,0.95)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue active:translate-y-0"
-                >
-                  Join for free
-                  <Arrow className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                {/* The plain primary button from the component sheet */}
+                <Link href="/signup" className={buttonPrimary}>
+                  Create account
                 </Link>
                 <p className="text-base text-slate">
                   Already a member?{" "}
