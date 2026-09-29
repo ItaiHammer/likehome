@@ -3,7 +3,7 @@
 /* `dark:` utilities follow the data-theme attribute set in layout.tsx */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* `motion-reduce:` follows data-motion (OS setting by default, overridable with MotionToggle) */
+/* `motion-reduce:` follows data-motion (set from the OS "reduce motion" setting) */
 @custom-variant motion-reduce (&:where([data-motion="reduce"], [data-motion="reduce"] *));
 
 /* Reduced motion: everything settles instantly; components below pick a still frame */

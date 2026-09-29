@@ -12,7 +12,7 @@ const subscribe = (cb: () => void) => {
 const isDark = () => document.documentElement.dataset.theme === "dark";
 
 /*
- * Square icon button beside MotionToggle, with the same border and height. The
+ * Square icon button in the header, with the same border and height as the controls. The
  * inline script in layout.tsx applies the saved theme before first paint and
  * the moon/sun swap via `dark:` styles, so the icon is right from the first
  * frame; the hook only keeps aria-pressed in sync. While the switch settles,

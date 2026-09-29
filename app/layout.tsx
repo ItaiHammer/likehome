@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 
 // Runs before first paint: saved choice wins, otherwise follow the OS setting
 // (for both the theme and reduced motion).
-const themeScript = `(function(){var d=document.documentElement;try{var t=localStorage.getItem("theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.setAttribute("data-theme",t)}catch(e){}try{var m=localStorage.getItem("motion");if(!m)m=matchMedia("(prefers-reduced-motion: reduce)").matches?"reduce":"full";d.setAttribute("data-motion",m)}catch(e){}})()`;
+const themeScript = `(function(){var d=document.documentElement;try{var t=localStorage.getItem("theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.setAttribute("data-theme",t)}catch(e){}try{localStorage.removeItem("motion");var q=matchMedia("(prefers-reduced-motion: reduce)"),f=function(){d.setAttribute("data-motion",q.matches?"reduce":"full")};f();q.addEventListener("change",f)}catch(e){}})()`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

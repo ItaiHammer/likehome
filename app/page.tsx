@@ -160,20 +160,22 @@ export default function Home() {
             </div>
           </div>
   
-          {/* Feature cards: the whole card is the link */}
+          {/* Feature cards: the whole card is the link. A soft blue tint sets them
+              apart from the white cards around them; the link text uses blue-dark
+              because plain blue drops under 4.5:1 contrast on the tint. */}
           <section className="grid gap-4 md:grid-cols-3">
             {features.map((f) => (
               <Link
                 key={f.title}
                 href={f.href}
-                className="group flex flex-col rounded-lg border border-edge bg-surface p-6 focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue sm:p-7"
+                className="group flex flex-col rounded-lg border border-blue/20 bg-blue/10 p-6 transition-colors duration-200 hover:bg-blue/15 focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue sm:p-7"
               >
-                <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue/10 text-blue transition-colors duration-200 group-hover:bg-blue group-hover:text-white">
+                <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue text-white transition-colors duration-200 group-hover:bg-blue-dark">
                   <Icon className="h-6 w-6">{f.icon}</Icon>
                 </span>
                 <h3 className="mt-5 text-xl font-semibold leading-7 text-ink">{f.title}</h3>
                 <p className="mt-2 flex-1 text-base leading-6 text-slate">{f.body}</p>
-                <span className="mt-6 inline-flex items-center gap-1.5 text-base font-semibold text-blue">
+                <span className="mt-6 inline-flex items-center gap-1.5 text-base font-semibold text-blue-dark">
                   {f.link}
                   <Arrow className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                 </span>
