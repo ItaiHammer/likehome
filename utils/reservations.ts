@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
 
-export async function listReservationsByAccount(accountId: string) {
+export async function getReservationsByAccount(accountId: string) {
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)
   const { data, error } = await supabase
