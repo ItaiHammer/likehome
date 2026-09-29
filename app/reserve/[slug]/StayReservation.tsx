@@ -187,7 +187,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
                   <span
                     aria-hidden
                     className={`hidden h-[46px] w-28 shrink-0 items-center justify-center rounded-control text-base font-semibold sm:inline-flex ${
-                      off ? "border border-edge text-slate" : on ? "bg-blue text-white" : "border border-edge bg-surface text-ink"
+                      off ? "border border-edge text-slate" : on ? "bg-blue text-on-blue" : "border border-edge bg-surface text-ink"
                     }`}
                   >
                     {off ? "Sold out" : on ? "Selected" : "Select"}

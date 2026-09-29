@@ -6,7 +6,7 @@ import { GuestsPicker } from "./_components/GuestsPicker";
 import { PopularDestinations } from "./_components/PopularDestinations";
 import { SearchDrift } from "./_components/SearchDrift";
 import { SkyBackground } from "./_components/SkyBackground";
-import { buttonPrimary, Stars } from "./_components/ui";
+import { Button, SectionHeading, Stars, Tag } from "./_components/ui";
 import { WindowScene } from "./_components/WindowScene";
 import { STAYS } from "./_data/stays";
 import coastalRoom from "./_assets/coastal-room.webp";
@@ -89,7 +89,7 @@ export default function Home() {
                 type="submit"
                 aria-label="Search"
                 title="Search"
-                className="flex h-14 shrink-0 items-center justify-center rounded-2xl bg-blue text-white shadow-[0_18px_40px_-22px_rgba(76,121,189,0.9)] transition-colors hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:h-auto md:w-[66px]"
+                className="flex h-14 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(76,121,189,0.9)] transition-colors hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:h-auto md:w-[66px]"
               >
                 {/* Icon only: a square the height of the bar on desktop */}
                 <Icon className="h-6 w-6">
@@ -127,10 +127,7 @@ export default function Home() {
                 ))}
               </ul>
               <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-                {/* The plain primary button from the component sheet */}
-                <Link href="/signup" className={buttonPrimary}>
-                  Create account
-                </Link>
+                <Button href="/signup">Create account</Button>
                 <p className="text-base text-slate">
                   Already a member?{" "}
                   <Link href="/login" className="font-semibold text-blue hover:text-blue-dark">
@@ -167,7 +164,7 @@ export default function Home() {
                 href={f.href}
                 className="group flex flex-col rounded-lg border border-blue/20 bg-blue/10 p-6 transition-colors duration-200 hover:bg-blue/15 focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue sm:p-7"
               >
-                <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue text-white transition-colors duration-200 group-hover:bg-blue-dark">
+                <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue text-on-blue transition-colors duration-200 group-hover:bg-blue-dark">
                   <Icon className="h-6 w-6">{f.icon}</Icon>
                 </span>
                 <h3 className="mt-5 text-xl font-semibold leading-7 text-ink">{f.title}</h3>
@@ -188,8 +185,7 @@ export default function Home() {
             more of a wide screen (up to 1400px, keeping 3rem clear at each edge);
             max(100%, …) keeps it from ever getting narrower than the column. */}
         <section id="stays" className="scroll-mt-6">
-          <h2 className="font-serif text-[40px] leading-[48px] text-ink">Stays that feel like yours</h2>
-          <p className="mt-1 text-base text-slate">Handpicked places our guests keep coming back to.</p>
+          <SectionHeading title="Stays that feel like yours" subtitle="Handpicked places our guests keep coming back to." />
           <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:mx-[calc((100%_-_max(100%,_min(100vw_-_6rem,_1400px)))_/_2)] lg:grid-cols-4">
             {STAYS.map((s) => (
               <li key={s.slug}>
@@ -210,8 +206,8 @@ export default function Home() {
                     <p className="text-sm text-slate">{s.location}</p>
                     <ul className="mt-3 flex flex-1 flex-wrap content-start gap-1.5">
                       {s.tags.map((t) => (
-                        <li key={t} className="rounded-control border border-edge px-2 py-0.5 text-xs text-slate">
-                          {t}
+                        <li key={t}>
+                          <Tag>{t}</Tag>
                         </li>
                       ))}
                     </ul>

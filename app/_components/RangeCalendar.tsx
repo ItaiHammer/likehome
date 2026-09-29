@@ -196,7 +196,7 @@ export function RangeCalendar({
               // Selected ends use the action color; nights in between use Edge, like the logo block.
               let tone: string;
               if (isStart || isEnd)
-                tone = `border-blue bg-blue font-semibold text-white ${isStart && rangeEnd ? "rounded-l-control" : isEnd ? "rounded-r-control" : "rounded-control"}`;
+                tone = `border-blue bg-blue font-semibold text-on-blue ${isStart && rangeEnd ? "rounded-l-control" : isEnd ? "rounded-r-control" : "rounded-control"}`;
               else if (inRange) tone = "border-edge bg-edge text-ink";
               else if (isPreviewEnd) tone = "rounded-r-control border-blue bg-edge text-ink";
               else if (disabled) tone = "cursor-not-allowed rounded-control border-transparent text-slate";

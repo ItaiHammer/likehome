@@ -32,6 +32,7 @@
   --danger: #c9474f; /* Field error */
   --disabled: #e6ebf3; /* Disabled field / button fill */
   --mark: #bac8df; /* Logo placeholder */
+  --on-blue: #ffffff; /* Text and icons on a blue fill */
   --bar-edge: rgb(255 255 255 / 0.7); /* Frosted search bar border */
   --theme-fade: 0.8s; /* Light/dark switch: how long the colors take to fade */
   --theme-ease: cubic-bezier(0.45, 0, 0.55, 1); /* Even in-out fade for the light/dark switch */
@@ -49,6 +50,7 @@
   --danger: #e2777d;
   --disabled: #1d2542;
   --mark: #3a4a70;
+  --on-blue: #0b1022; /* dark text: white on the lighter dark-mode blue is only 3:1 */
   --bar-edge: #2c3857;
   color-scheme: dark;
 }
@@ -71,8 +73,9 @@
 @property --disabled { syntax: "<color>"; inherits: true; initial-value: #e6ebf3; }
 @property --mark { syntax: "<color>"; inherits: true; initial-value: #bac8df; }
 @property --bar-edge { syntax: "<color>"; inherits: true; initial-value: rgb(255 255 255 / 0.7); }
+@property --on-blue { syntax: "<color>"; inherits: true; initial-value: #ffffff; }
 :root {
-  transition-property: --paper, --surface, --ink, --slate, --edge, --blue, --blue-dark, --danger, --disabled, --mark, --bar-edge;
+  transition-property: --paper, --surface, --ink, --slate, --edge, --blue, --blue-dark, --danger, --disabled, --mark, --bar-edge, --on-blue;
   transition-duration: var(--theme-fade);
   transition-timing-function: var(--theme-ease);
 }
@@ -88,6 +91,7 @@
   --color-danger: var(--danger);
   --color-disabled: var(--disabled);
   --color-mark: var(--mark);
+  --color-on-blue: var(--on-blue);
   --font-sans: var(--font-inter);
   --font-serif: var(--font-dm-serif);
   --radius-control: 0.4rem; /* 6.4px on inputs and buttons */

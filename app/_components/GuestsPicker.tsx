@@ -90,7 +90,7 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="cascade mt-2 h-[46px] w-full rounded-control bg-blue text-base font-semibold text-white hover:bg-blue-dark"
+          className="cascade mt-2 h-[46px] w-full rounded-control bg-blue text-base font-semibold text-on-blue hover:bg-blue-dark"
           style={{ "--i": rows.length } as React.CSSProperties}
         >
           Done
