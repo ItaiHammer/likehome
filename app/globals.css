@@ -1,26 +1,227 @@
 @import "tailwindcss";
 
+/* `dark:` utilities follow the data-theme attribute set in layout.tsx */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* `motion-reduce:` follows data-motion (set from the OS "reduce motion" setting) */
+@custom-variant motion-reduce (&:where([data-motion="reduce"], [data-motion="reduce"] *));
+
+/* Reduced motion: everything settles instantly; components below pick a still frame */
+[data-motion="reduce"] *,
+[data-motion="reduce"] *::before,
+[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/*
+ * LikeHome design reference: one text color for headings, one secondary text
+ * color, one border color, one action color. Illustration colors stay inside
+ * the artwork.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #faf7f2; /* Paper: page background */
+  --surface: #ffffff; /* White: cards */
+  --ink: #070d2f; /* Ink: headings and field labels */
+  --slate: #536383; /* Slate: body, helper and input text */
+  --edge: #bac8df; /* Edge: borders, rules, logo block */
+  --blue: #4c79bd; /* Blue: primary action and links */
+  --blue-dark: #3d66a6; /* Blue, hover */
+  --danger: #c9474f; /* Field error */
+  --disabled: #e6ebf3; /* Disabled field / button fill */
+  --mark: #bac8df; /* Logo placeholder */
+  --on-blue: #ffffff; /* Text and icons on a blue fill */
+  --bar-edge: rgb(255 255 255 / 0.7); /* Frosted search bar border */
+  --theme-fade: 0.8s; /* Light/dark switch: how long the colors take to fade */
+  --theme-ease: cubic-bezier(0.45, 0, 0.55, 1); /* Even in-out fade for the light/dark switch */
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --paper: #0b1022;
+  --surface: #141b33;
+  --ink: #eef1f8;
+  --slate: #9aa6bf;
+  --edge: #2c3857;
+  --blue: #6e95d6;
+  --blue-dark: #87a7de;
+  --danger: #e2777d;
+  --disabled: #1d2542;
+  --mark: #3a4a70;
+  --on-blue: #0b1022; /* dark text: white on the lighter dark-mode blue is only 3:1 */
+  --bar-edge: #2c3857;
+  color-scheme: dark;
+}
+
+/*
+ * Theme fade: the palette is registered as real colors so the root can
+ * transition it. Everything that uses a token (text, backgrounds, borders,
+ * inherited text) reads the same in-between value each frame, so the whole
+ * page changes in step over --theme-fade. (Per-element transitions lagged:
+ * inherited text restarted its fade every frame as its parent changed.)
+ */
+@property --paper { syntax: "<color>"; inherits: true; initial-value: #faf7f2; }
+@property --surface { syntax: "<color>"; inherits: true; initial-value: #ffffff; }
+@property --ink { syntax: "<color>"; inherits: true; initial-value: #070d2f; }
+@property --slate { syntax: "<color>"; inherits: true; initial-value: #536383; }
+@property --edge { syntax: "<color>"; inherits: true; initial-value: #bac8df; }
+@property --blue { syntax: "<color>"; inherits: true; initial-value: #4c79bd; }
+@property --blue-dark { syntax: "<color>"; inherits: true; initial-value: #3d66a6; }
+@property --danger { syntax: "<color>"; inherits: true; initial-value: #c9474f; }
+@property --disabled { syntax: "<color>"; inherits: true; initial-value: #e6ebf3; }
+@property --mark { syntax: "<color>"; inherits: true; initial-value: #bac8df; }
+@property --bar-edge { syntax: "<color>"; inherits: true; initial-value: rgb(255 255 255 / 0.7); }
+@property --on-blue { syntax: "<color>"; inherits: true; initial-value: #ffffff; }
+:root {
+  transition-property: --paper, --surface, --ink, --slate, --edge, --blue, --blue-dark, --danger, --disabled, --mark, --bar-edge, --on-blue;
+  transition-duration: var(--theme-fade);
+  transition-timing-function: var(--theme-ease);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-slate: var(--slate);
+  --color-edge: var(--edge);
+  --color-blue: var(--blue);
+  --color-blue-dark: var(--blue-dark);
+  --color-danger: var(--danger);
+  --color-disabled: var(--disabled);
+  --color-mark: var(--mark);
+  --color-on-blue: var(--on-blue);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-dm-serif);
+  --radius-control: 0.4rem; /* 6.4px on inputs and buttons */
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+/*
+ * While a theme switch settles, ThemeToggle puts .theme-fading on <html>.
+ * Elements drop their own color transitions (which would trail the root fade
+ * above) and only keep opacity, for the few things a theme toggles by
+ * opacity, like the sky's night tint. Things that move keep their own
+ * transitions, or they'd snap mid-switch: dropdowns and their rows, and
+ * anything marked .theme-fade-keep (the search bar drift, the tilting tiles).
+ * This outranks reduced motion's instant rule on purpose: a fade isn't
+ * movement.
+ */
+html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade),
+html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::before,
+html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
+  transition-property: opacity !important;
+  transition-duration: var(--theme-fade) !important;
+  transition-timing-function: var(--theme-ease) !important;
+  transition-delay: 0s !important;
+}
+
+/*
+ * Dropdown panels unroll downward from the top edge, then anything marked
+ * `.cascade` inside drops in one after another (set --i on each for its order).
+ */
+.dropdown {
+  clip-path: inset(0 0 100% 0 round 1rem);
+  opacity: 0;
+  transform: translateY(-6px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    clip-path 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.2s ease,
+    visibility 0s linear 0.3s;
+}
+.dropdown[data-open="true"] {
+  clip-path: inset(-40px -40px -60px -40px round 1rem); /* room for the shadow */
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+.dropdown .cascade {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 0.25s ease,
+    transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.dropdown[data-open="true"] .cascade {
+  opacity: 1;
+  transform: none;
+  transition-delay: calc(60ms + var(--i, 0) * 40ms);
+}
+
+[data-motion="reduce"] .dropdown,
+[data-motion="reduce"] .dropdown .cascade {
+  transition: none;
+}
+
+/* WindowScene (stay cards): night layers fade in with the theme, the desert
+   sun fades out. Same timing as the rest of the switch. */
+.ws-night {
+  opacity: 0;
+  transition: opacity var(--theme-fade) var(--theme-ease);
+}
+[data-theme="dark"] .ws-night { opacity: 1; }
+.ws-day {
+  transition: opacity var(--theme-fade) var(--theme-ease);
+}
+[data-theme="dark"] .ws-day { opacity: 0; }
+[data-motion="reduce"] :is(.ws-night, .ws-day) {
+  transition-duration: var(--theme-fade) !important;
+}
+
+/* Popular destination tiles rise in one after another (on load and on each tab switch) */
+.tile-in {
+  animation: tile-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+@keyframes tile-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+}
+/* Reduced motion: no entrance at all (the instant-duration rule above would
+   still hold each tile hidden through its stagger delay) */
+[data-motion="reduce"] .tile-in {
+  animation: none;
+}
+
+/*
+ * Popular destination tiles: 3D tilt toward the cursor (angles set from JS as
+ * --rx/--ry) and a "pop" on hover: a little bigger, lifted above its
+ * neighbors with a shadow. While hovered the transform follows the cursor
+ * quickly; on leave it eases back flat.
+ */
+.tilt {
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(var(--pop, 1));
+  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s ease;
+  will-change: transform;
+}
+.tilt:hover {
+  --pop: 1.04;
+  box-shadow: 0 28px 50px -22px rgba(7, 13, 47, 0.5);
+  transition-duration: 0.15s, 0.35s;
+}
+[data-motion="reduce"] .tilt {
+  transform: none;
+}
+
+/* Search bar placeholders roll like a ticker: old phrase up and out, new one up into place */
+.ph-in {
+  animation: ph-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.ph-out {
+  animation: ph-out 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes ph-in {
+  from { transform: translateY(100%); opacity: 0; }
+}
+@keyframes ph-out {
+  to { transform: translateY(-100%); opacity: 0; }
 }
