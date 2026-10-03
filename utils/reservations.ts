@@ -88,3 +88,19 @@ export async function deleteReservation(id: string) {
     .eq('id', id)
   return { error }
 }
+export async function getAccountOverlappingBookings(
+  hotelId: string,
+  checkIn: string,
+  checkOut: string,
+  excludeReservationId?: string
+) {
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+  const { data, error } = await supabase.rpc('get_account_overlapping_bookings', {
+    p_hotel_id: hotelId,
+    p_check_in: checkIn,
+    p_check_out: checkOut,
+    p_exclude_reservation_id: excludeReservationId ?? null,
+  })
+  return { data: data ?? [], error }
+}
