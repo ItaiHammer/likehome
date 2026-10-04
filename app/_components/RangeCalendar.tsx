@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { addDays, formatLong, formatShort, nightsBetween, todayISO } from "./dates";
 import { buttonPrimary, buttonSecondary, iconButton } from "./ui";
 
@@ -58,6 +58,9 @@ export function RangeCalendar({
   const [hover, setHover] = useState("");
   const [notice, setNotice] = useState<{ tone: "info" | "error"; text: string } | null>(null);
   const [seenReset, setSeenReset] = useState(resetKey);
+  const gridRef = useRef<HTMLDivElement>(null);
+  // A date to focus once its month has rendered (arrow keys can cross months)
+  const pendingFocus = useRef("");
   if (resetKey !== seenReset) {
     setSeenReset(resetKey);
     setView(null);
@@ -74,6 +77,23 @@ export function RangeCalendar({
   const atFirstMonth = !!shown && !!firstMonth && shown.y * 12 + shown.m <= firstMonth.y * 12 + firstMonth.m;
   const crossesBooked = (from: string, to: string) => [...booked].some((b) => b >= from && b < to);
   const rangeEnd = checkOut || (pickingOut && !!checkIn && hover > checkIn && !crossesBooked(checkIn, hover) ? hover : "");
+
+  // Whether a day can't be picked right now: past, or booked (a booked night
+  // can still be a check-out morning). Check-out needs at least one night before it.
+  const isDisabled = (day: string) => {
+    const past = day < today || (pickingOut && !checkIn && day <= today);
+    return past || (booked.has(day) && !(pickingOut && day > checkIn));
+  };
+
+  // After arrowing into another month, focus the target day once it has rendered
+  useEffect(() => {
+    if (!pendingFocus.current) return;
+    const el = gridRef.current?.querySelector<HTMLButtonElement>(`[data-date="${pendingFocus.current}"]`);
+    if (el) {
+      el.focus();
+      pendingFocus.current = "";
+    }
+  });
 
   function pick(day: string) {
     setNotice(null);
@@ -123,12 +143,26 @@ export function RangeCalendar({
     return "";
   }
 
+  // Arrow keys move a day (left/right) or a week (up/down), skipping dates that
+  // can't be picked and crossing into the next or previous month as needed.
   function onGridKey(e: React.KeyboardEvent<HTMLDivElement>) {
     const step = ARROW_STEPS[e.key];
     const from = (e.target as HTMLElement).dataset.date;
-    if (!step || !from) return;
+    if (!step || !from || !today) return;
     e.preventDefault();
-    e.currentTarget.querySelector<HTMLButtonElement>(`[data-date="${addDays(from, step)}"]:not(:disabled)`)?.focus();
+    let day = from;
+    for (let i = 0; ; i++) {
+      day = addDays(day, step);
+      if (day < today || i > 400) return; // nothing pickable that way
+      if (!isDisabled(day)) break;
+    }
+    const target = monthOf(day);
+    if (shown && (target.y !== shown.y || target.m !== shown.m)) {
+      pendingFocus.current = day;
+      setView(target);
+    } else {
+      gridRef.current?.querySelector<HTMLButtonElement>(`[data-date="${day}"]`)?.focus();
+    }
   }
 
   const cells: (string | null)[] = [];
@@ -178,16 +212,13 @@ export function RangeCalendar({
         ))}
       </div>
 
-      <div onKeyDown={onGridKey} onPointerLeave={() => setHover("")} className="mt-1 flex flex-col gap-y-1">
+      <div ref={gridRef} onKeyDown={onGridKey} onPointerLeave={() => setHover("")} className="mt-1 flex flex-col gap-y-1">
         {weeks.map((week, w) => (
           <div key={w} className="cascade grid grid-cols-7" style={cascadeAt(2 + w)}>
             {week.map((day, i) => {
               if (!day) return <span key={`pad-${i}`} aria-hidden />;
-              // Check-out needs at least one night before it.
-              const past = day < today || (pickingOut && !checkIn && day <= today);
               const isBooked = booked.has(day);
-              // A booked night can still be a check-out morning.
-              const disabled = past || (isBooked && !(pickingOut && day > checkIn));
+              const disabled = isDisabled(day);
               const isStart = day === checkIn;
               const isEnd = day === checkOut;
               const inRange = !!checkIn && !!rangeEnd && day > checkIn && day < rangeEnd;

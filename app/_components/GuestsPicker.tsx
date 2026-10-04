@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const rows = [
   { key: "adults", label: "Adults", hint: "Ages 13 or above", min: 1, max: 16 },
@@ -14,6 +14,13 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const [counts, setCounts] = useState<Counts>({ adults: 2, children: 0 });
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Closed with focus inside the panel (Done, Escape): send focus back to the field
+  useLayoutEffect(() => {
+    if (!open && panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -40,11 +47,13 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
         <path d="M5 20a7 7 0 0 1 14 0" strokeLinecap="round" />
       </svg>
       <button
+        ref={triggerRef}
         type="button"
+        data-trigger
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-base text-ink outline-none"
+        className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-base text-ink outline-hidden"
       >
         <span className="truncate">
           {total} {total === 1 ? "guest" : "guests"}
@@ -58,6 +67,7 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
       <input type="hidden" name="children" value={counts.children} />
 
       <div
+        ref={panelRef}
         role="dialog"
         aria-label="Choose guests"
         data-open={open}

@@ -136,7 +136,8 @@ export function DestinationInput({ className = "" }: { className?: string }) {
           aria-autocomplete="list"
           aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
           autoComplete="off"
-          className="w-full min-w-0 bg-transparent text-base text-ink placeholder:text-slate outline-none"
+          data-trigger
+          className="w-full min-w-0 bg-transparent text-base text-ink placeholder:text-slate outline-hidden"
         />
         {!query && (
           <span className="pointer-events-none absolute inset-0 flex items-center">

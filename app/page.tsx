@@ -59,7 +59,9 @@ function Arrow({ className }: { className?: string }) {
 
 const perks = ["Member prices on every stay", "Rewards on every night you book", "Free cancellation on most stays"];
 
-const field = "flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3 md:py-5";
+// Each search segment shows a focus ring while its control (marked data-trigger) has keyboard focus
+const field =
+  "flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-4 py-3 md:py-5 has-[[data-trigger]:focus-visible]:ring-2 has-[[data-trigger]:focus-visible]:ring-inset has-[[data-trigger]:focus-visible]:ring-blue";
 
 export default function Home() {
   return (

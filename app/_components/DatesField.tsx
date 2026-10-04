@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { formatShort, nightsBetween } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
 import { RangeCalendar, type RangeField } from "./RangeCalendar";
@@ -15,6 +15,13 @@ export function DatesField({ className = "" }: { className?: string }) {
   // Bumped on each open, so the calendar starts on the month being filled.
   const [session, setSession] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Closed with focus inside the calendar (Done, Escape): send focus back to the field
+  useLayoutEffect(() => {
+    if (!open && panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -56,12 +63,14 @@ export function DatesField({ className = "" }: { className?: string }) {
         <path d="M4 10h16M9 3v4M15 3v4" strokeLinecap="round" />
       </svg>
       <button
+        ref={triggerRef}
         type="button"
+        data-trigger
         onClick={toggle}
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={label ? `Dates: ${label}` : "Dates"}
-        className={`min-w-0 flex-1 truncate text-left text-base outline-none ${label ? "text-ink" : "text-slate"}`}
+        className={`min-w-0 flex-1 truncate text-left text-base outline-hidden ${label ? "text-ink" : "text-slate"}`}
       >
         {label || <RotatingPlaceholder kind="when" paused={open} />}
       </button>
@@ -70,6 +79,7 @@ export function DatesField({ className = "" }: { className?: string }) {
       <input type="hidden" name="checkOut" value={checkOut} />
 
       <div
+        ref={panelRef}
         role="dialog"
         aria-label="Choose your dates"
         data-open={open}

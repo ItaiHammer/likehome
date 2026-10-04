@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { formatDate } from "../../_components/dates";
 import { RangeCalendar, type RangeField } from "../../_components/RangeCalendar";
 import { labelClass } from "../../_components/ui";
 
 // Field look shared with inputClass: Edge border, blue border + ring while open, danger on error.
 const fieldClass = (active: boolean, error: boolean, filled: boolean) =>
-  `flex h-[46px] w-full items-center rounded-control border bg-surface px-4 text-left text-base outline-none transition focus-visible:border-blue focus-visible:ring-1 focus-visible:ring-blue ${
+  `flex h-[46px] w-full items-center rounded-control border bg-surface px-4 text-left text-base outline-hidden transition focus-visible:border-blue focus-visible:ring-1 focus-visible:ring-blue ${
     active ? "border-blue ring-1 ring-blue" : error ? "border-danger" : "border-edge"
   } ${filled ? "text-ink" : "text-slate"}`;
 
@@ -34,7 +34,16 @@ export function DateRangePicker({
   // Bumped whenever a field opens the calendar, so it jumps to that field's month.
   const [session, setSession] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const inRef = useRef<HTMLButtonElement>(null);
+  const outRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const pickingOut = field === "out";
+
+  // Closed with focus inside the calendar (Done, Escape): send focus back to
+  // the field that opened it
+  useLayoutEffect(() => {
+    if (!open && panelRef.current?.contains(document.activeElement)) (field === "out" ? outRef : inRef).current?.focus();
+  }, [open, field]);
 
   useEffect(() => {
     if (!open) return;
@@ -68,6 +77,7 @@ export function DateRangePicker({
             Check-in
           </span>
           <button
+            ref={inRef}
             id="checkIn"
             type="button"
             onClick={() => openField("in")}
@@ -85,6 +95,7 @@ export function DateRangePicker({
             Check-out
           </span>
           <button
+            ref={outRef}
             type="button"
             onClick={() => openField("out")}
             aria-labelledby="check-out-label check-out-value"
@@ -104,6 +115,7 @@ export function DateRangePicker({
       )}
 
       <div
+        ref={panelRef}
         role="dialog"
         aria-label="Choose your dates"
         data-open={open}

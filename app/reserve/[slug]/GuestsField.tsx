@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { buttonPrimary, iconButton, labelClass } from "../../_components/ui";
 
 const ROWS = [
@@ -34,6 +34,13 @@ export function GuestsField({
   error?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Closed with focus inside the panel (Done, Escape): send focus back to the field
+  useLayoutEffect(() => {
+    if (!open && panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -59,6 +66,7 @@ export function GuestsField({
         Guests
       </span>
       <button
+        ref={triggerRef}
         id="guests"
         type="button"
         onClick={() => onOpenChange(!open)}
@@ -66,7 +74,7 @@ export function GuestsField({
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-describedby={error ? "guests-error" : undefined}
-        className={`flex h-[46px] w-full items-center justify-between rounded-control border bg-surface px-4 text-left text-base text-ink outline-none transition focus-visible:border-blue focus-visible:ring-1 focus-visible:ring-blue ${
+        className={`flex h-[46px] w-full items-center justify-between rounded-control border bg-surface px-4 text-left text-base text-ink outline-hidden transition focus-visible:border-blue focus-visible:ring-1 focus-visible:ring-blue ${
           open ? "border-blue ring-1 ring-blue" : error ? "border-danger" : "border-edge"
         }`}
       >
@@ -82,6 +90,7 @@ export function GuestsField({
       )}
 
       <div
+        ref={panelRef}
         role="dialog"
         aria-label="Choose guests"
         data-open={open}
