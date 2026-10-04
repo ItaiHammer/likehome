@@ -15,6 +15,20 @@ import { PhotoGallery } from "./PhotoGallery";
 type Step = "stay" | "details" | "done";
 type Errors = Partial<Record<string, string>>;
 type Popover = "dates" | "guests" | null;
+type Contact = { firstName: string; lastName: string; email: string; phone: string };
+// What was confirmed, frozen at the moment of confirming (later edits can't change it)
+type Booking = {
+  confirmation: string;
+  email: string;
+  roomName: string;
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  total: number;
+};
+
+const CONTACT_FIELDS = ["firstName", "lastName", "email", "phone"] as const;
 
 const money = (n: number) => `$${n.toLocaleString("en-US")}`;
 const formatCard = (v: string) => v.replace(/\D/g, "").slice(0, 19).replace(/(\d{4})(?=\d)/g, "$1 ");
@@ -36,11 +50,16 @@ export function StayReservation({ stay }: { stay: Stay }) {
   const [step, setStep] = useState<Step>("stay");
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
-  const [confirmation, setConfirmation] = useState("");
-  const [guestEmail, setGuestEmail] = useState("");
+  const [booking, setBooking] = useState<Booking | null>(null);
+  // Contact details survive going back to change the stay (card details aren't kept)
+  const [contact, setContact] = useState<Contact>({ firstName: "", lastName: "", email: "", phone: "" });
   const cardRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const confirmTimer = useRef<number | undefined>(undefined);
   const lastStep = useRef(step);
+  // After Reserve, the room list is locked until the guest goes back to their stay
+  const roomsLocked = step !== "stay";
 
   const room = stay.rooms.find((r) => r.id === roomId)!;
   const nights = nightsBetween(checkIn, checkOut);
@@ -61,6 +80,9 @@ export function StayReservation({ stay }: { stay: Stay }) {
     headingRef.current?.focus({ preventScroll: true });
   }, [step]);
 
+  // A confirmation still pending when the page goes away shouldn't fire later
+  useEffect(() => () => window.clearTimeout(confirmTimer.current), []);
+
   const clear = (name: string) =>
     setErrors((e) => {
       if (!e[name]) return e;
@@ -69,19 +91,49 @@ export function StayReservation({ stay }: { stay: Stay }) {
       return next;
     });
 
-  function reserve() {
-    if (!nights) {
+  // What's wrong with the stay as chosen, if anything. Checked on Reserve and
+  // again right before confirming.
+  function stayProblem(): { field: "dates" | "guests"; message: string } | null {
+    if (!nights) return { field: "dates", message: "Choose your dates." };
+    if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
+    if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
+    return null;
+  }
+
+  function showStayProblem(problem: { field: "dates" | "guests"; message: string }) {
+    setStep("stay");
+    if (problem.field === "dates") {
+      setErrors({});
       setPopover("dates");
       return;
     }
-    if (guests > room.sleeps) {
-      setErrors({ guests: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` });
-      document.getElementById("guests")?.focus();
-      return;
-    }
+    setErrors({ guests: problem.message });
+    document.getElementById("guests")?.focus();
+  }
+
+  function reserve() {
+    const problem = stayProblem();
+    if (problem) return showStayProblem(problem);
     setErrors({});
     setPopover(null);
     setStep("details");
+  }
+
+  // Remember what's typed in the contact fields before the form goes away
+  function saveContact() {
+    const form = formRef.current;
+    if (!form) return;
+    const data = new FormData(form);
+    setContact(Object.fromEntries(CONTACT_FIELDS.map((k) => [k, String(data.get(k) ?? "")])) as Contact);
+  }
+
+  function backToStay() {
+    // Going back cancels a confirmation that's still in progress
+    window.clearTimeout(confirmTimer.current);
+    setSubmitting(false);
+    saveContact();
+    setErrors({});
+    setStep("stay");
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -106,11 +158,21 @@ export function StayReservation({ stay }: { stay: Stay }) {
       return;
     }
 
-    setGuestEmail(text("email"));
+    // Re-check the stay itself (room, dates, guests) right before confirming
+    const problem = stayProblem();
+    if (problem) {
+      saveContact();
+      return showStayProblem(problem);
+    }
+
+    saveContact();
+    // Freeze exactly what's being confirmed; the confirmation shows this, not live state
+    const snapshot = { email: text("email"), roomName: room.name, checkIn, checkOut, adults, children, total };
     setSubmitting(true);
-    // TODO: send the reservation to the backend once it exists. Simulated for now.
-    setTimeout(() => {
-      setConfirmation(`LH-${Math.random().toString(36).slice(2, 8).toUpperCase()}`);
+    // TODO: send the reservation to the backend (app/api/reservations). Simulated for now.
+    window.clearTimeout(confirmTimer.current);
+    confirmTimer.current = window.setTimeout(() => {
+      setBooking({ ...snapshot, confirmation: `LH-${Math.random().toString(36).slice(2, 8).toUpperCase()}` });
       setSubmitting(false);
       setStep("done");
     }, 900);
@@ -120,6 +182,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
     setCheckIn("");
     setCheckOut("");
     setErrors({});
+    setBooking(null);
     setStep("stay");
   }
 
@@ -143,8 +206,13 @@ export function StayReservation({ stay }: { stay: Stay }) {
       <FactTags groups={facts} stayName={stay.name} location={stay.location} />
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_514px] lg:items-start">
-        <fieldset id="rooms" className="min-w-0 scroll-mt-6">
+        <fieldset id="rooms" disabled={roomsLocked} aria-describedby={roomsLocked ? "rooms-locked" : undefined} className="min-w-0 scroll-mt-6">
           <legend className="text-[32px] font-bold leading-10 text-ink">Choose a room</legend>
+          {roomsLocked && (
+            <p id="rooms-locked" className="mt-2 text-sm text-slate">
+              {step === "done" ? "Your room is booked." : "To change rooms, go back to your stay."}
+            </p>
+          )}
           <div className="mt-5 space-y-4">
             {stay.rooms.map((r) => {
               const on = r.id === roomId;
@@ -157,8 +225,10 @@ export function StayReservation({ stay }: { stay: Stay }) {
                     off
                       ? "cursor-not-allowed border-disabled bg-disabled"
                       : on
-                        ? "cursor-pointer border-blue bg-surface ring-1 ring-blue"
-                        : "cursor-pointer border-edge bg-surface hover:border-blue"
+                        ? `border-blue bg-surface ring-1 ring-blue ${roomsLocked ? "cursor-default" : "cursor-pointer"}`
+                        : roomsLocked
+                          ? "cursor-not-allowed border-edge bg-surface opacity-60"
+                          : "cursor-pointer border-edge bg-surface hover:border-blue"
                   }`}
                 >
                   <input
@@ -275,13 +345,10 @@ export function StayReservation({ stay }: { stay: Stay }) {
           )}
 
           {step === "details" && (
-            <form noValidate onSubmit={handleSubmit} className="space-y-5">
+            <form ref={formRef} noValidate onSubmit={handleSubmit} className="space-y-5">
               <button
                 type="button"
-                onClick={() => {
-                  setErrors({});
-                  setStep("stay");
-                }}
+                onClick={backToStay}
                 className="inline-flex h-11 items-center gap-1.5 text-base font-semibold text-blue hover:text-blue-dark"
               >
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -306,11 +373,11 @@ export function StayReservation({ stay }: { stay: Stay }) {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field id="firstName" name="firstName" label="First name" placeholder="Alex" autoComplete="given-name" error={errors.firstName} onChange={() => clear("firstName")} />
-                <Field id="lastName" name="lastName" label="Last name" placeholder="Rivera" autoComplete="family-name" error={errors.lastName} onChange={() => clear("lastName")} />
+                <Field id="firstName" name="firstName" label="First name" placeholder="Alex" autoComplete="given-name" defaultValue={contact.firstName} error={errors.firstName} onChange={() => clear("firstName")} />
+                <Field id="lastName" name="lastName" label="Last name" placeholder="Rivera" autoComplete="family-name" defaultValue={contact.lastName} error={errors.lastName} onChange={() => clear("lastName")} />
               </div>
-              <Field id="email" name="email" label="Email address" type="email" placeholder="you@example.com" autoComplete="email" hint="We’ll send your confirmation here." error={errors.email} onChange={() => clear("email")} />
-              <Field id="phone" name="phone" label="Phone (optional)" type="tel" placeholder="+1 555 010 0000" autoComplete="tel" />
+              <Field id="email" name="email" label="Email address" type="email" placeholder="you@example.com" autoComplete="email" hint="We’ll send your confirmation here." defaultValue={contact.email} error={errors.email} onChange={() => clear("email")} />
+              <Field id="phone" name="phone" label="Phone (optional)" type="tel" placeholder="+1 555 010 0000" autoComplete="tel" defaultValue={contact.phone} />
 
               <div className="space-y-5 border-t border-edge pt-5">
                 <h3 className="text-base font-semibold leading-5 text-ink">Payment</h3>
@@ -380,22 +447,23 @@ export function StayReservation({ stay }: { stay: Stay }) {
             </form>
           )}
 
-          {step === "done" && (
+          {step === "done" && booking && (
             <div className="space-y-5">
               <div>
                 <h2 ref={headingRef} tabIndex={-1} className="text-[32px] font-bold leading-10 text-ink outline-none">
                   You’re booked.
                 </h2>
                 <p className="mt-2 text-base text-slate">
-                  Confirmation <span className="font-semibold text-ink">{confirmation}</span> is on its way to {guestEmail}.
+                  Confirmation <span className="font-semibold text-ink">{booking.confirmation}</span> is on its way to {booking.email}.
                 </p>
               </div>
+              {/* From the snapshot taken on confirm, so later edits can't change it */}
               <dl className="space-y-3 border-y border-edge py-4 text-base">
-                <Row label="Room" value={room.name} />
-                <Row label="Check-in" value={formatDate(checkIn)} />
-                <Row label="Check-out" value={formatDate(checkOut)} />
-                <Row label="Guests" value={guestLabel(adults, children)} />
-                <Row label="Total" value={money(total)} />
+                <Row label="Room" value={booking.roomName} />
+                <Row label="Check-in" value={formatDate(booking.checkIn)} />
+                <Row label="Check-out" value={formatDate(booking.checkOut)} />
+                <Row label="Guests" value={guestLabel(booking.adults, booking.children)} />
+                <Row label="Total" value={money(booking.total)} />
               </dl>
               <Link href="/" className={`${buttonPrimary} w-full`}>
                 Back to home
