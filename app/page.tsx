@@ -9,6 +9,7 @@ import { SkyBackground } from "./_components/SkyBackground";
 import { Button, SectionHeading, Stars, Tag } from "./_components/ui";
 import { WindowScene } from "./_components/WindowScene";
 import { STAYS } from "./_data/stays";
+import { PAGE_ROUTES } from "@/constants/routes";
 import coastalRoom from "./_assets/coastal-room.webp";
 
 const features = [
@@ -16,7 +17,7 @@ const features = [
     title: "Stay more, save more",
     body: "Members get instant discounts and rewards.",
     link: "See member perks",
-    href: "/signup",
+    href: PAGE_ROUTES.LOGIN,
     icon: <path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.4l-5.2 2.8 1-5.9L3.5 9.2l5.9-.8z" strokeLinejoin="round" />,
   },
   {
@@ -127,10 +128,10 @@ export default function Home() {
                 ))}
               </ul>
               <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-                <Button href="/signup">Create account</Button>
+                <Button href={PAGE_ROUTES.LOGIN}>Create account</Button>
                 <p className="text-base text-slate">
                   Already a member?{" "}
-                  <Link href="/login" className="font-semibold text-blue hover:text-blue-dark">
+                  <Link href={PAGE_ROUTES.LOGIN} className="font-semibold text-blue hover:text-blue-dark">
                     Sign in
                   </Link>
                 </p>

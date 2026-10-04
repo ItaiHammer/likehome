@@ -35,7 +35,7 @@ function Spinner() {
  *
  *   <Button>Create account</Button>
  *   <Button variant="secondary" size="sm">Cancel</Button>
- *   <Button href="/signup">Join</Button>
+ *   <Button href="/auth/login">Join</Button>
  */
 export function Button({ variant = "primary", size = "md", className = "", children, ...rest }: AsButton | AsLink) {
   const classes = `${buttonClass(variant, size)} ${className}`;

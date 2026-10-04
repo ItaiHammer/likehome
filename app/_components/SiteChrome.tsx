@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LogoMark } from "./LogoMark";
 import { ThemeToggle } from "./ThemeToggle";
+import { PAGE_ROUTES } from "@/constants/routes";
 
 function Logo() {
   return (
@@ -21,7 +22,7 @@ export function SiteHeader() {
           <a href="#" className="hidden rounded-control px-3 py-2 hover:text-ink md:block">Support</a>
           <a href="#" className="hidden rounded-control px-3 py-2 hover:text-ink sm:block">Trips</a>
           <ThemeToggle />
-          <Link href="/login" className="rounded-control px-3 py-2 font-semibold text-blue hover:text-blue-dark">
+          <Link href={PAGE_ROUTES.LOGIN} className="rounded-control px-3 py-2 font-semibold text-blue hover:text-blue-dark">
             Sign in
           </Link>
         </div>

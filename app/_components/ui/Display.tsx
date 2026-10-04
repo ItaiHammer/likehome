@@ -14,7 +14,7 @@ const cardPaddings: Record<CardPadding, string> = { none: "", md: "p-6", lg: "p-
  * version; pass `href` to make the whole card a link.
  *
  *   <Card>…</Card>
- *   <Card tone="tint" href="/signup">…</Card>
+ *   <Card tone="tint" href="/auth/login">…</Card>
  */
 export function Card({
   tone = "surface",

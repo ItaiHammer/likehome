@@ -198,7 +198,7 @@ export default function ComponentsPage() {
         </Row>
       </Group>
 
-      <Group title="Cards" usage='<Card tone="tint" href="/signup">…</Card>  ·  tone: surface | tint · padding: none | md | lg · optional href, as'>
+      <Group title="Cards" usage='<Card tone="tint" href="/auth/login">…</Card>  ·  tone: surface | tint · padding: none | md | lg · optional href, as'>
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <p className="text-lg font-semibold text-ink">Surface</p>
