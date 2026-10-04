@@ -16,9 +16,14 @@ const INDEX = DESTINATIONS.map(([name, region], rank) => ({
   key: norm(name),
   words: norm(name).split(/[\s,.'-]+/),
   regionKey: norm(region),
+  // The text a picked destination leaves in the field, e.g. "paris, france"
+  full: norm(`${name}, ${region}`),
 }));
 
 type Result = (typeof INDEX)[number];
+
+// A value in the "Place, Region" form the field holds after picking a destination
+const isPickedPlace = (query: string) => query.includes(",");
 
 function search(query: string): Result[] {
   const q = norm(query.trim());
@@ -26,7 +31,8 @@ function search(query: string): Result[] {
   const scored: [number, Result][] = [];
   for (const d of INDEX) {
     let score: number;
-    if (d.key.startsWith(q)) score = 0;
+    // A picked "Paris, France" (or the start of one) finds Paris again on reopen
+    if (d.key.startsWith(q) || d.full.startsWith(q)) score = 0;
     else if (d.words.some((w) => w.startsWith(q))) score = 1;
     else if (d.regionKey.split(/,\s*/).some((part) => part.startsWith(q))) score = 2;
     else if (`${d.key} ${d.regionKey}`.includes(q)) score = 3;
@@ -79,7 +85,10 @@ export function DestinationInput({ className = "" }: { className?: string }) {
     window.addEventListener("likehome:destination", onPick);
     return () => window.removeEventListener("likehome:destination", onPick);
   }, []);
-  const open = focused && (results.length > 0 || query.trim() !== "");
+  // "No matches" is for typing; a place filled from a popular-destination tile
+  // that isn't in the suggestion list just closes the list instead
+  const showNoMatches = query.trim() !== "" && results.length === 0 && !isPickedPlace(query);
+  const open = focused && (results.length > 0 || showNoMatches);
 
   function choose(d: Result) {
     setQuery(`${d.name}, ${d.region}`);
@@ -91,8 +100,11 @@ export function DestinationInput({ className = "" }: { className?: string }) {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (!focused) return setFocused(true);
-      const delta = e.key === "ArrowDown" ? 1 : -1;
-      setActive((i) => (i + delta + results.length) % results.length);
+      const n = results.length;
+      if (!n) return;
+      const down = e.key === "ArrowDown";
+      // From nothing selected: Down goes to the first result, Up to the last
+      setActive((i) => (i < 0 ? (down ? 0 : n - 1) : (i + (down ? 1 : -1) + n) % n));
     } else if (e.key === "Enter" && open && active >= 0) {
       e.preventDefault();
       choose(results[active]);
@@ -166,7 +178,7 @@ export function DestinationInput({ className = "" }: { className?: string }) {
             </li>
           ))}
         </ul>
-        {query.trim() && results.length === 0 && (
+        {showNoMatches && (
           <p className="px-3 py-3 text-sm text-slate">No matches yet. Try a city, region or country.</p>
         )}
       </div>
