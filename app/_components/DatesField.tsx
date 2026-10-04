@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatShort, nightsBetween } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
 import { RangeCalendar, type RangeField } from "./RangeCalendar";
@@ -18,17 +18,22 @@ export function DatesField({ className = "" }: { className?: string }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Closed with focus inside the calendar (Done, Escape): send focus back to the field
-  useLayoutEffect(() => {
-    if (!open && panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus();
-  }, [open]);
+  // Done and Escape send focus back to the field (if it was in the calendar).
+  // An outside click just closes, leaving focus where the click put it.
+  const restoreFocus = () => {
+    if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
+  };
 
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
+      setOpen(false);
+    };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -70,7 +75,7 @@ export function DatesField({ className = "" }: { className?: string }) {
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={label ? `Dates: ${label}` : "Dates"}
-        className={`min-w-0 flex-1 truncate text-left text-base outline-hidden ${label ? "text-ink" : "text-slate"}`}
+        className={`min-w-0 flex-1 truncate text-left text-base outline-none focus-visible:outline-hidden ${label ? "text-ink" : "text-slate"}`}
       >
         {label || <RotatingPlaceholder kind="when" paused={open} />}
       </button>
@@ -96,7 +101,10 @@ export function DatesField({ className = "" }: { className?: string }) {
           }}
           field={field}
           onFieldChange={setField}
-          onDone={() => setOpen(false)}
+          onDone={() => {
+            restoreFocus();
+            setOpen(false);
+          }}
         />
       </div>
     </div>

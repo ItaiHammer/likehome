@@ -61,7 +61,8 @@ const perks = ["Member prices on every stay", "Rewards on every night you book",
 
 // Each search segment shows a focus ring while its control (marked data-trigger) has keyboard focus
 const field =
-  "flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-4 py-3 md:py-5 has-[[data-trigger]:focus-visible]:ring-2 has-[[data-trigger]:focus-visible]:ring-inset has-[[data-trigger]:focus-visible]:ring-blue";
+  // (rounded only while the ring shows, so the divider lines between segments stay straight)
+  "flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3 md:py-5 has-[[data-trigger]:focus-visible]:rounded-xl has-[[data-trigger]:focus-visible]:ring-2 has-[[data-trigger]:focus-visible]:ring-inset has-[[data-trigger]:focus-visible]:ring-blue";
 
 export default function Home() {
   return (

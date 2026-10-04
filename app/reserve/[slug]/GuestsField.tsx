@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { buttonPrimary, iconButton, labelClass } from "../../_components/ui";
 
 const ROWS = [
@@ -37,17 +37,22 @@ export function GuestsField({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Closed with focus inside the panel (Done, Escape): send focus back to the field
-  useLayoutEffect(() => {
-    if (!open && panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus();
-  }, [open]);
+  // Done and Escape send focus back to the field (if it was in the panel).
+  // An outside click just closes, leaving focus where the click put it.
+  const restoreFocus = () => {
+    if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
+  };
 
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
       if (!ref.current?.contains(e.target as Node)) onOpenChange(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onOpenChange(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
+      onOpenChange(false);
+    };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -74,7 +79,7 @@ export function GuestsField({
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-describedby={error ? "guests-error" : undefined}
-        className={`flex h-[46px] w-full items-center justify-between rounded-control border bg-surface px-4 text-left text-base text-ink outline-hidden transition focus-visible:border-blue focus-visible:ring-1 focus-visible:ring-blue ${
+        className={`flex h-[46px] w-full items-center justify-between rounded-control border bg-surface px-4 text-left text-base text-ink outline-none transition focus-visible:border-blue focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-blue ${
           open ? "border-blue ring-1 ring-blue" : error ? "border-danger" : "border-edge"
         }`}
       >
@@ -104,11 +109,12 @@ export function GuestsField({
               <p className="text-sm text-slate">{r.hint}</p>
             </div>
             <div className="flex items-center gap-3">
+              {/* aria-disabled at a limit (not disabled), so a focused button keeps focus */}
               <button
                 type="button"
                 aria-label={`Fewer ${r.label.toLowerCase()}`}
-                disabled={counts[r.key] <= r.min}
-                onClick={() => set(r.key, counts[r.key] - 1)}
+                aria-disabled={counts[r.key] <= r.min}
+                onClick={() => counts[r.key] > r.min && set(r.key, counts[r.key] - 1)}
                 className={iconButton}
               >
                 <StepIcon d="M5 10h10" />
@@ -119,8 +125,8 @@ export function GuestsField({
               <button
                 type="button"
                 aria-label={`More ${r.label.toLowerCase()}`}
-                disabled={counts[r.key] >= r.max}
-                onClick={() => set(r.key, counts[r.key] + 1)}
+                aria-disabled={counts[r.key] >= r.max}
+                onClick={() => counts[r.key] < r.max && set(r.key, counts[r.key] + 1)}
                 className={iconButton}
               >
                 <StepIcon d="M5 10h10M10 5v10" />
@@ -130,7 +136,14 @@ export function GuestsField({
         ))}
         <div className="cascade pt-3" style={{ "--i": ROWS.length } as React.CSSProperties}>
           <p className="text-sm text-slate">This room sleeps up to {sleeps}.</p>
-          <button type="button" onClick={() => onOpenChange(false)} className={`${buttonPrimary} mt-3 w-full`}>
+          <button
+            type="button"
+            onClick={() => {
+              restoreFocus();
+              onOpenChange(false);
+            }}
+            className={`${buttonPrimary} mt-3 w-full`}
+          >
             Done
           </button>
         </div>

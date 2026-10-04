@@ -192,8 +192,9 @@ export function RangeCalendar({
         <button
           type="button"
           aria-label="Previous month"
-          disabled={atFirstMonth}
-          onClick={() => shown && setView(shiftMonth(shown, -1))}
+          // aria-disabled (not disabled) on the first month, so a focused button keeps focus
+          aria-disabled={atFirstMonth}
+          onClick={() => !atFirstMonth && shown && setView(shiftMonth(shown, -1))}
           className={iconButton}
         >
           <Chevron d="M15 6l-6 6 6 6" />

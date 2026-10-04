@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDate } from "../../_components/dates";
 import { RangeCalendar, type RangeField } from "../../_components/RangeCalendar";
 import { labelClass } from "../../_components/ui";
 
 // Field look shared with inputClass: Edge border, blue border + ring while open, danger on error.
 const fieldClass = (active: boolean, error: boolean, filled: boolean) =>
-  `flex h-[46px] w-full items-center rounded-control border bg-surface px-4 text-left text-base outline-hidden transition focus-visible:border-blue focus-visible:ring-1 focus-visible:ring-blue ${
+  `flex h-[46px] w-full items-center rounded-control border bg-surface px-4 text-left text-base outline-none transition focus-visible:border-blue focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-blue ${
     active ? "border-blue ring-1 ring-blue" : error ? "border-danger" : "border-edge"
   } ${filled ? "text-ink" : "text-slate"}`;
 
@@ -39,25 +39,29 @@ export function DateRangePicker({
   const panelRef = useRef<HTMLDivElement>(null);
   const pickingOut = field === "out";
 
-  // Closed with focus inside the calendar (Done, Escape): send focus back to
-  // the field that opened it
-  useLayoutEffect(() => {
-    if (!open && panelRef.current?.contains(document.activeElement)) (field === "out" ? outRef : inRef).current?.focus();
-  }, [open, field]);
+  // Done and Escape send focus back to the field that opened the calendar (if
+  // focus was in it). An outside click just closes, leaving focus where the click put it.
+  const restoreFocus = () => {
+    if (panelRef.current?.contains(document.activeElement)) (field === "out" ? outRef : inRef).current?.focus({ preventScroll: true });
+  };
 
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
       if (!ref.current?.contains(e.target as Node)) onOpenChange(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onOpenChange(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (panelRef.current?.contains(document.activeElement)) (field === "out" ? outRef : inRef).current?.focus({ preventScroll: true });
+      onOpenChange(false);
+    };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, field]);
 
   function openField(f: RangeField) {
     if (open && field === f) {
@@ -135,7 +139,10 @@ export function DateRangePicker({
           onChange={onChange}
           field={field}
           onFieldChange={setField}
-          onDone={() => onOpenChange(false)}
+          onDone={() => {
+            restoreFocus();
+            onOpenChange(false);
+          }}
           blockedOffsets={blockedOffsets}
         />
       </div>

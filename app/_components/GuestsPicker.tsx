@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const rows = [
   { key: "adults", label: "Adults", hint: "Ages 13 or above", min: 1, max: 16 },
@@ -17,17 +17,22 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Closed with focus inside the panel (Done, Escape): send focus back to the field
-  useLayoutEffect(() => {
-    if (!open && panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus();
-  }, [open]);
+  // Done and Escape send focus back to the field (if it was in the panel).
+  // An outside click just closes, leaving focus where the click put it.
+  const restoreFocus = () => {
+    if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
+  };
 
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
+      setOpen(false);
+    };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -53,7 +58,7 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-base text-ink outline-hidden"
+        className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-base text-ink outline-none focus-visible:outline-hidden"
       >
         <span className="truncate">
           {total} {total === 1 ? "guest" : "guests"}
@@ -99,7 +104,10 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
         ))}
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={() => {
+            restoreFocus();
+            setOpen(false);
+          }}
           className="cascade mt-2 h-[46px] w-full rounded-control bg-blue text-base font-semibold text-on-blue hover:bg-blue-dark"
           style={{ "--i": rows.length } as React.CSSProperties}
         >
@@ -121,13 +129,14 @@ function StepButton({
   onClick: () => void;
   children: React.ReactNode;
 }) {
+  // aria-disabled at a limit (not disabled), so a focused button keeps focus
   return (
     <button
       type="button"
       aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center rounded-control border border-edge text-ink transition hover:border-blue hover:text-blue disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-edge disabled:hover:text-ink"
+      aria-disabled={disabled}
+      onClick={() => !disabled && onClick()}
+      className="flex h-8 w-8 items-center justify-center rounded-control border border-edge text-ink transition hover:border-blue hover:text-blue aria-disabled:cursor-not-allowed aria-disabled:opacity-35 aria-disabled:hover:border-edge aria-disabled:hover:text-ink"
     >
       <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
         {children}
