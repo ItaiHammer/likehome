@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LogoMark } from "./LogoMark";
+import { DesktopNav, MobileNav } from "./SiteNav";
 import { ThemeToggle } from "./ThemeToggle";
 import { PAGE_ROUTES } from "@/constants/routes";
 
@@ -14,19 +15,20 @@ function Logo() {
 
 export function SiteHeader() {
   return (
-    <header className="border-b border-edge bg-surface">
-      <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+    <header className="relative border-b border-edge bg-surface">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <Logo />
-        <div className="flex items-center gap-1 text-base font-medium text-slate sm:gap-2">
-          <a href="#" className="hidden rounded-control px-3 py-2 hover:text-ink md:block">List your property</a>
-          <a href="#" className="hidden rounded-control px-3 py-2 hover:text-ink md:block">Support</a>
-          <a href="#" className="hidden rounded-control px-3 py-2 hover:text-ink sm:block">Trips</a>
+        <nav aria-label="Main" className="hidden md:block">
+          <DesktopNav />
+        </nav>
+        <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Link href={PAGE_ROUTES.LOGIN} className="rounded-control px-3 py-2 font-semibold text-blue hover:text-blue-dark">
+          <Link href={PAGE_ROUTES.LOGIN} className="rounded-control px-3 py-2 text-base font-semibold text-blue hover:text-blue-dark">
             Sign in
           </Link>
+          <MobileNav />
         </div>
-      </nav>
+      </div>
     </header>
   );
 }
@@ -36,11 +38,8 @@ export function SiteFooter() {
     <footer className="mt-auto border-t border-edge">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-6 text-sm text-slate sm:flex-row sm:px-6">
         <span>© {new Date().getFullYear()} LikeHome</span>
-        <div className="flex gap-6">
-          <a href="#" className="hover:text-ink">About</a>
-          <a href="#" className="hover:text-ink">Help</a>
-          <a href="#" className="hover:text-ink">Privacy</a>
-        </div>
+        {/* No About / Help / Privacy pages yet, so no links that go nowhere */}
+        <span className="text-slate/80">About, Help and Privacy pages coming soon</span>
       </div>
     </footer>
   );

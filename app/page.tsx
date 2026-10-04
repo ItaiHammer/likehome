@@ -30,8 +30,8 @@ const features = [
   {
     title: "Plans change. We get it.",
     body: "Free cancellation on most stays.",
-    link: "Learn more",
-    href: "#",
+    link: "Find a flexible stay",
+    href: "#stays",
     icon: (
       <>
         <rect x="4" y="5" width="16" height="15" rx="2" />
