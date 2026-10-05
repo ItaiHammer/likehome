@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750"><title>Garden courtyard with dining tables</title>
+<rect width="1200" height="750" fill="#CFE0F1"/>
+<rect y="260" width="1200" height="200" fill="#F1EADF"/>
+<g fill="#7C9AC9"><rect x="120" y="300" width="80" height="110"/><rect x="300" y="300" width="80" height="110"/><rect x="820" y="300" width="80" height="110"/><rect x="1000" y="300" width="80" height="110"/></g>
+<rect y="440" width="1200" height="310" fill="#D8C8AE"/>
+<g stroke="#C4B294" stroke-width="3"><path d="M0 520 H1200M0 600 H1200M0 680 H1200M200 440 V750M450 440 V750M700 440 V750M950 440 V750"/></g>
+<g fill="#6F8F6A"><circle cx="80" cy="200" r="130"/><circle cx="1130" cy="180" r="140"/><circle cx="600" cy="160" r="90"/></g>
+<g fill="#8DAA7E"><circle cx="190" cy="250" r="90"/><circle cx="1020" cy="240" r="90"/></g>
+<rect x="60" y="300" width="30" height="180" fill="#7C6656"/><rect x="1110" y="300" width="30" height="180" fill="#7C6656"/>
+<g fill="#F2F2F2"><circle cx="140" cy="430" r="12"/><circle cx="170" cy="445" r="12"/><circle cx="1050" cy="430" r="12"/><circle cx="1080" cy="445" r="12"/><circle cx="240" cy="420" r="10"/></g>
+<g fill="#E8B4B8"><circle cx="200" cy="440" r="10"/><circle cx="1010" cy="440" r="10"/></g>
+<ellipse cx="600" cy="560" rx="190" ry="40" fill="#B08968"/><rect x="590" y="560" width="20" height="110" fill="#8A6F5A"/>
+<g fill="#4C79BD"><rect x="360" y="540" width="90" height="100" rx="14"/><rect x="750" y="540" width="90" height="100" rx="14"/></g>
+<g fill="#3E6AAE"><rect x="360" y="490" width="90" height="60" rx="14"/><rect x="750" y="490" width="90" height="60" rx="14"/></g>
+<rect x="560" y="500" width="80" height="40" rx="8" fill="#FBF8F3"/><circle cx="600" cy="495" r="16" fill="#8DAA7E"/>
+</svg>
