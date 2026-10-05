@@ -431,8 +431,11 @@ export function PopularDestinations() {
                   </div>
                   {/* Night: the tile dims with the theme */}
                   <div className="absolute inset-0 bg-[#141a45]/45 opacity-0 dark:opacity-100" />
-                  <div className="absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-[rgba(20,28,70,0.55)] to-transparent" />
-                  <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6">
+                  {/* Ink fade behind the caption: it eases in across the 112px top padding,
+                      then stays at 66%+ under every line of text (however many lines the
+                      name wraps to), so the white text clears 4.5:1 (3:1 for the city name)
+                      even if the illustration under it were pure white. */}
+                  <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(to_bottom,rgb(7_13_47/0)_0,rgb(7_13_47/0.1)_28px,rgb(7_13_47/0.33)_56px,rgb(7_13_47/0.56)_84px,rgb(7_13_47/0.66)_112px,rgb(7_13_47/0.7))] p-5 pt-28 sm:p-6 sm:pt-28">
                     <p className="text-sm font-semibold text-white/85">#{i + 1}</p>
                     <p className="font-serif text-[32px] leading-[38px] text-white">{d.name}</p>
                     <p className="truncate text-sm text-white/80">{d.region}</p>
