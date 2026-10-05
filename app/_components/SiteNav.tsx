@@ -52,8 +52,12 @@ export function MobileNav() {
     const onPointer = (e: PointerEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
+    // Only handle Escape meant for the menu (focus in it, or nowhere in particular),
+    // so it doesn't steal focus from another open popover
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      const active = document.activeElement;
+      if (active && active !== document.body && !rootRef.current?.contains(active)) return;
       setOpen(false);
       buttonRef.current?.focus();
     };
@@ -66,7 +70,16 @@ export function MobileNav() {
   }, [open]);
 
   return (
-    <div ref={rootRef} className="md:hidden">
+    <div
+      ref={rootRef}
+      className="md:hidden"
+      // Tabbing out of the menu closes it, so it doesn't cover what gets focus next
+      // (a null relatedTarget, like the window losing focus, is left alone)
+      onBlur={(e) => {
+        const next = e.relatedTarget as Node | null;
+        if (next && !e.currentTarget.contains(next)) setOpen(false);
+      }}
+    >
       <button
         ref={buttonRef}
         type="button"
