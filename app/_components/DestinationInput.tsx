@@ -77,6 +77,9 @@ export function DestinationInput({ className = "" }: { className?: string }) {
   const [active, setActive] = useState(-1);
   // The last place filled in by picking (a suggestion or a popular-destination tile)
   const [picked, setPicked] = useState("");
+  // Text fields match :focus-visible even when clicked, so the search bar's
+  // keyboard focus ring is turned off while the field was focused by mouse or touch
+  const [pointerFocus, setPointerFocus] = useState(false);
   const results = useMemo(() => search(query), [query]);
 
   // Popular destination tiles fill this field.
@@ -134,9 +137,13 @@ export function DestinationInput({ className = "" }: { className?: string }) {
             setFocused(true);
           }}
           onFocus={() => setFocused(true)}
+          onPointerDown={() => setPointerFocus(true)}
           // Clicking the field again (it keeps focus after a pick) reopens the list
           onClick={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false);
+            setPointerFocus(false);
+          }}
           onKeyDown={onKeyDown}
           aria-label="Destination"
           role="combobox"
@@ -146,6 +153,7 @@ export function DestinationInput({ className = "" }: { className?: string }) {
           aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
           autoComplete="off"
           data-trigger
+          data-pointer-focus={pointerFocus || undefined}
           className="w-full min-w-0 bg-transparent text-base text-ink placeholder:text-slate outline-none focus:outline-hidden"
         />
         {!query && (

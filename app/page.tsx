@@ -59,10 +59,12 @@ function Arrow({ className }: { className?: string }) {
 
 const perks = ["Member prices on every stay", "Rewards on every night you book", "Free cancellation on most stays"];
 
-// Each search segment shows a focus ring while its control (marked data-trigger) has keyboard focus
+// Each search segment shows a focus ring while its control (marked data-trigger) has keyboard focus.
+// The destination field marks a mouse or touch focus with data-pointer-focus, since text fields
+// count as focus-visible even when clicked.
 const field =
   // (rounded only while the ring shows, so the divider lines between segments stay straight)
-  "flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3 md:py-5 has-[[data-trigger]:focus-visible]:rounded-xl has-[[data-trigger]:focus-visible]:ring-2 has-[[data-trigger]:focus-visible]:ring-inset has-[[data-trigger]:focus-visible]:ring-blue";
+  "flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3 md:py-5 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:rounded-xl has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-2 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-inset has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-blue";
 
 export default function Home() {
   return (
