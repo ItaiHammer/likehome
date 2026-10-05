@@ -6,8 +6,12 @@ import { RotatingPlaceholder } from "./placeholders";
 
 const MAX_RESULTS = 7;
 
-// Case- and accent-insensitive: "sao paulo" matches "São Paulo"
-const norm = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+// Case- and accent-insensitive: "sao paulo" matches "São Paulo". Letters that
+// don't decompose into letter + accent (ø, æ, ß…) are folded by hand, so
+// "tromso" finds Tromsø.
+const FOLDS: [RegExp, string][] = [[/ø/g, "o"], [/æ/g, "ae"], [/œ/g, "oe"], [/ß/g, "ss"], [/ł/g, "l"], [/đ/g, "d"]];
+const norm = (s: string) =>
+  FOLDS.reduce((t, [re, to]) => t.replace(re, to), s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase());
 
 const INDEX = DESTINATIONS.map(([name, region], rank) => ({
   name,
@@ -21,9 +25,6 @@ const INDEX = DESTINATIONS.map(([name, region], rank) => ({
 }));
 
 type Result = (typeof INDEX)[number];
-
-// A value in the "Place, Region" form the field holds after picking a destination
-const isPickedPlace = (query: string) => query.includes(",");
 
 function search(query: string): Result[] {
   const q = norm(query.trim());
@@ -74,24 +75,30 @@ export function DestinationInput({ className = "" }: { className?: string }) {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [active, setActive] = useState(-1);
+  // The last place filled in by picking (a suggestion or a popular-destination tile)
+  const [picked, setPicked] = useState("");
   const results = useMemo(() => search(query), [query]);
 
   // Popular destination tiles fill this field.
   useEffect(() => {
     const onPick = (e: Event) => {
-      setQuery((e as CustomEvent<string>).detail);
+      const place = (e as CustomEvent<string>).detail;
+      setQuery(place);
+      setPicked(place);
       setActive(-1);
     };
     window.addEventListener("likehome:destination", onPick);
     return () => window.removeEventListener("likehome:destination", onPick);
   }, []);
-  // "No matches" is for typing; a place filled from a popular-destination tile
-  // that isn't in the suggestion list just closes the list instead
-  const showNoMatches = query.trim() !== "" && results.length === 0 && !isPickedPlace(query);
+  // "No matches" is for typing; a picked place that isn't in the suggestion
+  // list (some popular-destination tiles) just closes the list instead
+  const showNoMatches = query.trim() !== "" && results.length === 0 && query !== picked;
   const open = focused && (results.length > 0 || showNoMatches);
 
   function choose(d: Result) {
-    setQuery(`${d.name}, ${d.region}`);
+    const place = `${d.name}, ${d.region}`;
+    setQuery(place);
+    setPicked(place);
     setFocused(false);
     setActive(-1);
   }
@@ -127,6 +134,8 @@ export function DestinationInput({ className = "" }: { className?: string }) {
             setFocused(true);
           }}
           onFocus={() => setFocused(true)}
+          // Clicking the field again (it keeps focus after a pick) reopens the list
+          onClick={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onKeyDown={onKeyDown}
           aria-label="Destination"
