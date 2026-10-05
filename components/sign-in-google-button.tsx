@@ -3,22 +3,17 @@
 import { createClient } from "@/utils/supabase/client";
 import { API_ROUTES } from "@/constants/routes";
 
-export function SignInWithGoogleOAuthButton() {
-    const signIn = async() => {
-        const supabase = createClient();
-        await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: getRedirectUrl(),
-            },
-        });
-    };
+export async function signInWithGoogle() {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: getRedirectUrl() },
+    });
+    if (error) console.error(error.message);
+}
 
-    return <button
-            onClick={signIn}
-           >
-            Sign In With Google
-           </button> 
+export function SignInWithGoogleOAuthButton() {
+    return <button onClick={signInWithGoogle}>Sign In With Google</button>;
 }
 
 function getRedirectUrl(): string {
