@@ -33,10 +33,11 @@ export function Card({
 }) {
   const classes = `rounded-lg border ${cardTones[tone]} ${cardPaddings[padding]} ${className}`;
   if (href) {
+    // The tint's hover stops at 14% blue: any deeper and blue-dark text on it drops under 4.5:1 contrast
     const link = (
       <Link
         href={href}
-        className={`group block transition-colors ${tone === "tint" ? "hover:bg-blue/15" : "hover:border-blue/50"} focus-visible:border-blue focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-blue ${classes}`}
+        className={`group block transition-colors ${tone === "tint" ? "hover:bg-blue/14" : "hover:border-blue/50"} focus-visible:border-blue focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-blue ${classes}`}
       >
         {children}
       </Link>

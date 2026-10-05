@@ -39,7 +39,7 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-6 text-sm text-slate sm:flex-row sm:px-6">
         <span>© {new Date().getFullYear()} LikeHome</span>
         {/* No About / Help / Privacy pages yet, so no links that go nowhere */}
-        <span className="text-slate/80">About, Help and Privacy pages coming soon</span>
+        <span>About, Help and Privacy pages coming soon</span>
       </div>
     </footer>
   );

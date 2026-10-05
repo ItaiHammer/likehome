@@ -14,7 +14,7 @@ const NAV_ITEMS: { label: string; href?: string }[] = [
 
 function ComingSoon({ label, className = "" }: { label: string; className?: string }) {
   return (
-    <span aria-disabled="true" title="Coming soon" className={`inline-flex cursor-not-allowed items-center gap-2 text-slate/70 ${className}`}>
+    <span aria-disabled="true" title="Coming soon" className={`inline-flex cursor-not-allowed items-center gap-2 text-slate ${className}`}>
       {label}
       <Tag>Soon</Tag>
     </span>

@@ -93,7 +93,7 @@ export default function Home() {
                 type="submit"
                 aria-label="Search"
                 title="Search"
-                className="flex h-14 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(76,121,189,0.9)] transition-colors hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:h-auto md:w-[66px]"
+                className="flex h-14 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-colors hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:h-auto md:w-[66px]"
               >
                 {/* Icon only: a square the height of the bar on desktop */}
                 <Icon className="h-6 w-6">
@@ -160,13 +160,14 @@ export default function Home() {
   
           {/* Feature cards: the whole card is the link. A soft blue tint sets them
               apart from the white cards around them; the link text uses blue-dark
-              because plain blue drops under 4.5:1 contrast on the tint. */}
+              because plain blue drops under 4.5:1 contrast on the tint, and the
+              hover tint stops at 14% so blue-dark keeps 4.5:1 on it too. */}
           <section className="grid gap-4 md:grid-cols-3">
             {features.map((f) => (
               <Link
                 key={f.title}
                 href={f.href}
-                className="group flex flex-col rounded-lg border border-blue/20 bg-blue/10 p-6 transition-colors duration-200 hover:bg-blue/15 focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue sm:p-7"
+                className="group flex flex-col rounded-lg border border-blue/20 bg-blue/10 p-6 transition-colors duration-200 hover:bg-blue/14 focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue sm:p-7"
               >
                 <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue text-on-blue transition-colors duration-200 group-hover:bg-blue-dark">
                   <Icon className="h-6 w-6">{f.icon}</Icon>

@@ -15,10 +15,10 @@ const COLORS = [
   { name: "ink", swatch: "bg-ink", use: "Headings and labels", light: "#070D2F", dark: "#EEF1F8" },
   { name: "slate", swatch: "bg-slate", use: "Body, helper and input text", light: "#536383", dark: "#9AA6BF" },
   { name: "edge", swatch: "bg-edge", use: "Borders and dividers", light: "#BAC8DF", dark: "#2C3857" },
-  { name: "blue", swatch: "bg-blue", use: "Main action and links", light: "#4C79BD", dark: "#6E95D6" },
+  { name: "blue", swatch: "bg-blue", use: "Main action and links", light: "#4473B5", dark: "#6E95D6" },
   { name: "blue-dark", swatch: "bg-blue-dark", use: "Hover shade of blue, stronger blue text", light: "#3D66A6", dark: "#87A7DE" },
   { name: "on-blue", swatch: "bg-on-blue", use: "Text and icons on a blue fill", light: "#FFFFFF", dark: "#0B1022" },
-  { name: "danger", swatch: "bg-danger", use: "Errors", light: "#C9474F", dark: "#E2777D" },
+  { name: "danger", swatch: "bg-danger", use: "Errors", light: "#C7444D", dark: "#E2777D" },
   { name: "disabled", swatch: "bg-disabled", use: "Disabled fill", light: "#E6EBF3", dark: "#1D2542" },
 ];
 
@@ -97,6 +97,10 @@ export default function ComponentsPage() {
         <p className="mt-6 text-sm text-slate">
           Use the names, never the hex codes: each one switches automatically in dark mode. They work with any Tailwind
           color utility: <Code>bg-blue</Code>, <Code>text-ink</Code>, <Code>border-edge</Code>, <Code>bg-blue/10</Code>…
+        </p>
+        <p className="mt-2 text-sm text-slate">
+          Blue and danger are a shade darker than their original values (blue was the Figma&apos;s <Code>#4C79BD</Code>,
+          danger <Code>#C9474F</Code>) so blue links, error text and white text on blue buttons all clear 4.5:1 contrast.
         </p>
       </Group>
 
