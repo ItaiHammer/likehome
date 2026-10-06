@@ -1,6 +1,10 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { useRouter } from "next/navigation";
+import { type FormEvent, useRef, useState } from "react";
+import { readAiAnswer } from "./aiSearch";
 import { DatesField } from "./DatesField";
 import { DestinationInput } from "./DestinationInput";
 import { GuestsPicker } from "./GuestsPicker";
@@ -55,6 +59,28 @@ export function SearchExperience({
   compact?: boolean;
 }) {
   const [mode, setMode] = useState<SearchMode>(initialMode);
+  const router = useRouter();
+
+  // AI mode: send the prompt to Cara's /api/search/ai endpoint (the same way her
+  // app/sample/search page does), then open the standard search it describes.
+  // Off-topic prompts come back as a reply with no filters, shown under the bar.
+  const promptRef = useRef("");
+  const [aiNote, setAiNote] = useState("");
+  const [aiError, setAiError] = useState("");
+  const [transport] = useState(() => new DefaultChatTransport({ api: "/api/search/ai" }));
+  const { sendMessage, setMessages, status } = useChat({
+    transport,
+    onFinish: ({ message, isError, isAbort, isDisconnect }) => {
+      if (isError || isAbort || isDisconnect) return;
+      const text = message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
+      const answer = readAiAnswer(text, promptRef.current);
+      if (!answer) setAiError("Sorry, that didn't come through. Try asking again.");
+      else if (answer.query) router.push(`/search?${answer.query}`);
+      else setAiNote(answer.reply || "Tell us where you're going, when, and who's coming.");
+    },
+    onError: () => setAiError("AI search isn't available right now. Try the standard search instead."),
+  });
+  const aiBusy = status === "submitted" || status === "streaming";
 
   const filters: SearchFilterValues = {
     minPrice: initialValues.minPrice,
@@ -73,9 +99,16 @@ export function SearchExperience({
   const searchButtonSize = compact ? "h-12 md:h-auto md:w-[56px]" : "h-14 md:h-auto md:w-[66px]";
   const toggleSize = compact ? "h-12 w-12 md:h-auto md:w-[54px]" : "h-14 w-14 md:h-auto md:w-[58px]";
 
-  const preventEmptyAiSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const submitAiSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     const prompt = new FormData(event.currentTarget).get("aiPrompt");
-    if (typeof prompt !== "string" || !prompt.trim()) event.preventDefault();
+    if (typeof prompt !== "string" || !prompt.trim() || aiBusy) return;
+    promptRef.current = prompt.trim();
+    setAiNote("");
+    setAiError("");
+    // Each prompt is its own search, not a follow-up in a conversation
+    setMessages([]);
+    sendMessage({ text: promptRef.current });
   };
 
   return (
@@ -125,8 +158,8 @@ export function SearchExperience({
           </div>
         </form>
       ) : (
-        <form action="/search" onSubmit={preventEmptyAiSubmit} className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row">
-          {/* TODO(INTEGRATION): Cara's AI endpoint will translate aiPrompt into the same structured fields used by standard search. */}
+        <>
+        <form action="/search" onSubmit={submitAiSearch} aria-busy={aiBusy} className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row">
           <div
             className={`flex min-w-0 flex-1 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md ${barPadding}`}
           >
@@ -140,6 +173,7 @@ export function SearchExperience({
                 defaultValue={initialValues.aiPrompt ?? ""}
                 autoComplete="off"
                 placeholder="Tell us about your dream stay"
+                readOnly={aiBusy}
                 className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-slate"
               />
             </label>
@@ -148,11 +182,16 @@ export function SearchExperience({
           <div className="flex gap-2.5 md:contents">
             <button
               type="submit"
-              aria-label="Search with AI"
+              aria-label={aiBusy ? "Searching with AI" : "Search with AI"}
               title="Search with AI"
-              className={`flex flex-1 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:flex-none ${searchButtonSize}`}
+              aria-disabled={aiBusy}
+              className={`flex flex-1 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue aria-disabled:cursor-progress md:flex-none ${searchButtonSize}`}
             >
-              <SearchIcon className={compact ? "h-5 w-5" : "h-6 w-6"} />
+              {aiBusy ? (
+                <span className={`animate-spin rounded-full border-2 border-on-blue/40 border-t-on-blue ${compact ? "h-5 w-5" : "h-6 w-6"}`} aria-hidden />
+              ) : (
+                <SearchIcon className={compact ? "h-5 w-5" : "h-6 w-6"} />
+              )}
             </button>
             <button
                 type="button"
@@ -166,6 +205,15 @@ export function SearchExperience({
             </button>
           </div>
         </form>
+        {(aiNote || aiError) && (
+          <p
+            role="status"
+            className={`mt-2.5 rounded-2xl border bg-surface/90 px-4 py-3 text-sm leading-6 backdrop-blur-md ${aiError ? "border-danger/35 text-danger" : "border-edge text-ink"}`}
+          >
+            {aiError || aiNote}
+          </p>
+        )}
+        </>
       )}
     </SearchDrift>
   );

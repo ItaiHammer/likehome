@@ -1,10 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { DatesField } from "./_components/DatesField";
-import { DestinationInput } from "./_components/DestinationInput";
-import { GuestsPicker } from "./_components/GuestsPicker";
 import { PopularDestinations } from "./_components/PopularDestinations";
-import { SearchDrift } from "./_components/SearchDrift";
+import { SearchExperience } from "./_components/SearchExperience";
 import { SkyBackground } from "./_components/SkyBackground";
 import { Button, SectionHeading, Stars, Tag } from "./_components/ui";
 import { WindowScene } from "./_components/WindowScene";
@@ -59,13 +56,6 @@ function Arrow({ className }: { className?: string }) {
 
 const perks = ["Member prices on every stay", "Rewards on every night you book", "Free cancellation on most stays"];
 
-// Each search segment shows a focus ring while its control (marked data-trigger) has keyboard focus.
-// The destination field marks a mouse or touch focus with data-pointer-focus, since text fields
-// count as focus-visible even when clicked.
-const field =
-  // (rounded only while the ring shows, so the divider lines between segments stay straight)
-  "flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3 md:py-5 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:rounded-xl has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-2 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-inset has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-blue";
-
 export default function Home() {
   return (
     <div className="flex flex-1 flex-col">
@@ -83,28 +73,10 @@ export default function Home() {
             A new favorite stay starts with a hello.
           </p>
 
-          <SearchDrift className="mt-10">
-            {/* The fields' bar and the Search button sit side by side, same height. */}
-            <form action="/search" className="flex flex-col gap-3 md:flex-row">
-              <div className="flex min-w-0 flex-1 flex-col divide-y divide-edge/60 rounded-2xl border border-(--bar-edge) bg-surface/80 p-2 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md md:flex-row md:divide-x md:divide-y-0 md:py-0">
-                <DestinationInput className={`${field} md:flex-[1.6]`} />
-                <DatesField className={field} />
-                <GuestsPicker className={field} />
-              </div>
-              <button
-                type="submit"
-                aria-label="Search"
-                title="Search"
-                className="flex h-14 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-colors hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:h-auto md:w-[66px]"
-              >
-                {/* Icon only: a square the height of the bar on desktop */}
-                <Icon className="h-6 w-6">
-                  <circle cx="11" cy="11" r="6.5" />
-                  <path d="M16 16l4.5 4.5" strokeLinecap="round" />
-                </Icon>
-              </button>
-            </form>
-          </SearchDrift>
+          {/* Mykaela's search bar (fields, filters, AI mode): it sends people to /search */}
+          <div className="mt-10">
+            <SearchExperience />
+          </div>
         </div>
       </section>
 

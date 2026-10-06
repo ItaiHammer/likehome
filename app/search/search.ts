@@ -15,10 +15,19 @@ import { bedSizes, sorts, tags } from './types.ts';
 
 import { searchAvailableHotels } from '../../utils/search.ts';
 
-export async function search(searchParams: SearchRequest): Promise<SearchResponse> {
+// Paging stays out of SearchRequest: it picks which slice of results to show,
+// not which stays match, so the AI and filter parsing never see it.
+export type PageOptions = {
+    page?: number;
+    pageSize?: number;
+};
+
+export async function search(searchParams: SearchRequest, pageOptions?: PageOptions): Promise<SearchResponse> {
     const standardizedParams = getSearchParams(searchParams);
 
     const result = await searchAvailableHotels({
+        ...(pageOptions?.page !== undefined && { page: pageOptions.page }),
+        ...(pageOptions?.pageSize !== undefined && { page_size: pageOptions.pageSize }),
         city: standardizedParams?.location?.city,
         region: standardizedParams?.location?.region,
         country: standardizedParams?.location?.country,

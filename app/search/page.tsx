@@ -1,7 +1,7 @@
 import { SearchExperience } from "../_components/SearchExperience";
 import { SkyBackground } from "../_components/SkyBackground";
-import { DESTINATIONS } from "../_data/destinations";
-import { searchAvailableHotels } from "@/utils/search";
+import { search } from "./search";
+import type { SearchRequest } from "./types";
 import { Pagination } from "./components/Pagination";
 import { SearchResultCard, type HotelSearchResult } from "./components/SearchResultCard";
 import { SortSelect } from "./components/SortSelect";
@@ -26,60 +26,47 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const raw = await searchParams;
   const params = normalizeParams(raw);
   const aiPrompt = params.aiPrompt?.trim();
-  const isDevAiPreview =
-    process.env.NODE_ENV === "development" && Boolean(aiPrompt) && !hasStructuredSearchCriteria(params);
-  const aiPreviewResult = isDevAiPreview && aiPrompt ? buildDevAiPreview(params, aiPrompt) : null;
-  const aiPreview = aiPreviewResult && "params" in aiPreviewResult ? aiPreviewResult : null;
-  const aiPreviewError = aiPreviewResult && "error" in aiPreviewResult ? aiPreviewResult.error : "";
-  const resolvedParams: SearchParams = aiPreview
-    ? { ...aiPreview.params, aiReply: aiPreview.reply }
-    : params;
-  const aiReply = resolvedParams.aiReply?.trim();
-  const hasStructuredSearch = hasStructuredSearchCriteria(resolvedParams);
-  const navigationParams = toRawParams(resolvedParams);
+  // An AI search arrives as normal filters plus the assistant's summary (aiReply):
+  // SearchExperience asks Cara's /api/search/ai endpoint, then links here.
+  const aiReply = params.aiReply?.trim();
+  const navigationParams = toRawParams(params);
 
   let data: HotelSearchResult[] = [];
   let total = 0;
   let searchError = "";
   let usingMockData = false;
 
-  // TODO(INTEGRATION): Once Cara's AI endpoint is merged into dev, replace
-  // buildDevAiPreview with the real endpoint response. The preview is deliberately
-  // development-only so it cannot ship as fake AI behavior.
-  const shouldSearch = !aiPrompt || hasStructuredSearch;
+  try {
+    const { results } = await search(toSearchRequest(params), {
+      page: positiveInt(params.page, 1),
+      pageSize: PAGE_SIZE,
+    });
+    data = Array.isArray(results.data) ? (results.data as HotelSearchResult[]) : [];
+    total = Number(results.total ?? 0);
+    if (results.error) {
+      console.error("Search failed", results.error);
+      searchError = "We couldn't load stays right now. Please try again.";
+    }
+  } catch (error) {
+    console.error("Search failed", error);
+    searchError = "We couldn't load stays right now. Please try again.";
+  }
 
-  if (aiPreview) {
-    const mock = getMockSearchResults(resolvedParams);
+  // TODO(INTEGRATION): Remove this local-only fallback once the shared Supabase
+  // project has enough seeded hotel/room data for reliable frontend testing.
+  // It never runs in production and never replaces real database results.
+  if (process.env.NODE_ENV === "development" && data.length === 0) {
+    const mock = getMockSearchResults(params);
     data = mock.data;
     total = mock.total;
     usingMockData = true;
-  } else if (!aiPreviewError && shouldSearch) {
-    try {
-      const result = await searchAvailableHotels(toDatabaseFilters(resolvedParams));
-      data = Array.isArray(result.data) ? (result.data as HotelSearchResult[]) : [];
-      total = Number(result.total ?? 0);
-      if (result.error) searchError = "We couldn't load stays right now. Please try again.";
-    } catch (error) {
-      console.error("Search failed", error);
-      searchError = "We couldn't load stays right now. Please try again.";
-    }
-
-    // TODO(INTEGRATION): Remove this local-only fallback once the shared Supabase
-    // project has enough seeded hotel/room data for reliable frontend testing.
-    // It never runs in production and never replaces real database results.
-    if (process.env.NODE_ENV === "development" && data.length === 0) {
-      const mock = getMockSearchResults(resolvedParams);
-      data = mock.data;
-      total = mock.total;
-      usingMockData = true;
-      searchError = "";
-    }
+    searchError = "";
   }
 
-  const currentPage = positiveInt(resolvedParams.page, 1);
+  const currentPage = positiveInt(params.page, 1);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const activeFilterCount = getActiveFilterCount(resolvedParams);
-  const locationHeading = resolvedParams.where ? `Stays in ${resolvedParams.where}` : "Stays for you";
+  const activeFilterCount = getActiveFilterCount(params);
+  const locationHeading = params.where ? `Stays in ${params.where}` : "Stays for you";
 
   return (
     <div className="flex flex-1 flex-col">
@@ -90,21 +77,23 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
         <div className="mx-auto max-w-6xl">
           <p className="mb-3 text-sm font-semibold text-blue">Find your next stay</p>
+          {/* Keyed by the search, so a new search (e.g. from AI mode) refills the bar */}
           <SearchExperience
+            key={searchKey(navigationParams)}
             compact
             initialMode={aiPrompt ? "ai" : "standard"}
             initialValues={{
-              where: resolvedParams.where,
-              checkIn: resolvedParams.checkIn,
-              checkOut: resolvedParams.checkOut,
-              adults: positiveInt(resolvedParams.adults, 2),
-              children: nonNegativeInt(resolvedParams.children, 0),
-              minPrice: resolvedParams.minPrice,
-              maxPrice: resolvedParams.maxPrice,
-              minRating: resolvedParams.minRating,
-              numBeds: resolvedParams.numBeds,
-              bedSize: resolvedParams.bedSize,
-              tags: resolvedParams.tags,
+              where: params.where,
+              checkIn: params.checkIn,
+              checkOut: params.checkOut,
+              adults: positiveInt(params.adults, 2),
+              children: nonNegativeInt(params.children, 0),
+              minPrice: params.minPrice,
+              maxPrice: params.maxPrice,
+              minRating: params.minRating,
+              numBeds: params.numBeds,
+              bedSize: params.bedSize,
+              tags: params.tags,
               aiPrompt,
             }}
           />
@@ -112,38 +101,26 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       </section>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 sm:px-6">
-        {aiReply && <AiReplyCard reply={aiReply} params={resolvedParams} />}
-        {aiPreviewError && <AiErrorCard message={aiPreviewError} />}
+        {aiReply && <AiReplyCard reply={aiReply} params={params} />}
         {usingMockData && <MockDataNotice />}
 
-        {!aiPreviewError && (
         <div className="flex flex-col gap-5 border-b border-edge pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-blue">Search results</p>
             <h1 className="mt-1 font-serif text-[36px] leading-[44px] text-ink sm:text-[44px] sm:leading-[52px]">{locationHeading}</h1>
             <p className="mt-2 text-sm text-slate">
-              {searchError
-                ? "Results unavailable"
-                : shouldSearch
-                  ? `${total} ${total === 1 ? "stay" : "stays"} found`
-                  : "Your AI request is ready for interpretation"}
+              {searchError ? "Results unavailable" : `${total} ${total === 1 ? "stay" : "stays"} found`}
               {activeFilterCount > 0 && ` · ${activeFilterCount} ${activeFilterCount === 1 ? "filter" : "filters"} applied`}
             </p>
           </div>
 
-          <SortSelect current={resolvedParams.sort} params={navigationParams} />
+          <SortSelect current={params.sort} params={navigationParams} />
         </div>
-        )}
 
-        {aiPreviewError ? null : searchError ? (
+        {searchError ? (
           <StatePanel
             title="We couldn't load stays"
             body="Try the search again. If this keeps happening, the search service may be temporarily unavailable."
-          />
-        ) : aiPrompt && !hasStructuredSearch ? (
-          <StatePanel
-            title="AI search is almost connected"
-            body="The prompt experience is ready. Once the AI search endpoint is merged into dev, this request will be translated into search filters and the matching stays will appear here."
           />
         ) : data.length === 0 ? (
           <StatePanel title="No stays found" body="Try changing the destination, dates, guest count, or filters." />
@@ -221,148 +198,23 @@ function toRawParams(params: SearchParams): RawParams {
   };
 }
 
-function buildDevAiPreview(params: SearchParams, prompt: string) {
-  const lower = prompt.toLocaleLowerCase();
-  const tags = new Set(params.tags);
-
-  if (lower.includes("pool")) tags.add("Pool");
-  if (lower.includes("breakfast") || lower.includes("free meal")) tags.add("Free Meals");
-  if (lower.includes("wifi") || lower.includes("wi-fi")) tags.add("Free Wi-Fi");
-  if (lower.includes("gym")) tags.add("Gym");
-  if (lower.includes("parking")) tags.add("Parking");
-  if (lower.includes("kitchen")) tags.add("Kitchen");
-  if (lower.includes("pet")) tags.add("Pets");
-  if (lower.includes("family") || lower.includes("families")) tags.add("Families");
-
-  const guestMatch = lower.match(/\b(\d+)\s+(?:of us|guests?|people|travelers?)\b/);
-  const maxPriceMatch = lower.match(/(?:under|below|less than|up to|max(?:imum)?(?: of)?)\s*\$?\s*(\d+)/);
-  const bedMatch = lower.match(/\b(\d+)\+?\s*beds?\b/);
-  const ratingMatch = lower.match(/\b([1-5](?:\.\d)?)\+?\s*stars?\b/);
-
-  let where = params.where;
-  if (!where) {
-    if (lower.includes("france") || lower.includes("paris")) where = "Paris, France";
-    else if (lower.includes("hawaii") || lower.includes("honolulu")) where = "Honolulu, Hawaii, United States";
-    else if (lower.includes("miami")) where = "Miami, Florida, United States";
-    else if (lower.includes("italy") || lower.includes("positano")) where = "Positano, Campania, Italy";
-    else if (lower.includes("portugal") || lower.includes("lisbon")) where = "Lisbon, Lisbon, Portugal";
-    else if (lower.includes("banff") || lower.includes("canada")) where = "Banff, Alberta, Canada";
-    else if (lower.includes("san diego")) where = "San Diego, California, United States";
-    else if (lower.includes("mexico") || lower.includes("tulum")) where = "Tulum, Quintana Roo, Mexico";
-  }
-
-  let bedSize = params.bedSize;
-  if (!bedSize) {
-    if (lower.includes("king bed")) bedSize = "King";
-    else if (lower.includes("queen bed")) bedSize = "Queen";
-    else if (lower.includes("twin xl")) bedSize = "Twin XL";
-    else if (lower.includes("twin bed")) bedSize = "Twin";
-    else if (lower.includes("double bed")) bedSize = "Double";
-  }
-
-  const extractedSomething = Boolean(
-    where ||
-      guestMatch ||
-      maxPriceMatch ||
-      bedMatch ||
-      ratingMatch ||
-      bedSize ||
-      tags.size > params.tags.length,
-  );
-
-  if (!extractedSomething) {
-    return {
-      error:
-        "I couldn't confidently turn that into search filters. Try adding a destination, guest count, budget, bed preference, or amenity.",
-    };
-  }
-
-  const previewParams: SearchParams = {
-    ...params,
-    where,
-    adults: guestMatch?.[1] ?? params.adults ?? "2",
-    maxPrice: maxPriceMatch?.[1] ?? params.maxPrice,
-    minRating: ratingMatch?.[1] ?? params.minRating,
-    numBeds: bedMatch?.[1] ?? params.numBeds,
-    bedSize,
-    tags: [...tags],
-    page: "1",
-  };
-
-  const replyParts: string[] = [];
-  if (where) replyParts.push(`in ${where}`);
-  const guests = positiveInt(previewParams.adults, 0) + nonNegativeInt(previewParams.children, 0);
-  if (guests > 0) replyParts.push(`for ${guests} ${guests === 1 ? "guest" : "guests"}`);
-  if (previewParams.maxPrice) replyParts.push(`under $${previewParams.maxPrice} per night`);
-
-  const priorities: string[] = [];
-  if (tags.has("Pool")) priorities.push("a pool");
-  if (tags.has("Free Meals")) priorities.push("free breakfast");
-  if (tags.has("Free Wi-Fi")) priorities.push("free Wi-Fi");
-  if (tags.has("Gym")) priorities.push("a gym");
-  if (tags.has("Parking")) priorities.push("parking");
-  if (tags.has("Kitchen")) priorities.push("a kitchen");
-
-  const scope = replyParts.length ? ` ${replyParts.join(" ")}` : "";
-  const priorityText = priorities.length ? `, prioritizing ${joinNaturalLanguage(priorities)}` : "";
-
+// Cara's SearchRequest uses the same names as the link, so this only drops
+// what she doesn't parse (sort "recommended" is her default).
+function toSearchRequest(params: SearchParams): SearchRequest {
   return {
-    params: previewParams,
-    reply: `I found stays${scope}${priorityText}. Here are the best matches from your request.`,
-  };
-}
-
-function joinNaturalLanguage(items: string[]) {
-  if (items.length <= 1) return items[0] ?? "";
-  if (items.length === 2) return `${items[0]} and ${items[1]}`;
-  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
-}
-
-function toDatabaseFilters(params: SearchParams) {
-  const location = parseLocation(params.where);
-  return {
-    ...location,
-    check_in: params.checkIn || undefined,
-    check_out: params.checkOut || undefined,
-    guests: positiveInt(params.adults, 2) + nonNegativeInt(params.children, 0),
-    min_price: optionalNumber(params.minPrice),
-    max_price: optionalNumber(params.maxPrice),
-    min_rating: optionalNumber(params.minRating),
-    num_beds: optionalNumber(params.numBeds),
-    bed_size: params.bedSize || undefined,
+    where: params.where,
+    checkIn: params.checkIn,
+    checkOut: params.checkOut,
+    adults: params.adults,
+    children: params.children,
+    minPrice: params.minPrice,
+    maxPrice: params.maxPrice,
+    minRating: params.minRating,
+    numBeds: params.numBeds,
+    bedSize: params.bedSize,
     tags: params.tags.length ? params.tags : undefined,
-    sort: params.sort ?? "recommended",
-    page: positiveInt(params.page, 1),
-    page_size: PAGE_SIZE,
+    sort: params.sort,
   };
-}
-
-function parseLocation(where?: string) {
-  const trimmed = where?.trim();
-  if (!trimmed) return {};
-
-  const match = DESTINATIONS.find(([city, region]) => `${city}, ${region}`.toLocaleLowerCase() === trimmed.toLocaleLowerCase());
-  if (!match) return { query: trimmed };
-
-  const [city, area] = match;
-  const pieces = area.split(",").map((piece) => piece.trim());
-  const country = pieces.at(-1);
-  const region = pieces.length > 1 ? pieces.slice(0, -1).join(", ") : undefined;
-  return { city, region, country };
-}
-
-function hasStructuredSearchCriteria(params: SearchParams) {
-  return Boolean(
-    params.where ||
-      params.checkIn ||
-      params.checkOut ||
-      params.minPrice ||
-      params.maxPrice ||
-      params.minRating ||
-      params.numBeds ||
-      params.bedSize ||
-      params.tags.length,
-  );
 }
 
 function getActiveFilterCount(params: SearchParams) {
@@ -401,20 +253,12 @@ function AiReplyCard({ reply, params }: { reply: string; params: SearchParams })
   );
 }
 
-function AiErrorCard({ message }: { message: string }) {
-  return (
-    <section className="mb-7 rounded-2xl border border-danger/35 bg-surface p-4 sm:p-5">
-      <div className="flex gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger/10 text-sm font-bold text-danger" aria-hidden>
-          !
-        </span>
-        <div>
-          <p className="text-sm font-semibold text-danger">Try adding a little more detail</p>
-          <p className="mt-1 text-sm leading-6 text-ink">{message}</p>
-        </div>
-      </div>
-    </section>
-  );
+function searchKey(params: RawParams) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    for (const item of [value ?? []].flat()) query.append(key, item);
+  }
+  return query.toString();
 }
 
 function buildCriteriaChips(params: SearchParams) {
@@ -462,12 +306,6 @@ function first(value: string | string[] | undefined) {
 function values(value: string | string[] | undefined) {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
-}
-
-function optionalNumber(value?: string) {
-  if (value === undefined || value.trim() === "") return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function positiveInt(value: string | undefined, fallback: number) {
