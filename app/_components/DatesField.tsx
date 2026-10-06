@@ -7,10 +7,18 @@ import { RangeCalendar, type RangeField } from "./RangeCalendar";
 
 // The search bar's dates segment: one field that opens the same range calendar
 // the stay pages use. Sends checkIn / checkOut with the form.
-export function DatesField({ className = "" }: { className?: string }) {
+export function DatesField({
+  className = "",
+  initialCheckIn = "",
+  initialCheckOut = "",
+}: {
+  className?: string;
+  initialCheckIn?: string;
+  initialCheckOut?: string;
+}) {
   const [open, setOpen] = useState(false);
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
+  const [checkIn, setCheckIn] = useState(initialCheckIn);
+  const [checkOut, setCheckOut] = useState(initialCheckOut);
   const [field, setField] = useState<RangeField>("in");
   // Bumped on each open, so the calendar starts on the month being filled.
   const [session, setSession] = useState(0);
@@ -75,9 +83,20 @@ export function DatesField({ className = "" }: { className?: string }) {
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={label ? `Dates: ${label}` : "Dates"}
-        className={`min-w-0 flex-1 truncate text-left text-base outline-none focus-visible:outline-hidden ${label ? "text-ink" : "text-slate"}`}
+        className={`min-w-0 flex-1 text-left outline-none focus-visible:outline-hidden ${label ? "text-ink" : "text-slate"}`}
       >
-        {label || <RotatingPlaceholder kind="when" paused={open} />}
+        {checkIn && checkOut ? (
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="truncate text-base">
+              {formatShort(checkIn)} – {formatShort(checkOut)}
+            </span>
+            <span className="mt-1 text-xs font-medium text-slate">
+              {nights} {nights === 1 ? "night" : "nights"}
+            </span>
+          </span>
+        ) : (
+          label || <RotatingPlaceholder kind="when" paused={open} />
+        )}
       </button>
 
       <input type="hidden" name="checkIn" value={checkIn} />

@@ -10,9 +10,20 @@ const rows = [
 type Counts = Record<(typeof rows)[number]["key"], number>;
 
 // Themed replacement for a native <select>, whose popup ignores the site's light/dark theme.
-export function GuestsPicker({ className = "" }: { className?: string }) {
+export function GuestsPicker({
+  className = "",
+  initialAdults = 2,
+  initialChildren = 0,
+}: {
+  className?: string;
+  initialAdults?: number;
+  initialChildren?: number;
+}) {
   const [open, setOpen] = useState(false);
-  const [counts, setCounts] = useState<Counts>({ adults: 2, children: 0 });
+  const [counts, setCounts] = useState<Counts>({
+    adults: Math.min(16, Math.max(1, initialAdults)),
+    children: Math.min(10, Math.max(0, initialChildren)),
+  });
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);

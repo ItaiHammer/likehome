@@ -226,3 +226,65 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
 @keyframes ph-out {
   to { transform: translateY(-100%); opacity: 0; }
 }
+
+/* AI mode switch: the only search control with an animated multicolor edge. */
+.ai-toggle {
+  border: 2px solid transparent;
+  background:
+          linear-gradient(var(--surface), var(--surface)) padding-box,
+          linear-gradient(120deg, #4473b5, #8576d1, #55aeb5, #e0a05f, #4473b5) border-box;
+  background-size: 100% 100%, 260% 260%;
+  background-position: 0 0, 0% 50%;
+  animation: ai-border-shift 2.8s ease-in-out infinite;
+  transition:
+          color 0.2s ease,
+          background-color 0.2s ease,
+          border-color 0.2s ease,
+          transform 0.2s ease;
+}
+
+.ai-toggle:hover {
+  border-color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 5%, var(--surface));
+  color: var(--blue);
+  animation-play-state: paused;
+  transform: translateY(-2px);
+}
+
+@keyframes ai-border-shift {
+  0% {
+    background-position: 0 0, 0% 50%;
+  }
+  50% {
+    background-position: 0 0, 100% 50%;
+  }
+  100% {
+    background-position: 0 0, 0% 50%;
+  }
+}
+
+.standard-return-button {
+  background-image: none !important;
+  background-color: color-mix(
+          in srgb,
+          var(--blue) 12%,
+          var(--surface) 88%
+  ) !important;
+
+  border: 1px solid color-mix(
+          in srgb,
+          var(--blue) 45%,
+          var(--edge) 55%
+  ) !important;
+  border-image: none !important;
+}
+
+.standard-return-button:hover {
+  background-image: none !important;
+  background-color: color-mix(
+          in srgb,
+          var(--blue) 18%,
+          var(--surface) 82%
+  ) !important;
+  border-image: none !important;
+}
