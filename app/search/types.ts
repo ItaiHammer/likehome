@@ -18,7 +18,7 @@ export type SearchRequest = {
     
     sort?: string;
 
-    tags?: string[];
+    tags?: string | string[];
 }
 
 // Backend to Frontend contract
@@ -49,9 +49,9 @@ export type PropertyRecords = {
 // Export intended only for use in /search/page.tsx
 // Should not need to be used individually elsewhere
 export type LocationParams = {
-    city?: string;
+    city: string;
     region?: string;
-    country: string;
+    country?: string;
 }
 
 export type DateParams = {

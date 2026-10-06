@@ -18,15 +18,19 @@ import { searchAvailableHotels } from '../../utils/search.ts';
 export async function search(searchParams: SearchRequest): Promise<SearchResponse> {
     const standardizedParams = getSearchParams(searchParams);
 
-    // TODO(Database): Align query with supported search params
     const result = await searchAvailableHotels({
         city: standardizedParams?.location?.city,
+        region: standardizedParams?.location?.region,
         country: standardizedParams?.location?.country,
         check_in: standardizedParams?.dates?.checkIn,
         check_out: standardizedParams?.dates?.checkOut,
         guests: standardizedParams?.guests?.total,
         min_price: standardizedParams?.price?.min,
         max_price: standardizedParams?.price?.max,
+        min_rating: standardizedParams?.rating?.minStars,
+        num_beds: standardizedParams?.beds?.num,
+        bed_size: standardizedParams?.beds?.size,
+        tags: standardizedParams?.tags,
         sort: standardizedParams?.sort
     });
 
@@ -56,7 +60,7 @@ function getSearchParams(searchParams: SearchRequest): PropertyFilter {
 }
 
 function getLocationParams(location?: string): LocationParams | undefined {
-    if (location === undefined) {
+    if (location === undefined || !location.trim()) {
         return undefined;
     }
 
@@ -65,7 +69,7 @@ function getLocationParams(location?: string): LocationParams | undefined {
         case 0:
             return undefined;
         case 1:
-            return { country: segment[0] };
+            return { city: segment[0] };
         case 2:
             return {
                 city: segment[0],
@@ -189,13 +193,16 @@ function getSortParams(sort?: string): Sort | undefined {
     return getAsTypeOrUndefined(sort, sorts);
 }
 
-function getTagParams(tagArr?: string[]): Tag[] | undefined {
-    if (tagArr === undefined) {
+function getTagParams(tagInput?: SearchRequest['tags']): Tag[] | undefined {
+    if (tagInput === undefined) {
         return undefined;
+    }
+    if (typeof tagInput === 'string') {
+        tagInput = [tagInput];
     }
     const result: Tag[] = [];
     let tag;
-    for (const t of tagArr) {
+    for (const t of tagInput) {
         tag = getAsTypeOrUndefined(t, tags);
         if (tag !== undefined) {
             result.push(tag);

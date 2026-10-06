@@ -40,29 +40,38 @@ const instructions =
     For the tags output field, only include values when the given input explicitly seeks out accommodations with the benefits.
     Do not just include all tags, unless the given input does actually want all of the tags. Do not assume.
 
-    Use the following format for the 'where' output field:
-        Write as comma and space separated string in order of preference based on information from given input:
-        1. 'city, region, country' if all 3 specified or unambiguous in given input
-        2. 'city, country' if both specified or unambiguous in given input
-        3. 'country' if unambigious in given input
-    
-    Use the following format for the 'text' output field:
-        If any field in output besides text has a value, then the text output field must have a value describing all values in output.
-        The only instance where text is not defined is if all other output fields have been omitted.
-        Using the other output fields with values from the given input, format it into the following paragraph format.
-        If a field is missing, omit the sentence segment mentioning that field from the text output. 
-        Do not assume the value of a field omitted from output.
-        Correct grammar relating to units after numbers or removed parts of a sentence due to a missing field,
-        but follow the paragraph format template as closely as possible. 
-        In the paragraph format template, replace the single quotations and the name of the output field with the value of the output field.
+    The following are format rules for certain output fields. Always use given input for the information, and do NOT assume.
+        'where':
+            - 'city, region, country' (preferred if all 3 specified or unambiguous).
+            - Fallback 1: 'city, country' (if region is missing or ambiguous).
+            - Fallback 2: 'city' (if only city is specified or unambiguous).
+            - If no valid city can be determined, output nothing (leave blank).
+            - Spell out all names fully. NO abbreviations (e.g., use "California", not "CA"; use "United States of America", not "US" or "USA").
+
+        'minPrice' and 'maxPrice:
+            - Units are price per night.
+            - Accurately calculate the equivalent price per night if given input provides in another unit.
+            - Include none, both, xor one or the other field.
+            - Including 'minPrice' does not mean 'maxPrice' must be specified and vice versa.
+
+        'text:
+            - If any field in output besides text has a value, then the text output field must have a value describing all values in output.
+            - The only instance where text is not defined is if all other output fields have been omitted.
+            - Using the other output fields with values from the given input, format it into the following paragraph format.
+            - If a field is missing, omit the sentence segment mentioning that field from the text output. 
+            - Do not assume the value of a field omitted from output.
+            - In the paragraph format template, replace the single quotations and the name of the output field with the value of the output field.
+            - **CRITICAL**: Correct any incorrect grammar due to filling in output fields or removing parts of a sentence due to omitted output fields with the minimum edits to the provided paragraph format template.
 
         Paragraph format:
         Based on your description, the following travel accommodations would suit your plans best.
-        They are all located in 'where' and available from 'checkIn' to 'checkOut'.
-        The accommodations have at least 'numBeds' 'bedSize' beds, perfect for 'adults' adults and 'children' children.
+        They are all located in 'where' and available from 'checkIn in Month name, Day number, Year number' to 'checkOut in Month name, Day number, Year number'.
+        The accommodations have at least 'numBeds' 'bedSize' beds.
+        The accommodations are perfect for 'adults' adults and 'children' children.
         The price per night is between 'minPrice' and 'maxPrice'.
         These options have been rated at least 'minRating' out of 5 stars.
-        These accommodations have 'all elements in tags output field'.
+        These accommodations are great for 'tags in output field tags in: families, kids, pets, couples, friends'.
+        These accommodations have 'tags in output field tags not included in previous sentence in lowercase when that is grammatically correct'.
         The results are sorted by 'sort'.
         Hope you find one where you can best enjoy your stay!
     `;
@@ -74,13 +83,13 @@ const aiOutputFormat = Output.object({
         where: getOptionalZString(),
         checkIn: getOptionalIsoDateToString(),
         checkOut: getOptionalIsoDateToString(),
-        numBeds: getOptionalNumberToString(0, undefined, true),
+        numBeds: getOptionalNumberToString(0, undefined),
         bedSize: getOptionalEnum(bedSizes),
-        adults: getOptionalNumberToString(0, undefined, true),
-        children: getOptionalNumberToString(0, undefined, true),
-        minPrice:getOptionalNumberToString(0, undefined, false),
-        maxPrice: getOptionalNumberToString(0, undefined, false),
-        minRating: getOptionalNumberToString(0, 5, false),
+        adults: getOptionalNumberToString(0, undefined),
+        children: getOptionalNumberToString(0, undefined),
+        minPrice:getOptionalNumberToString(0, undefined, 2),
+        maxPrice: getOptionalNumberToString(0, undefined, 2),
+        minRating: getOptionalNumberToString(0, 5, 1),
         sort: getOptionalEnum(sorts),
         tags: z.array(z.enum(tags)).optional()
     })
@@ -96,18 +105,15 @@ function getOptionalIsoDateToString() {
     return z.iso.date().transform((val) => val.toString()).optional();
 }
 
-function getOptionalNumberToString(min?: number, max?: number, int?: boolean) {
+function getOptionalNumberToString(min?: number, max?: number, decimalDigits: number = 0) {
     let value = z.number();
-    if (int) {
-        value = value.int();
-    }
     if (min !== undefined) {
         value = value.min(min);
     }
     if (max !== undefined) {
         value = value.max(max);
     }
-    return value.transform((val) => val.toString(0)).optional();
+    return value.transform((val) => val.toFixed(decimalDigits)).optional();
 }
 
 function getOptionalEnum(options: readonly any[]) {

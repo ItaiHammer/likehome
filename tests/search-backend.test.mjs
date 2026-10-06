@@ -56,13 +56,13 @@ describe('Search Module Integration', () => {
             {
                 name: 'filters out invalid parameters and omits corresponding fields',
                 input: {
-                    where: 'France', // 1 segment -> country only
+                    where: 'Paris', // 1 segment -> city only
                     checkIn: 'invalid-date',
                     numBeds: 'abc',
                     adults: '2',
                 },
                 expectedParams: {
-                    location: { country: 'France' },
+                    location: { city: 'Paris' },
                     guests: { adults: 2, total: 2 },
                 },
             },
@@ -84,13 +84,17 @@ describe('Search Module Integration', () => {
         test('maps standardized parameters correctly to searchAvailableHotels call', async () => {
             // Arrange
             const mockSearchRequest = {
-                where: 'Tokyo, Japan',
+                where: 'Osaka, Osaka Prefecture, Japan',
                 checkIn: '2026-07-01',
                 checkOut: '2026-07-05',
                 adults: '2',
                 children: '2',
                 minPrice: '150',
                 maxPrice: '400',
+                minRating: '4',
+                numBeds: '2',
+                bedSize: 'Queen',
+                tags: ['Free Wi-Fi', 'Pool'],
                 sort: 'recommended',
             };
 
@@ -101,26 +105,34 @@ describe('Search Module Integration', () => {
             const result = await search(mockSearchRequest);
 
             // Assert
-            // 1. Verify searchAvailableHotels received mapped DB fields
+            // 1. Verify searchAvailableHotels received mapped DB fields including the new properties
             assert.strictEqual(searchAvailableHotels.mock.callCount(), 1);
             assert.deepStrictEqual(searchAvailableHotels.mock.calls[0].arguments[0], {
-                city: 'Tokyo',
+                city: 'Osaka',
+                region: 'Osaka Prefecture',
                 country: 'Japan',
                 check_in: '2026-07-01',
                 check_out: '2026-07-05',
                 guests: 4, // 2 adults + 2 children total
                 min_price: 150,
                 max_price: 400,
+                min_rating: 4,
+                num_beds: 2,
+                bed_size: 'Queen',
+                tags: ['Free Wi-Fi', 'Pool'],
                 sort: 'recommended',
             });
 
             // 2. Verify wrapper returns expected composite response shape
             assert.deepStrictEqual(result, {
                 params: {
-                    location: { city: 'Tokyo', country: 'Japan' },
+                    location: { city: 'Osaka', region: 'Osaka Prefecture', country: 'Japan' },
                     dates: { checkIn: '2026-07-01', checkOut: '2026-07-05' },
                     guests: { adults: 2, children: 2, total: 4 },
                     price: { min: 150, max: 400 },
+                    rating: { minStars: 4 },
+                    beds: { num: 2, size: 'Queen' },
+                    tags: ['Free Wi-Fi', 'Pool'],
                     sort: 'recommended',
                 },
                 results: mockDbResults,
@@ -137,12 +149,17 @@ describe('Search Module Integration', () => {
             // Assert
             assert.deepStrictEqual(searchAvailableHotels.mock.calls[0].arguments[0], {
                 city: undefined,
+                region: undefined,
                 country: undefined,
                 check_in: undefined,
                 check_out: undefined,
                 guests: undefined,
                 min_price: undefined,
                 max_price: undefined,
+                min_rating: undefined,
+                num_beds: undefined,
+                bed_size: undefined,
+                tags: undefined,
                 sort: undefined,
             });
             assert.deepStrictEqual(result, {
@@ -161,9 +178,14 @@ describe('search location parameter', () => {
             expected: undefined,
         },
         {
-            name: 'returns country only when 1 segment is provided',
-            input: 'France',
-            expected: { country: 'France' },
+            name: 'returns undefined when location is whitespace',
+            input: ' ',
+            expected: undefined,
+        },
+        {
+            name: 'returns city only when 1 segment is provided',
+            input: 'Paris',
+            expected: { city: 'Paris' },
         },
         {
             name: 'returns city and country when 2 segments are provided',
@@ -177,8 +199,8 @@ describe('search location parameter', () => {
         },
         {
             name: 'returns city, region, and country when 3 segments are provided',
-            input: 'San Francisco, California, USA',
-            expected: { city: 'San Francisco', region: 'California', country: 'USA' },
+            input: 'San Francisco, California, United States of America',
+            expected: { city: 'San Francisco', region: 'California', country: 'United States of America' },
         },
         {
             name: 'returns city and country, skipping middle segments, when more than 3 segments are provided',
@@ -540,31 +562,41 @@ describe('search sort parameter', () => {
 describe('search tag parameter', () => {
     const tagTestCases = [
         {
-            name: 'returns undefined when tagArr is undefined',
-            tagArr: undefined,
+            name: 'returns undefined when tagInput is undefined',
+            tagInput: undefined,
             expected: undefined,
         },
         {
             name: 'returns undefined when none of the provided tags are valid',
-            tagArr: ['invalid-tag-1', 'invalid-tag-2'],
+            tagInput: ['invalid-tag-1', 'invalid-tag-2'],
             expected: undefined,
         },
         {
             name: 'returns filtered array of valid tags when some tags are valid',
-            tagArr: ['Free Wi-Fi', 'invalid-tag', 'Pool'],
+            tagInput: ['Free Wi-Fi', 'invalid-tag', 'Pool'],
             expected: ['Free Wi-Fi', 'Pool'],
         },
         {
             name: 'returns array of tags when all provided tags are valid',
-            tagArr: ['Free Wi-Fi', 'Parking'],
+            tagInput: ['Free Wi-Fi', 'Parking'],
             expected: ['Free Wi-Fi', 'Parking'],
+        },
+        {
+            name: 'returns array of tags when one invalid tag provided (string)',
+            tagInput: 'invalid-tag',
+            expected: undefined
+        },
+        {
+            name: 'returns array of tags when one valid tag provided (string)',
+            tagInput: 'Pool',
+            expected: ['Pool']
         },
     ];
 
-    for (const { name, tagArr, expected } of tagTestCases) {
+    for (const { name, tagInput, expected } of tagTestCases) {
         test(name, async () => {
             // Act
-            const response = await search({ tags: tagArr });
+            const response = await search({ tags: tagInput });
             // Assert
             assert.deepStrictEqual(response.params.tags, expected);
         });
