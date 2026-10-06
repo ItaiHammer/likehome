@@ -132,7 +132,10 @@ export function SearchExperience({
               initialAdults={initialValues.adults ?? 2}
               initialChildren={initialValues.children ?? 0}
             />
-            <SearchFiltersPicker className={`${field} md:flex-[0.95]`} initialValues={filters} />
+            <SearchFiltersPicker
+              className={`${field} md:flex-none md:justify-center ${compact ? "md:w-[76px]" : "md:w-[88px]"}`}
+              initialValues={filters}
+            />
           </div>
 
           <div className="flex gap-2.5 md:contents">

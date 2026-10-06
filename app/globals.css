@@ -228,24 +228,29 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
 }
 
 /* AI mode switch: the only search control with an animated multicolor edge. */
+/*
+ * The fill is its own registered color so hover can fade it. (Swapping the
+ * whole background on hover dropped the gradient border at once and faded the
+ * fill in from transparent, which flashed.)
+ */
+@property --ai-fill { syntax: "<color>"; inherits: false; initial-value: #ffffff; }
 .ai-toggle {
+  --ai-fill: var(--surface);
   border: 2px solid transparent;
   background:
-          linear-gradient(var(--surface), var(--surface)) padding-box,
+          linear-gradient(var(--ai-fill), var(--ai-fill)) padding-box,
           linear-gradient(120deg, #4473b5, #8576d1, #55aeb5, #e0a05f, #4473b5) border-box;
   background-size: 100% 100%, 260% 260%;
   background-position: 0 0, 0% 50%;
   animation: ai-border-shift 2.8s ease-in-out infinite;
   transition:
+          --ai-fill 0.2s ease,
           color 0.2s ease,
-          background-color 0.2s ease,
-          border-color 0.2s ease,
           transform 0.2s ease;
 }
 
 .ai-toggle:hover {
-  border-color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 5%, var(--surface));
+  --ai-fill: color-mix(in srgb, var(--blue) 10%, var(--surface));
   color: var(--blue);
   animation-play-state: paused;
   transform: translateY(-2px);
