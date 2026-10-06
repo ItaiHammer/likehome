@@ -68,7 +68,7 @@ export function SearchExperience({
   const [aiNote, setAiNote] = useState("");
   const [aiError, setAiError] = useState("");
   const [transport] = useState(() => new DefaultChatTransport({ api: "/api/search/ai" }));
-  const { sendMessage, setMessages, status } = useChat({
+  const { sendMessage, setMessages, status, stop } = useChat({
     transport,
     onFinish: ({ message, isError, isAbort, isDisconnect }) => {
       if (isError || isAbort || isDisconnect) return;
@@ -81,6 +81,15 @@ export function SearchExperience({
     onError: () => setAiError("AI search isn't available right now. Try the standard search instead."),
   });
   const aiBusy = status === "submitted" || status === "streaming";
+
+  // Switching modes starts fresh: no leftover reply or error, and an AI search
+  // still running is cancelled so it can't open results after you've left.
+  const switchMode = (next: SearchMode) => {
+    if (aiBusy) stop();
+    setAiNote("");
+    setAiError("");
+    setMode(next);
+  };
 
   const filters: SearchFilterValues = {
     minPrice: initialValues.minPrice,
@@ -150,7 +159,7 @@ export function SearchExperience({
             <button
               type="button"
               aria-pressed="false"
-              onClick={() => setMode("ai")}
+              onClick={() => switchMode("ai")}
               className={`ai-toggle flex shrink-0 items-center justify-center rounded-2xl text-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${toggleSize}`}
               title="Search with AI"
               aria-label="Search with AI"
@@ -173,6 +182,11 @@ export function SearchExperience({
               <span className="sr-only">Tell us about your dream stay</span>
               <input
                 name="aiPrompt"
+                onChange={() => {
+                  // A new prompt replaces the last reply
+                  setAiNote("");
+                  setAiError("");
+                }}
                 defaultValue={initialValues.aiPrompt ?? ""}
                 autoComplete="off"
                 placeholder="Tell us about your dream stay"
@@ -199,7 +213,7 @@ export function SearchExperience({
             <button
                 type="button"
                 aria-pressed="true"
-                onClick={() => setMode("standard")}
+                onClick={() => switchMode("standard")}
                 className={`standard-return-button flex shrink-0 items-center justify-center rounded-2xl text-blue transition-[border-color,color,background-color,transform] duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${toggleSize}`}                title="Return to standard search"
                 aria-label="Return to standard search"
             >
