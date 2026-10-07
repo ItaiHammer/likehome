@@ -178,16 +178,26 @@ export function SearchFiltersPicker({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full min-w-0 items-center gap-2.5 bg-transparent text-left outline-none"
+        aria-label={activeCount > 0 ? `Filters, ${activeCount} applied` : "Filters"}
+        // A row on phones; on desktop a slim tile: the icon over a short label
+        className="flex w-full min-w-0 items-center gap-2.5 bg-transparent text-left outline-none after:absolute after:inset-0 md:flex-col md:justify-center md:gap-1 md:text-center"
       >
-        <SlidersIcon />
-        <span className="min-w-0 flex-1">
+        <span className="relative text-slate">
+          <SlidersIcon />
+          {activeCount > 0 && (
+            <span className="absolute -right-2.5 -top-2 hidden h-4 min-w-4 items-center justify-center rounded-full bg-blue px-1 text-[10px] font-semibold leading-none text-on-blue tabular-nums md:flex">
+              {activeCount}
+            </span>
+          )}
+        </span>
+        <span className="min-w-0 flex-1 md:hidden">
           <span className="block text-xs font-semibold uppercase tracking-[0.08em] text-slate">Filters</span>
           <span className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-ink">
             {activeCount > 0 ? `${activeCount} applied` : "Add filters"}
             <ChevronIcon />
           </span>
         </span>
+        <span className="hidden text-xs font-semibold text-ink md:block">Filters</span>
       </button>
 
       {/* Inputs remain mounted while the panel is closed so the parent search form always submits them. */}

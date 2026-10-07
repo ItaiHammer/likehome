@@ -167,6 +167,21 @@ describe('Search Module Integration', () => {
                 results: {},
             });
         });
+
+        test('passes page options through to the database call without adding them to params', async () => {
+            // Arrange
+            searchAvailableHotels.mock.mockImplementationOnce(async () => ({}));
+
+            // Act
+            const result = await search({ where: 'Paris, France' }, { page: 3, pageSize: 21 });
+
+            // Assert
+            const dbCall = searchAvailableHotels.mock.calls[0].arguments[0];
+            assert.strictEqual(dbCall.page, 3);
+            assert.strictEqual(dbCall.page_size, 21);
+            assert.strictEqual(dbCall.city, 'Paris');
+            assert.deepStrictEqual(result.params, { location: { city: 'Paris', country: 'France' } });
+        });
     });
 });
 

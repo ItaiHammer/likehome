@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { DESTINATIONS } from "../_data/destinations";
 import { RotatingPlaceholder } from "./placeholders";
 
@@ -80,6 +80,7 @@ export function DestinationInput({ className = "", initialValue = "" }: { classN
   // Text fields match :focus-visible even when clicked, so the search bar's
   // keyboard focus ring is turned off while the field was focused by mouse or touch
   const [pointerFocus, setPointerFocus] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const results = useMemo(() => search(query), [query]);
 
   // Popular destination tiles fill this field.
@@ -124,11 +125,24 @@ export function DestinationInput({ className = "", initialValue = "" }: { classN
   }
 
   return (
-    <div className={`relative ${className}`}>
+    <div
+      className={`relative ${className}`}
+      // A press anywhere in the segment (its padding, the pin) goes to the text field,
+      // except in the suggestion list, which handles its own clicks
+      onMouseDown={(e) => {
+        const target = e.target as HTMLElement;
+        if (target === inputRef.current || target.closest('[role="listbox"]')) return;
+        e.preventDefault();
+        setPointerFocus(true);
+        setFocused(true);
+        inputRef.current?.focus();
+      }}
+    >
       <PinIcon className="h-5 w-5 shrink-0 text-slate" />
       {/* The placeholder is drawn over the empty field so it can roll */}
       <span className="relative flex min-w-0 flex-1 items-center">
         <input
+          ref={inputRef}
           name="where"
           value={query}
           onChange={(e) => {

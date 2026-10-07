@@ -1,6 +1,11 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { useRouter } from "next/navigation";
+import { type FormEvent, useRef, useState } from "react";
+import { readAiAnswer } from "./aiSearch";
+import { RotatingPlaceholder } from "./placeholders";
 import { DatesField } from "./DatesField";
 import { DestinationInput } from "./DestinationInput";
 import { GuestsPicker } from "./GuestsPicker";
@@ -55,6 +60,42 @@ export function SearchExperience({
   compact?: boolean;
 }) {
   const [mode, setMode] = useState<SearchMode>(initialMode);
+  const router = useRouter();
+
+  // AI mode: send the prompt to Cara's /api/search/ai endpoint (the same way her
+  // app/sample/search page does), then open the standard search it describes.
+  // Off-topic prompts come back as a reply with no filters, shown under the bar.
+  const promptRef = useRef("");
+  const [aiNote, setAiNote] = useState("");
+  const [aiError, setAiError] = useState("");
+  // The AI box rolls through example requests while it's empty
+  const [aiText, setAiText] = useState(initialValues.aiPrompt ?? "");
+  const [aiFocused, setAiFocused] = useState(false);
+  const [transport] = useState(() => new DefaultChatTransport({ api: "/api/search/ai" }));
+  const { sendMessage, setMessages, status, stop } = useChat({
+    transport,
+    onFinish: ({ message, isError, isAbort, isDisconnect }) => {
+      if (isError || isAbort || isDisconnect) return;
+      const text = message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
+      const answer = readAiAnswer(text, promptRef.current);
+      if (!answer) setAiError("Sorry, that didn't come through. Try asking again.");
+      else if (answer.query) router.push(`/search?${answer.query}`);
+      else setAiNote(answer.reply || "Tell us where you're going, when, and who's coming.");
+    },
+    onError: () => setAiError("AI search isn't available right now. Try the standard search instead."),
+  });
+  const aiBusy = status === "submitted" || status === "streaming";
+
+  // Switching modes starts fresh: no leftover reply or error, and an AI search
+  // still running is cancelled so it can't open results after you've left.
+  const switchMode = (next: SearchMode) => {
+    if (aiBusy) stop();
+    setAiNote("");
+    setAiError("");
+    // The AI box remounts with its starting text, so match it
+    setAiText(initialValues.aiPrompt ?? "");
+    setMode(next);
+  };
 
   const filters: SearchFilterValues = {
     minPrice: initialValues.minPrice,
@@ -69,13 +110,24 @@ export function SearchExperience({
     ? "flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 md:px-3.5 md:py-3.5 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:rounded-xl has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-2 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-inset has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-blue"
     : "flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3 md:py-5 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:rounded-xl has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-2 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-inset has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-blue";
 
+  // Desktop: a short line centered on each segment's left edge, between the fields
+  const divider =
+    "md:before:absolute md:before:inset-y-[26%] md:before:left-0 md:before:w-px md:before:bg-edge has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:before:opacity-0";
+
   const barPadding = compact ? "p-1.5 md:py-0" : "p-2 md:py-0";
   const searchButtonSize = compact ? "h-12 md:h-auto md:w-[56px]" : "h-14 md:h-auto md:w-[66px]";
   const toggleSize = compact ? "h-12 w-12 md:h-auto md:w-[54px]" : "h-14 w-14 md:h-auto md:w-[58px]";
 
-  const preventEmptyAiSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const submitAiSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     const prompt = new FormData(event.currentTarget).get("aiPrompt");
-    if (typeof prompt !== "string" || !prompt.trim()) event.preventDefault();
+    if (typeof prompt !== "string" || !prompt.trim() || aiBusy) return;
+    promptRef.current = prompt.trim();
+    setAiNote("");
+    setAiError("");
+    // Each prompt is its own search, not a follow-up in a conversation
+    setMessages([]);
+    sendMessage({ text: promptRef.current });
   };
 
   return (
@@ -83,23 +135,26 @@ export function SearchExperience({
       {mode === "standard" ? (
         <form action="/search" className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row">
           <div
-            className={`grid min-w-0 flex-1 grid-cols-1 divide-y divide-edge/60 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md sm:grid-cols-2 sm:divide-y-0 md:flex md:flex-row md:divide-x ${barPadding}`}
+            className={`grid min-w-0 flex-1 grid-cols-1 divide-y divide-edge/60 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md sm:grid-cols-2 sm:divide-y-0 md:flex md:flex-row ${barPadding}`}
           >
             <DestinationInput
               className={`${field} sm:col-span-1 sm:border-b sm:border-r sm:border-edge/60 md:flex-[1.6] md:border-0`}
               initialValue={initialValues.where ?? ""}
             />
             <DatesField
-              className={`${field} sm:col-span-1 sm:border-b sm:border-edge/60 md:flex-[1.15] md:border-0`}
+              className={`${field} ${divider} sm:col-span-1 sm:border-b sm:border-edge/60 md:flex-[1.15] md:border-0`}
               initialCheckIn={initialValues.checkIn ?? ""}
               initialCheckOut={initialValues.checkOut ?? ""}
             />
             <GuestsPicker
-              className={`${field} sm:border-r sm:border-edge/60 md:border-0`}
+              className={`${field} ${divider} sm:border-r sm:border-edge/60 md:border-0`}
               initialAdults={initialValues.adults ?? 2}
               initialChildren={initialValues.children ?? 0}
             />
-            <SearchFiltersPicker className={`${field} md:flex-[0.95]`} initialValues={filters} />
+            <SearchFiltersPicker
+              className={`${field} ${divider} md:flex-none md:justify-center ${compact ? "md:w-[76px]" : "md:w-[88px]"}`}
+              initialValues={filters}
+            />
           </div>
 
           <div className="flex gap-2.5 md:contents">
@@ -114,7 +169,7 @@ export function SearchExperience({
             <button
               type="button"
               aria-pressed="false"
-              onClick={() => setMode("ai")}
+              onClick={() => switchMode("ai")}
               className={`ai-toggle flex shrink-0 items-center justify-center rounded-2xl text-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${toggleSize}`}
               title="Search with AI"
               aria-label="Search with AI"
@@ -125,8 +180,8 @@ export function SearchExperience({
           </div>
         </form>
       ) : (
-        <form action="/search" onSubmit={preventEmptyAiSubmit} className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row">
-          {/* TODO(INTEGRATION): Cara's AI endpoint will translate aiPrompt into the same structured fields used by standard search. */}
+        <>
+        <form action="/search" onSubmit={submitAiSearch} aria-busy={aiBusy} className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row">
           <div
             className={`flex min-w-0 flex-1 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md ${barPadding}`}
           >
@@ -135,29 +190,49 @@ export function SearchExperience({
                 <SparklesIcon />
               </span>
               <span className="sr-only">Tell us about your dream stay</span>
-              <input
-                name="aiPrompt"
-                defaultValue={initialValues.aiPrompt ?? ""}
-                autoComplete="off"
-                placeholder="Tell us about your dream stay"
-                className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-slate"
-              />
+              <span className="relative flex min-w-0 flex-1 items-center">
+                <input
+                  name="aiPrompt"
+                  onChange={(e) => {
+                    setAiText(e.target.value);
+                    // A new prompt replaces the last reply
+                    setAiNote("");
+                    setAiError("");
+                  }}
+                  onFocus={() => setAiFocused(true)}
+                  onBlur={() => setAiFocused(false)}
+                  defaultValue={initialValues.aiPrompt ?? ""}
+                  autoComplete="off"
+                  readOnly={aiBusy}
+                  className="w-full min-w-0 bg-transparent text-base text-ink outline-none"
+                />
+                {!aiText && (
+                  <span className="pointer-events-none absolute inset-0 flex items-center">
+                    <RotatingPlaceholder kind="ai" paused={aiFocused} className="w-full text-base text-slate" />
+                  </span>
+                )}
+              </span>
             </label>
           </div>
 
           <div className="flex gap-2.5 md:contents">
             <button
               type="submit"
-              aria-label="Search with AI"
+              aria-label={aiBusy ? "Searching with AI" : "Search with AI"}
               title="Search with AI"
-              className={`flex flex-1 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:flex-none ${searchButtonSize}`}
+              aria-disabled={aiBusy}
+              className={`flex flex-1 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue aria-disabled:cursor-progress md:flex-none ${searchButtonSize}`}
             >
-              <SearchIcon className={compact ? "h-5 w-5" : "h-6 w-6"} />
+              {aiBusy ? (
+                <span className={`animate-spin rounded-full border-2 border-on-blue/40 border-t-on-blue ${compact ? "h-5 w-5" : "h-6 w-6"}`} aria-hidden />
+              ) : (
+                <SearchIcon className={compact ? "h-5 w-5" : "h-6 w-6"} />
+              )}
             </button>
             <button
                 type="button"
                 aria-pressed="true"
-                onClick={() => setMode("standard")}
+                onClick={() => switchMode("standard")}
                 className={`standard-return-button flex shrink-0 items-center justify-center rounded-2xl text-blue transition-[border-color,color,background-color,transform] duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${toggleSize}`}                title="Return to standard search"
                 aria-label="Return to standard search"
             >
@@ -166,6 +241,15 @@ export function SearchExperience({
             </button>
           </div>
         </form>
+        {(aiNote || aiError) && (
+          <p
+            role="status"
+            className={`mt-2.5 rounded-2xl border bg-surface/90 px-4 py-3 text-sm leading-6 backdrop-blur-md ${aiError ? "border-danger/35 text-danger" : "border-edge text-ink"}`}
+          >
+            {aiError || aiNote}
+          </p>
+        )}
+        </>
       )}
     </SearchDrift>
   );
