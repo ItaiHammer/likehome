@@ -1,6 +1,9 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport, type UIMessage } from "ai";
 import { DatesField } from "./DatesField";
 import { DestinationInput } from "./DestinationInput";
 import { GuestsPicker } from "./GuestsPicker";
@@ -17,6 +20,40 @@ export type SearchInitialValues = SearchFilterValues & {
   children?: number;
   aiPrompt?: string;
 };
+
+type AiSearchResult = {
+  text?: string;
+  where?: string;
+  checkIn?: string;
+  checkOut?: string;
+  numBeds?: string;
+  bedSize?: string;
+  adults?: string;
+  children?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  minRating?: string;
+  sort?: string;
+  tags?: string[];
+};
+
+function parseAiSearchMessage(message: UIMessage): AiSearchResult | null {
+  const raw = message.parts
+      .map((part) => (part.type === "text" ? part.text : ""))
+      .join("")
+      .trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw) as AiSearchResult;
+  } catch {
+    console.error("Could not parse AI search response:", raw);
+    return null;
+  }
+}
 
 function SearchIcon({ className = "h-6 w-6" }: { className?: string }) {
   return (
@@ -45,6 +82,13 @@ function ReturnIcon() {
   );
 }
 
+function isPositiveNumber(value?: string) {
+  if (!value) return false;
+
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0;
+}
+
 export function SearchExperience({
   initialValues = {},
   initialMode = initialValues.aiPrompt ? "ai" : "standard",
@@ -55,6 +99,76 @@ export function SearchExperience({
   compact?: boolean;
 }) {
   const [mode, setMode] = useState<SearchMode>(initialMode);
+  const [aiInput, setAiInput] = useState(initialValues.aiPrompt ?? "");
+  const submittedAiPrompt = useRef(initialValues.aiPrompt ?? "");
+  const router = useRouter();
+
+  const { sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({
+      api: "/api/search/ai",
+    }),
+
+    onFinish: ({ message, isError }) => {
+      if (isError) {
+        console.error("AI search failed.");
+        return;
+      }
+
+      const result = parseAiSearchMessage(message);
+
+      if (!result) {
+        console.error("AI search returned an unreadable response.");
+        return;
+      }
+
+      const query = new URLSearchParams();
+
+      query.set("aiPrompt", submittedAiPrompt.current);
+
+      if (result.text) query.set("aiReply", result.text);
+      if (result.where) query.set("where", result.where);
+      if (result.checkIn) query.set("checkIn", result.checkIn);
+      if (result.checkOut) query.set("checkOut", result.checkOut);
+      if (isPositiveNumber(result.adults)) {
+        query.set("adults", result.adults!);
+      }
+
+      if (isPositiveNumber(result.children)) {
+        query.set("children", result.children!);
+      }
+
+      if (isPositiveNumber(result.minPrice)) {
+        query.set("minPrice", result.minPrice!);
+      }
+
+      if (isPositiveNumber(result.maxPrice)) {
+        query.set("maxPrice", result.maxPrice!);
+      }
+
+      if (isPositiveNumber(result.minRating)) {
+        query.set("minRating", result.minRating!);
+      }
+
+      if (isPositiveNumber(result.numBeds)) {
+        query.set("numBeds", result.numBeds!);
+      }
+
+      if (result.bedSize?.trim()) {
+        query.set("bedSize", result.bedSize);
+      }
+      if (result.sort) query.set("sort", result.sort);
+
+      result.tags?.forEach((tag) => {
+        query.append("tags", tag);
+      });
+
+      router.push(`/search?${query.toString()}`);
+    },
+
+    onError: (error) => {
+      console.error("AI search error:", error);
+    },
+  });
 
   const filters: SearchFilterValues = {
     minPrice: initialValues.minPrice,
@@ -74,9 +188,17 @@ export function SearchExperience({
   const toggleSize = compact
       ? "h-12 md:h-auto md:w-[54px]"
       : "h-14 md:h-auto md:w-[58px]";
-  const preventEmptyAiSubmit = (event: FormEvent<HTMLFormElement>) => {
-    const prompt = new FormData(event.currentTarget).get("aiPrompt");
-    if (typeof prompt !== "string" || !prompt.trim()) event.preventDefault();
+  const handleAiSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const prompt = aiInput.trim();
+
+    if (!prompt || status === "submitted" || status === "streaming") {
+      return;
+    }
+
+    submittedAiPrompt.current = prompt;
+    void sendMessage({ text: prompt });
   };
 
   return (
@@ -116,7 +238,7 @@ export function SearchExperience({
                 type="button"
                 aria-pressed="false"
                 onClick={() => setMode("ai")}
-                className={`group flex flex-1 shrink-0 items-center justify-center rounded-2xl
+                className={`flex flex-1 shrink-0 items-center justify-center rounded-2xl
                   bg-[linear-gradient(135deg,#8B5CF6,#4C79BD,#49B6C8,#F09A8A)]
                   p-[3px]
                   transition-transform duration-200
@@ -135,8 +257,10 @@ export function SearchExperience({
           </div>
         </form>
       ) : (
-        <form action="/search" onSubmit={preventEmptyAiSubmit} className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row">
-          {/* TODO(INTEGRATION): Cara's AI endpoint will translate aiPrompt into the same structured fields used by standard search. */}
+          <form
+              onSubmit={handleAiSubmit}
+              className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row"
+          >
           <div
             className={`flex min-w-0 flex-1 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md ${barPadding}`}
           >
@@ -146,21 +270,23 @@ export function SearchExperience({
               </span>
               <span className="sr-only">Tell us about your dream stay</span>
               <input
-                name="aiPrompt"
-                defaultValue={initialValues.aiPrompt ?? ""}
-                autoComplete="off"
-                placeholder="Tell us about your dream stay"
-                className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-slate"
+                  name="aiPrompt"
+                  value={aiInput}
+                  onChange={(event) => setAiInput(event.target.value)}
+                  autoComplete="off"
+                  placeholder="Tell us about your dream stay"
+                  className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-slate"
               />
             </label>
           </div>
 
           <div className="flex gap-2.5 md:contents">
             <button
-              type="submit"
-              aria-label="Search with AI"
-              title="Search with AI"
-              className={`flex flex-1 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:flex-none ${searchButtonSize}`}
+                type="submit"
+                disabled={status === "submitted" || status === "streaming"}
+                aria-label="Search with AI"
+                title="Search with AI"
+                className={`flex flex-1 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue disabled:cursor-not-allowed disabled:opacity-60 md:flex-none ${searchButtonSize}`}
             >
               <SearchIcon className={compact ? "h-5 w-5" : "h-6 w-6"} />
             </button>

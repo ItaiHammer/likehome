@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  bedSizes,
+  propertyAmenities,
+  roomAmenities,
+  travelerTypes,
+} from "../search/types";
 
 export type SearchFilterValues = {
   minPrice?: string;
@@ -12,27 +18,16 @@ export type SearchFilterValues = {
 };
 
 const BED_COUNTS = ["1", "2", "3", "4"];
-const BED_SIZES = ["Twin", "Twin XL", "Double", "Queen", "King"];
 const RATINGS = ["3", "4", "4.5"];
 
-// These labels mirror the tags currently supported by the search backend.
-// TODO(INTEGRATION): Keep this list in sync with the backend's canonical tag list.
+const BED_SIZES = bedSizes;
+
 const AMENITY_TAGS = [
-  "Washer & Dryer",
-  "Parking",
-  "EV Charging",
-  "Free Meals",
-  "Pool",
-  "Gym",
-  "Gift Shops",
-  "ADA Compliant",
-  "Kitchen",
-  "Free Wi-Fi",
-  "Housekeeping",
+  ...propertyAmenities,
+  ...roomAmenities,
 ];
 
-const TRAVELER_TAGS = ["Families", "Kids", "Pets", "Couples", "Friends"];
-
+const TRAVELER_TAGS = travelerTypes;
 type PriceField = "min" | "max";
 
 function SlidersIcon() {
