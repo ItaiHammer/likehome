@@ -104,6 +104,10 @@ export function SearchExperience({
     ? "flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 md:px-3.5 md:py-3.5 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:rounded-xl has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-2 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-inset has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-blue"
     : "flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3 md:py-5 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:rounded-xl has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-2 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-inset has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-blue";
 
+  // Desktop: a short line centered on each segment's left edge, between the fields
+  const divider =
+    "md:before:absolute md:before:inset-y-[26%] md:before:left-0 md:before:w-px md:before:bg-edge has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:before:opacity-0";
+
   const barPadding = compact ? "p-1.5 md:py-0" : "p-2 md:py-0";
   const searchButtonSize = compact ? "h-12 md:h-auto md:w-[56px]" : "h-14 md:h-auto md:w-[66px]";
   const toggleSize = compact ? "h-12 w-12 md:h-auto md:w-[54px]" : "h-14 w-14 md:h-auto md:w-[58px]";
@@ -125,24 +129,24 @@ export function SearchExperience({
       {mode === "standard" ? (
         <form action="/search" className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row">
           <div
-            className={`grid min-w-0 flex-1 grid-cols-1 divide-y divide-edge/60 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md sm:grid-cols-2 sm:divide-y-0 md:flex md:flex-row md:divide-x ${barPadding}`}
+            className={`grid min-w-0 flex-1 grid-cols-1 divide-y divide-edge/60 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md sm:grid-cols-2 sm:divide-y-0 md:flex md:flex-row ${barPadding}`}
           >
             <DestinationInput
               className={`${field} sm:col-span-1 sm:border-b sm:border-r sm:border-edge/60 md:flex-[1.6] md:border-0`}
               initialValue={initialValues.where ?? ""}
             />
             <DatesField
-              className={`${field} sm:col-span-1 sm:border-b sm:border-edge/60 md:flex-[1.15] md:border-0`}
+              className={`${field} ${divider} sm:col-span-1 sm:border-b sm:border-edge/60 md:flex-[1.15] md:border-0`}
               initialCheckIn={initialValues.checkIn ?? ""}
               initialCheckOut={initialValues.checkOut ?? ""}
             />
             <GuestsPicker
-              className={`${field} sm:border-r sm:border-edge/60 md:border-0`}
+              className={`${field} ${divider} sm:border-r sm:border-edge/60 md:border-0`}
               initialAdults={initialValues.adults ?? 2}
               initialChildren={initialValues.children ?? 0}
             />
             <SearchFiltersPicker
-              className={`${field} md:flex-none md:justify-center ${compact ? "md:w-[76px]" : "md:w-[88px]"}`}
+              className={`${field} ${divider} md:flex-none md:justify-center ${compact ? "md:w-[76px]" : "md:w-[88px]"}`}
               initialValues={filters}
             />
           </div>
