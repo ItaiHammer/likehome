@@ -83,7 +83,8 @@ export function DatesField({
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={label ? `Dates: ${label}` : "Dates"}
-        className={`min-w-0 flex-1 text-left outline-none focus-visible:outline-hidden ${label ? "text-ink" : "text-slate"}`}
+        // after: covers the whole segment, padding included, so a click anywhere in it opens the calendar
+        className={`min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 focus-visible:outline-hidden ${label ? "text-ink" : "text-slate"}`}
       >
         {checkIn && checkOut ? (
           <span className="flex min-w-0 flex-col leading-tight">

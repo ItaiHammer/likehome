@@ -5,6 +5,7 @@ import { DefaultChatTransport } from "ai";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState } from "react";
 import { readAiAnswer } from "./aiSearch";
+import { RotatingPlaceholder } from "./placeholders";
 import { DatesField } from "./DatesField";
 import { DestinationInput } from "./DestinationInput";
 import { GuestsPicker } from "./GuestsPicker";
@@ -67,6 +68,9 @@ export function SearchExperience({
   const promptRef = useRef("");
   const [aiNote, setAiNote] = useState("");
   const [aiError, setAiError] = useState("");
+  // The AI box rolls through example requests while it's empty
+  const [aiText, setAiText] = useState(initialValues.aiPrompt ?? "");
+  const [aiFocused, setAiFocused] = useState(false);
   const [transport] = useState(() => new DefaultChatTransport({ api: "/api/search/ai" }));
   const { sendMessage, setMessages, status, stop } = useChat({
     transport,
@@ -88,6 +92,8 @@ export function SearchExperience({
     if (aiBusy) stop();
     setAiNote("");
     setAiError("");
+    // The AI box remounts with its starting text, so match it
+    setAiText(initialValues.aiPrompt ?? "");
     setMode(next);
   };
 
@@ -184,19 +190,28 @@ export function SearchExperience({
                 <SparklesIcon />
               </span>
               <span className="sr-only">Tell us about your dream stay</span>
-              <input
-                name="aiPrompt"
-                onChange={() => {
-                  // A new prompt replaces the last reply
-                  setAiNote("");
-                  setAiError("");
-                }}
-                defaultValue={initialValues.aiPrompt ?? ""}
-                autoComplete="off"
-                placeholder="Tell us about your dream stay"
-                readOnly={aiBusy}
-                className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-slate"
-              />
+              <span className="relative flex min-w-0 flex-1 items-center">
+                <input
+                  name="aiPrompt"
+                  onChange={(e) => {
+                    setAiText(e.target.value);
+                    // A new prompt replaces the last reply
+                    setAiNote("");
+                    setAiError("");
+                  }}
+                  onFocus={() => setAiFocused(true)}
+                  onBlur={() => setAiFocused(false)}
+                  defaultValue={initialValues.aiPrompt ?? ""}
+                  autoComplete="off"
+                  readOnly={aiBusy}
+                  className="w-full min-w-0 bg-transparent text-base text-ink outline-none"
+                />
+                {!aiText && (
+                  <span className="pointer-events-none absolute inset-0 flex items-center">
+                    <RotatingPlaceholder kind="ai" paused={aiFocused} className="w-full text-base text-slate" />
+                  </span>
+                )}
+              </span>
             </label>
           </div>
 

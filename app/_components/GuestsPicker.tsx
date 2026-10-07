@@ -69,7 +69,8 @@ export function GuestsPicker({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-base text-ink outline-none focus-visible:outline-hidden"
+        // after: covers the whole segment, padding included, so a click anywhere in it opens the picker
+        className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-base text-ink outline-none after:absolute after:inset-0 focus-visible:outline-hidden"
       >
         <span className="truncate">
           {total} {total === 1 ? "guest" : "guests"}

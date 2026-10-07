@@ -180,7 +180,7 @@ export function SearchFiltersPicker({
         onClick={() => setOpen((current) => !current)}
         aria-label={activeCount > 0 ? `Filters, ${activeCount} applied` : "Filters"}
         // A row on phones; on desktop a slim tile: the icon over a short label
-        className="flex w-full min-w-0 items-center gap-2.5 bg-transparent text-left outline-none md:flex-col md:justify-center md:gap-1 md:text-center"
+        className="flex w-full min-w-0 items-center gap-2.5 bg-transparent text-left outline-none after:absolute after:inset-0 md:flex-col md:justify-center md:gap-1 md:text-center"
       >
         <span className="relative text-slate">
           <SlidersIcon />
