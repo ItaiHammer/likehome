@@ -70,13 +70,13 @@ function PinIcon({ className }: { className: string }) {
 }
 
 // Destination field with instant suggestions from a bundled list (no network round-trip).
-export function DestinationInput({ className = "" }: { className?: string }) {
+export function DestinationInput({ className = "", initialValue = "" }: { className?: string; initialValue?: string }) {
   const listId = useId();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialValue);
   const [focused, setFocused] = useState(false);
   const [active, setActive] = useState(-1);
   // The last place filled in by picking (a suggestion or a popular-destination tile)
-  const [picked, setPicked] = useState("");
+  const [picked, setPicked] = useState(initialValue);
   // Text fields match :focus-visible even when clicked, so the search bar's
   // keyboard focus ring is turned off while the field was focused by mouse or touch
   const [pointerFocus, setPointerFocus] = useState(false);
