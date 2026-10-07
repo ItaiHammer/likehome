@@ -31,9 +31,15 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const aiPreviewResult = isDevAiPreview && aiPrompt ? buildDevAiPreview(params, aiPrompt) : null;
   const aiPreview = aiPreviewResult && "params" in aiPreviewResult ? aiPreviewResult : null;
   const aiPreviewError = aiPreviewResult && "error" in aiPreviewResult ? aiPreviewResult.error : "";
-  const resolvedParams: SearchParams = aiPreview
-    ? { ...aiPreview.params, aiReply: aiPreview.reply }
-    : params;
+  const previewParams = aiPreview?.params;
+
+  const resolvedParams: SearchParams = previewParams
+      ? {
+        ...previewParams,
+        tags: previewParams.tags ?? [],
+        aiReply: aiPreview?.reply,
+      }
+      : params;
   const aiReply = resolvedParams.aiReply?.trim();
   const hasStructuredSearch = hasStructuredSearchCriteria(resolvedParams);
   const navigationParams = toRawParams(resolvedParams);

@@ -71,8 +71,9 @@ export function SearchExperience({
 
   const barPadding = compact ? "p-1.5 md:py-0" : "p-2 md:py-0";
   const searchButtonSize = compact ? "h-12 md:h-auto md:w-[56px]" : "h-14 md:h-auto md:w-[66px]";
-  const toggleSize = compact ? "h-12 w-12 md:h-auto md:w-[54px]" : "h-14 w-14 md:h-auto md:w-[58px]";
-
+  const toggleSize = compact
+      ? "h-12 md:h-auto md:w-[54px]"
+      : "h-14 md:h-auto md:w-[58px]";
   const preventEmptyAiSubmit = (event: FormEvent<HTMLFormElement>) => {
     const prompt = new FormData(event.currentTarget).get("aiPrompt");
     if (typeof prompt !== "string" || !prompt.trim()) event.preventDefault();
@@ -112,15 +113,24 @@ export function SearchExperience({
               <SearchIcon className={compact ? "h-5 w-5" : "h-6 w-6"} />
             </button>
             <button
-              type="button"
-              aria-pressed="false"
-              onClick={() => setMode("ai")}
-              className={`ai-toggle flex shrink-0 items-center justify-center rounded-2xl text-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${toggleSize}`}
-              title="Search with AI"
-              aria-label="Search with AI"
+                type="button"
+                aria-pressed="false"
+                onClick={() => setMode("ai")}
+                className={`group flex flex-1 shrink-0 items-center justify-center rounded-2xl
+                  bg-[linear-gradient(135deg,#8B5CF6,#4C79BD,#49B6C8,#F09A8A)]
+                  p-[3px]
+                  transition-transform duration-200
+                  hover:-translate-y-0.5
+                  focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue
+                  md:flex-none
+                  ${toggleSize}`}
+                title="Search with AI"
+                aria-label="Search with AI"
             >
-              <SparklesIcon />
-              <span className="sr-only">Search with AI</span>
+                <span className="flex h-full w-full items-center justify-center rounded-[13px] bg-surface text-blue">
+                  <SparklesIcon />
+                  <span className="sr-only">Search with AI</span>
+                </span>
             </button>
           </div>
         </form>
@@ -158,8 +168,7 @@ export function SearchExperience({
                 type="button"
                 aria-pressed="true"
                 onClick={() => setMode("standard")}
-                className={`standard-return-button flex shrink-0 items-center justify-center rounded-2xl text-blue transition-[border-color,color,background-color,transform] duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${toggleSize}`}                title="Return to standard search"
-                aria-label="Return to standard search"
+                className={`standard-return-button flex flex-1 shrink-0 items-center justify-center rounded-2xl text-blue transition-[border-color,color,background-color,transform] duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:flex-none ${toggleSize}`}                aria-label="Return to standard search"
             >
               <ReturnIcon />
               <span className="sr-only">Return to standard search</span>

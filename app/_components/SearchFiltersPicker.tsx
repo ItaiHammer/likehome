@@ -313,27 +313,47 @@ export function SearchFiltersPicker({
           </fieldset>
         </div>
 
-        <fieldset className="cascade mt-5 border-t border-edge pt-5" style={{ "--i": 3 } as React.CSSProperties}>
-          <legend className="text-sm font-semibold text-ink">Amenities</legend>
+        <section
+            className="cascade mt-5 border-t border-edge pt-5"
+            style={{ "--i": 3 } as React.CSSProperties}
+        >
+          <h3 className="text-sm font-semibold text-ink">
+            Amenities
+          </h3>
+
           <div className="mt-2 flex flex-wrap gap-2">
             {AMENITY_TAGS.map((tag) => (
-              <FilterChip key={tag} active={tags.includes(tag)} onClick={() => toggleTag(tag)}>
-                {tag}
-              </FilterChip>
+                <FilterChip
+                    key={tag}
+                    active={tags.includes(tag)}
+                    onClick={() => toggleTag(tag)}
+                >
+                  {tag}
+                </FilterChip>
             ))}
           </div>
-        </fieldset>
+        </section>
 
-        <fieldset className="cascade mt-5 border-t border-edge pt-5" style={{ "--i": 4 } as React.CSSProperties}>
-          <legend className="text-sm font-semibold text-ink">Good for</legend>
+        <section
+            className="cascade mt-5 border-t border-edge pt-5"
+            style={{ "--i": 4 } as React.CSSProperties}
+        >
+          <h3 className="text-sm font-semibold text-ink">
+            Good for
+          </h3>
+
           <div className="mt-2 flex flex-wrap gap-2">
             {TRAVELER_TAGS.map((tag) => (
-              <FilterChip key={tag} active={tags.includes(tag)} onClick={() => toggleTag(tag)}>
-                {tag}
-              </FilterChip>
+                <FilterChip
+                    key={tag}
+                    active={tags.includes(tag)}
+                    onClick={() => toggleTag(tag)}
+                >
+                  {tag}
+                </FilterChip>
             ))}
           </div>
-        </fieldset>
+        </section>
 
         <div className="cascade mt-5 flex items-center justify-between gap-4 border-t border-edge pt-4" style={{ "--i": 5 } as React.CSSProperties}>
           <div>
