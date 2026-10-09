@@ -9,7 +9,7 @@ import { Tag } from "./ui";
 const NAV_ITEMS: { label: string; href?: string }[] = [
   { label: "Stays", href: "/#stays" },
   { label: "My bookings" },
-  { label: "My listings" },
+  { label: "My listings", href: "/listings" },
 ];
 
 function ComingSoon({ label, className = "" }: { label: string; className?: string }) {

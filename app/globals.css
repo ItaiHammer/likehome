@@ -103,6 +103,15 @@ body {
   background: var(--paper);
 }
 
+/* Tailwind v4 resets buttons to the arrow cursor; bring back the pointer for anything clickable.
+   Utilities like aria-disabled:cursor-not-allowed still win, since they sit in a later layer. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
 /*
  * While a theme switch settles, ThemeToggle puts .theme-fading on <html>.
  * Elements drop their own color transitions (which would trail the root fade
