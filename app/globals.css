@@ -13,7 +13,7 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* LikeHome palette (Figma design reference). Generates classes like bg-paper, text-ink, border-edge. */
+/* LikeHome Figma design token palette */
 @theme {
   --color-ink: #070d2f;
   --color-blue: #4c79bd;
@@ -21,13 +21,6 @@
   --color-white: #ffffff;
   --color-slate: #536383;
   --color-edge: #bac8df;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
