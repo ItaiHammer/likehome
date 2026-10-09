@@ -1,4 +1,4 @@
-//   PATCH /api/reservations  -> update a reservation for the logged-in user
+//   PATCH /api/reservations/[id]  -> update a reservation for the logged-in user
 import { getUserId } from '../../../../utils/user.ts'
 import { updateReservation, getReservation } from '../../../../utils/reservations.ts'
 import {
