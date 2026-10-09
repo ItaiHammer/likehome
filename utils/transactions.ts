@@ -2,9 +2,11 @@ import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
 
 // Transactions are append-only: corrections are new rows, never updates or deletes.
-// amount is always positive; transaction_type says which direction the money moved.
+// amount is always positive; transaction_type says which direction the value moved.
+// charge = customer pays for the reservation. credit = value goes back to the customer's
+// site wallet (no money returns to the card). The wallet balance itself lives in the wallet table.
 
-export type TransactionType = 'charge' | 'refund'
+export type TransactionType = 'charge' | 'credit'
 export type TransactionStatus = 'pending' | 'completed' | 'failed'
 
 export async function createTransaction(transaction: {
@@ -42,7 +44,7 @@ export async function getTransactionsByReservation(reservationId: string) {
   return { data, error }
 }
 
-/** Net amount paid for a reservation: completed charges minus completed refunds, in dollars. */
+/** Net amount paid for a reservation: completed charges minus completed credits, in dollars. */
 export async function getAmountPaid(reservationId: string) {
   const { data, error } = await getTransactionsByReservation(reservationId)
   if (error || !data) return { data: null, error }
@@ -51,7 +53,7 @@ export async function getAmountPaid(reservationId: string) {
     .filter((t) => t.status === 'completed')
     .reduce((sum, t) => {
       const amount = Math.round(Number(t.amount) * 100)
-      return t.transaction_type === 'refund' ? sum - amount : sum + amount
+      return t.transaction_type === 'credit' ? sum - amount : sum + amount
     }, 0)
 
   return { data: cents / 100, error: null }
