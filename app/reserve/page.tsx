@@ -21,16 +21,20 @@ export default function ReservePage({ searchParams }: PageProps) {
   const room = RoomsData[roomId] || RoomsData["ocean-studio"];
 
   const subtotal = room.pricePerNight * room.nights;
-  const grandTotal = subtotal + room.taxes + room.fee;
 
-  // Account authentication state
+  const ACCOUNT_EMAIL = "alex.morgan@likehome.com";
   const [isSignedIn, setIsSignedIn] = useState(true);
+  const [formError, setFormError] = useState("");
 
   const [formData, setFormData] = useState({
     firstName: "Alex",
     lastName: "Morgan",
-    email: "alex.morgan@likehome.com",
+    email: "alex.morgan@gmail.com",
     phone: "(510) 555-0142",
+    primaryStreet: "123 Main St, Apt 4B",
+    primaryCity: "Fremont",
+    primaryState: "CA",
+    primaryZip: "94538",
     specialRequests: "",
     cardType: "visa",
     cardNumber: "4111 1111 1111 1111",
@@ -46,6 +50,15 @@ export default function ReservePage({ searchParams }: PageProps) {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const REWARD_DISCOUNT_VALUE = 24;
+  const rewardDiscount = formData.useRewardPoints ? REWARD_DISCOUNT_VALUE : 0;
+  const grandTotal = Math.max(0, subtotal + room.taxes + room.fee - rewardDiscount);
+
+  const handleNameInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitized = e.target.value.replace(/[^a-zA-Z\s'-]/g, "");
+    setFormData((prev) => ({ ...prev, [e.target.name]: sanitized }));
+  };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let digits = e.target.value.replace(/\D/g, "").slice(0, 10);
@@ -71,12 +84,43 @@ export default function ReservePage({ searchParams }: PageProps) {
     setFormData((prev) => ({ ...prev, [name]: val }));
   };
 
+  // Redirect to guest root page when switching account / signing out
+  const handleSwitchAccount = () => {
+    window.location.href = "/";
+  };
+
+  const validateForm = (): boolean => {
+    setFormError("");
+
+    const nameRegex = /^[a-zA-Z\s'-]+$/;
+    if (
+      !nameRegex.test(formData.firstName.trim()) ||
+      !nameRegex.test(formData.lastName.trim())
+    ) {
+      setFormError("First and last names can only contain letters.");
+      return false;
+    }
+
+    const publicProvidersRegex =
+      /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|hotmail|outlook|icloud|aol|protonmail|proton|live|msn)\.(com|net|org|me)$/i;
+
+    if (!publicProvidersRegex.test(formData.email.trim())) {
+      setFormError(
+        "Please enter a valid email address from a recognized provider (e.g. gmail.com, yahoo.com, outlook.com, icloud.com)."
+      );
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isSignedIn) return;
 
-    setIsSubmitting(true);
+    if (!validateForm()) return;
 
+    setIsSubmitting(true);
     const bookingId = `BK-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const query = new URLSearchParams({
@@ -84,6 +128,8 @@ export default function ReservePage({ searchParams }: PageProps) {
       roomId: room.id,
       email: formData.email,
       firstName: formData.firstName,
+      total: grandTotal.toString(),
+      usedPoints: formData.useRewardPoints.toString(),
     }).toString();
 
     window.location.href = `/reserve/confirmation?${query}`;
@@ -102,19 +148,23 @@ export default function ReservePage({ searchParams }: PageProps) {
           {room.name} at {room.property} · {room.dates} · {room.guests}
         </p>
 
+        {formError && (
+          <div className="mt-4 rounded-xl bg-rose-50 p-4 border border-rose-200 text-sm font-semibold text-rose-700">
+            ⚠️ {formError}
+          </div>
+        )}
+
         <form
           onSubmit={handleSubmit}
           className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]"
         >
           <div className="flex flex-col gap-6">
-            {/* Account Banner */}
             <AuthBanner
               isSignedIn={isSignedIn}
-              userEmail={formData.email}
-              onSignOut={() => setIsSignedIn(false)}
+              userEmail={ACCOUNT_EMAIL}
+              onSignOut={handleSwitchAccount}
             />
 
-            {/* 1. Account / Guest Details Section */}
             <section
               className={`${cardClass} ${!isSignedIn ? "opacity-60 pointer-events-none" : ""}`}
               aria-labelledby="guest-details-heading"
@@ -137,7 +187,7 @@ export default function ReservePage({ searchParams }: PageProps) {
                     required
                     disabled={!isSignedIn}
                     value={formData.firstName}
-                    onChange={handleInputChange}
+                    onChange={handleNameInput}
                     placeholder="Alex"
                     className={inputClass}
                   />
@@ -152,48 +202,125 @@ export default function ReservePage({ searchParams }: PageProps) {
                     required
                     disabled={!isSignedIn}
                     value={formData.lastName}
-                    onChange={handleInputChange}
+                    onChange={handleNameInput}
                     placeholder="Morgan"
                     className={inputClass}
                   />
                 </div>
               </div>
 
-              <div className="mt-4">
-                <label htmlFor="email" className={labelClass}>
-                  Email address
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  disabled={!isSignedIn}
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="alex@example.com"
-                  className={inputClass}
-                />
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="email" className={labelClass}>
+                    Email address
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    disabled={!isSignedIn}
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="alex@example.com"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="phone" className={labelClass}>
+                    Phone number
+                  </label>
+                  <input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    required
+                    disabled={!isSignedIn}
+                    value={formData.phone}
+                    onChange={handlePhoneChange}
+                    placeholder="(510) 555-0142"
+                    className={inputClass}
+                  />
+                </div>
               </div>
 
-              <div className="mt-4">
-                <label htmlFor="phone" className={labelClass}>
-                  Phone number
-                </label>
-                <input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  required
-                  disabled={!isSignedIn}
-                  value={formData.phone}
-                  onChange={handlePhoneChange}
-                  placeholder="(510) 555-0142"
-                  className={inputClass}
-                />
+              <div className="mt-6 border-t border-edge pt-5">
+                <p className="text-xs font-bold tracking-wider text-slate uppercase mb-3">
+                  Account Primary Address
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label htmlFor="primaryStreet" className={labelClass}>
+                      Street address
+                    </label>
+                    <input
+                      id="primaryStreet"
+                      name="primaryStreet"
+                      disabled={!isSignedIn}
+                      value={formData.primaryStreet}
+                      onChange={handleInputChange}
+                      placeholder="123 Main St, Apt 4B"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="primaryCity" className={labelClass}>
+                      City
+                    </label>
+                    <input
+                      id="primaryCity"
+                      name="primaryCity"
+                      disabled={!isSignedIn}
+                      value={formData.primaryCity}
+                      onChange={(e) => {
+                        e.target.value = e.target.value.replace(/[^a-zA-Z\s'-]/g, "");
+                        handleInputChange(e);
+                      }}
+                      placeholder="Fremont"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="primaryState" className={labelClass}>
+                        State
+                      </label>
+                      <input
+                        id="primaryState"
+                        name="primaryState"
+                        maxLength={2}
+                        disabled={!isSignedIn}
+                        value={formData.primaryState}
+                        onChange={(e) => {
+                          e.target.value = e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase();
+                          handleInputChange(e);
+                        }}
+                        placeholder="CA"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="primaryZip" className={labelClass}>
+                        ZIP
+                      </label>
+                      <input
+                        id="primaryZip"
+                        name="primaryZip"
+                        disabled={!isSignedIn}
+                        value={formData.primaryZip}
+                        onChange={(e) => {
+                          e.target.value = e.target.value.replace(/\D/g, "").slice(0, 5);
+                          handleInputChange(e);
+                        }}
+                        placeholder="94538"
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="mt-4">
+              <div className="mt-5 border-t border-edge pt-5">
                 <label htmlFor="specialRequests" className={labelClass}>
                   Special requests{" "}
                   <span className="font-normal text-slate">(optional)</span>
@@ -201,7 +328,7 @@ export default function ReservePage({ searchParams }: PageProps) {
                 <textarea
                   id="specialRequests"
                   name="specialRequests"
-                  rows={3}
+                  rows={2}
                   disabled={!isSignedIn}
                   value={formData.specialRequests}
                   onChange={handleInputChange}
@@ -211,9 +338,9 @@ export default function ReservePage({ searchParams }: PageProps) {
               </div>
             </section>
 
-            {/* 2. Payment Details Section */}
             <div className={!isSignedIn ? "opacity-60 pointer-events-none" : ""}>
               <PaymentSection
+                isSignedIn={isSignedIn}
                 values={{
                   cardType: formData.cardType,
                   cardNumber: formData.cardNumber,
@@ -225,13 +352,16 @@ export default function ReservePage({ searchParams }: PageProps) {
                   billingCity: formData.billingCity,
                   billingState: formData.billingState,
                   billingZip: formData.billingZip,
+                  primaryStreet: formData.primaryStreet,
+                  primaryCity: formData.primaryCity,
+                  primaryState: formData.primaryState,
+                  primaryZip: formData.primaryZip,
                 }}
                 onChange={handleInputChange}
               />
             </div>
           </div>
 
-          {/* Booking Summary Column */}
           <section className={cardClass} aria-labelledby="summary-heading">
             <h2 id="summary-heading" className="text-xl font-semibold text-ink">
               Booking summary
@@ -257,7 +387,6 @@ export default function ReservePage({ searchParams }: PageProps) {
             </p>
             <p className="text-sm text-slate">{room.guests} · 1 room</p>
 
-            {/* Schedule */}
             <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-paper p-3 text-xs">
               <div>
                 <span className="block font-semibold text-slate uppercase">Check-in</span>
@@ -269,7 +398,6 @@ export default function ReservePage({ searchParams }: PageProps) {
               </div>
             </div>
 
-            {/* Pricing Breakdown */}
             <dl className="mt-5 space-y-3 border-t border-edge pt-5 text-sm text-slate">
               <div className="flex justify-between">
                 <dt>
@@ -285,7 +413,15 @@ export default function ReservePage({ searchParams }: PageProps) {
                 <dt>LikeHome service fee</dt>
                 <dd>${room.fee}</dd>
               </div>
-              <div className="flex justify-between pt-2 text-lg font-bold text-ink">
+
+              {formData.useRewardPoints && (
+                <div className="flex justify-between font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                  <dt>Reward points discount (2,400 pts)</dt>
+                  <dd>-$24</dd>
+                </div>
+              )}
+
+              <div className="flex justify-between pt-2 text-lg font-bold text-ink border-t border-edge">
                 <dt>Total</dt>
                 <dd>${grandTotal} USD</dd>
               </div>

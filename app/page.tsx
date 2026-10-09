@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import AuthBanner from "@/components/reservation/AuthBanner";
 import PaymentSection from "@/components/reservation/PaymentSection";
@@ -9,27 +9,25 @@ import { RoomsData } from "@/data/rooms";
 const cardClass = "rounded-xl border border-edge bg-white p-6 shadow-xs";
 const labelClass = "mb-2 block text-base font-semibold text-ink";
 const inputClass =
-  "h-[46px] w-full rounded-[6.4px] border border-edge bg-white px-4 text-base font-normal text-ink placeholder:text-slate focus:placeholder:text-transparent focus:border-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-blue transition-colors";
+  "h-[46px] w-full rounded-[6.4px] border border-edge bg-white px-4 text-base font-normal text-ink placeholder:text-slate focus:placeholder:text-transparent focus:border-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-blue transition-colors disabled:bg-slate/10 disabled:cursor-not-allowed";
 
-interface PageProps {
-  searchParams: Promise<{ roomId?: string }>;
-}
-
-export default function ReservePage({ searchParams }: PageProps) {
-  const resolvedParams = use(searchParams);
-  const roomId = resolvedParams?.roomId || "ocean-studio";
-  const room = RoomsData[roomId] || RoomsData["ocean-studio"];
-
+export default function HomePage() {
+  const room = RoomsData["ocean-studio"];
   const subtotal = room.pricePerNight * room.nights;
-  const grandTotal = subtotal + room.taxes + room.fee;
 
-  const [isGuest, setIsGuest] = useState(true);
+  const ACCOUNT_EMAIL = "alex.morgan@likehome.com";
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     phone: "",
+    primaryStreet: "",
+    primaryCity: "",
+    primaryState: "",
+    primaryZip: "",
     specialRequests: "",
     cardType: "visa",
     cardNumber: "",
@@ -46,40 +44,15 @@ export default function ReservePage({ searchParams }: PageProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Toggle Guest vs Saved Account Profile
-  const handleSelectAccount = () => {
-    setIsGuest(false);
-    setFormData((prev) => ({
-      ...prev,
-      firstName: "Alex",
-      lastName: "Morgan",
-      email: "alex.morgan@likehome.com",
-      phone: "(510) 555-0142",
-      cardType: "visa",
-      cardNumber: "4111 1111 1111 1111",
-      expirationDate: "12/28",
-      cvv: "888",
-      zipCode: "94538",
-      sameAsGuestAddress: true,
-    }));
+  const REWARD_DISCOUNT_VALUE = 24;
+  const rewardDiscount = formData.useRewardPoints ? REWARD_DISCOUNT_VALUE : 0;
+  const grandTotal = Math.max(0, subtotal + room.taxes + room.fee - rewardDiscount);
+
+  const handleNameInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitized = e.target.value.replace(/[^a-zA-Z\s'-]/g, "");
+    setFormData((prev) => ({ ...prev, [e.target.name]: sanitized }));
   };
 
-  const handleSelectGuest = () => {
-    setIsGuest(true);
-    setFormData((prev) => ({
-      ...prev,
-      firstName: "",
-      lastName: "",
-      email: "",
-      phone: "",
-      cardNumber: "",
-      expirationDate: "",
-      cvv: "",
-      zipCode: "",
-    }));
-  };
-
-  // Auto-format phone numbers: (510) 600-1010
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let digits = e.target.value.replace(/\D/g, "").slice(0, 10);
     let formatted = digits;
@@ -104,10 +77,70 @@ export default function ReservePage({ searchParams }: PageProps) {
     setFormData((prev) => ({ ...prev, [name]: val }));
   };
 
+  const handleAuthToggle = () => {
+    const nextState = !isSignedIn;
+    setIsSignedIn(nextState);
+    setFormError("");
+    if (nextState) {
+      setFormData((prev) => ({
+        ...prev,
+        firstName: "Alex",
+        lastName: "Morgan",
+        email: "alex.morgan@gmail.com",
+        phone: "(510) 555-0142",
+        primaryStreet: "123 Main St, Apt 4B",
+        primaryCity: "Fremont",
+        primaryState: "CA",
+        primaryZip: "94538",
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        primaryStreet: "",
+        primaryCity: "",
+        primaryState: "",
+        primaryZip: "",
+        useRewardPoints: false,
+      }));
+    }
+  };
+
+  const validateForm = (): boolean => {
+    setFormError("");
+
+    const nameRegex = /^[a-zA-Z\s'-]+$/;
+    if (
+      !nameRegex.test(formData.firstName.trim()) ||
+      !nameRegex.test(formData.lastName.trim())
+    ) {
+      setFormError("First and last names can only contain letters.");
+      return false;
+    }
+
+    const publicProvidersRegex =
+      /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|hotmail|outlook|icloud|aol|protonmail|proton|live|msn)\.(com|net|org|me)$/i;
+
+    if (!publicProvidersRegex.test(formData.email.trim())) {
+      setFormError(
+        "Please enter a valid email address from a recognized provider (e.g. gmail.com, yahoo.com, outlook.com, icloud.com)."
+      );
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    if (!isSignedIn) return;
 
+    if (!validateForm()) return;
+
+    setIsSubmitting(true);
     const bookingId = `BK-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const query = new URLSearchParams({
@@ -115,6 +148,8 @@ export default function ReservePage({ searchParams }: PageProps) {
       roomId: room.id,
       email: formData.email,
       firstName: formData.firstName,
+      total: grandTotal.toString(),
+      usedPoints: formData.useRewardPoints.toString(),
     }).toString();
 
     window.location.href = `/reserve/confirmation?${query}`;
@@ -133,28 +168,32 @@ export default function ReservePage({ searchParams }: PageProps) {
           {room.name} at {room.property} · {room.dates} · {room.guests}
         </p>
 
+        {formError && (
+          <div className="mt-4 rounded-xl bg-rose-50 p-4 border border-rose-200 text-sm font-semibold text-rose-700">
+            ⚠️ {formError}
+          </div>
+        )}
+
         <form
           onSubmit={handleSubmit}
           className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]"
         >
           <div className="flex flex-col gap-6">
-            {/* Top Sign-In / Guest Selector */}
             <AuthBanner
-              isGuest={isGuest}
-              onSelectGuest={handleSelectGuest}
-              onSelectAccount={handleSelectAccount}
+              isSignedIn={isSignedIn}
+              userEmail={ACCOUNT_EMAIL}
+              onSignOut={handleAuthToggle}
             />
 
-            {/* 1. Guest Details Section */}
             <section
-              className={cardClass}
+              className={`${cardClass} ${!isSignedIn ? "opacity-60 pointer-events-none" : ""}`}
               aria-labelledby="guest-details-heading"
             >
               <h2
                 id="guest-details-heading"
                 className="text-[32px] leading-10 font-bold text-ink"
               >
-                1. Guest details
+                1. Account details
               </h2>
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -166,8 +205,9 @@ export default function ReservePage({ searchParams }: PageProps) {
                     id="firstName"
                     name="firstName"
                     required
+                    disabled={!isSignedIn}
                     value={formData.firstName}
-                    onChange={handleInputChange}
+                    onChange={handleNameInput}
                     placeholder="Alex"
                     className={inputClass}
                   />
@@ -180,47 +220,127 @@ export default function ReservePage({ searchParams }: PageProps) {
                     id="lastName"
                     name="lastName"
                     required
+                    disabled={!isSignedIn}
                     value={formData.lastName}
-                    onChange={handleInputChange}
+                    onChange={handleNameInput}
                     placeholder="Morgan"
                     className={inputClass}
                   />
                 </div>
               </div>
 
-              <div className="mt-4">
-                <label htmlFor="email" className={labelClass}>
-                  Email address
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="alex@example.com"
-                  className={inputClass}
-                />
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="email" className={labelClass}>
+                    Email address
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    disabled={!isSignedIn}
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="alex@example.com"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="phone" className={labelClass}>
+                    Phone number
+                  </label>
+                  <input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    required
+                    disabled={!isSignedIn}
+                    value={formData.phone}
+                    onChange={handlePhoneChange}
+                    placeholder="(510) 555-0142"
+                    className={inputClass}
+                  />
+                </div>
               </div>
 
-              <div className="mt-4">
-                <label htmlFor="phone" className={labelClass}>
-                  Phone number
-                </label>
-                <input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  required
-                  value={formData.phone}
-                  onChange={handlePhoneChange}
-                  placeholder="(510) 555-0142"
-                  className={inputClass}
-                />
+              <div className="mt-6 border-t border-edge pt-5">
+                <p className="text-xs font-bold tracking-wider text-slate uppercase mb-3">
+                  Account Primary Address
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label htmlFor="primaryStreet" className={labelClass}>
+                      Street address
+                    </label>
+                    <input
+                      id="primaryStreet"
+                      name="primaryStreet"
+                      disabled={!isSignedIn}
+                      value={formData.primaryStreet}
+                      onChange={handleInputChange}
+                      placeholder="123 Main St, Apt 4B"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="primaryCity" className={labelClass}>
+                      City
+                    </label>
+                    <input
+                      id="primaryCity"
+                      name="primaryCity"
+                      disabled={!isSignedIn}
+                      value={formData.primaryCity}
+                      onChange={(e) => {
+                        e.target.value = e.target.value.replace(/[^a-zA-Z\s'-]/g, "");
+                        handleInputChange(e);
+                      }}
+                      placeholder="Fremont"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="primaryState" className={labelClass}>
+                        State
+                      </label>
+                      <input
+                        id="primaryState"
+                        name="primaryState"
+                        maxLength={2}
+                        disabled={!isSignedIn}
+                        value={formData.primaryState}
+                        onChange={(e) => {
+                          e.target.value = e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase();
+                          handleInputChange(e);
+                        }}
+                        placeholder="CA"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="primaryZip" className={labelClass}>
+                        ZIP
+                      </label>
+                      <input
+                        id="primaryZip"
+                        name="primaryZip"
+                        disabled={!isSignedIn}
+                        value={formData.primaryZip}
+                        onChange={(e) => {
+                          e.target.value = e.target.value.replace(/\D/g, "").slice(0, 5);
+                          handleInputChange(e);
+                        }}
+                        placeholder="94538"
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="mt-4">
+              <div className="mt-5 border-t border-edge pt-5">
                 <label htmlFor="specialRequests" className={labelClass}>
                   Special requests{" "}
                   <span className="font-normal text-slate">(optional)</span>
@@ -228,7 +348,8 @@ export default function ReservePage({ searchParams }: PageProps) {
                 <textarea
                   id="specialRequests"
                   name="specialRequests"
-                  rows={3}
+                  rows={2}
+                  disabled={!isSignedIn}
                   value={formData.specialRequests}
                   onChange={handleInputChange}
                   placeholder="Late check-in, extra pillows…"
@@ -237,25 +358,30 @@ export default function ReservePage({ searchParams }: PageProps) {
               </div>
             </section>
 
-            {/* 2. Payment Details Section */}
-            <PaymentSection
-              values={{
-                cardType: formData.cardType,
-                cardNumber: formData.cardNumber,
-                expirationDate: formData.expirationDate,
-                cvv: formData.cvv,
-                zipCode: formData.zipCode,
-                sameAsGuestAddress: formData.sameAsGuestAddress,
-                billingAddress: formData.billingAddress,
-                billingCity: formData.billingCity,
-                billingState: formData.billingState,
-                billingZip: formData.billingZip,
-              }}
-              onChange={handleInputChange}
-            />
+            <div className={!isSignedIn ? "opacity-60 pointer-events-none" : ""}>
+              <PaymentSection
+                isSignedIn={isSignedIn}
+                values={{
+                  cardType: formData.cardType,
+                  cardNumber: formData.cardNumber,
+                  expirationDate: formData.expirationDate,
+                  cvv: formData.cvv,
+                  zipCode: formData.zipCode,
+                  sameAsGuestAddress: formData.sameAsGuestAddress,
+                  billingAddress: formData.billingAddress,
+                  billingCity: formData.billingCity,
+                  billingState: formData.billingState,
+                  billingZip: formData.billingZip,
+                  primaryStreet: formData.primaryStreet,
+                  primaryCity: formData.primaryCity,
+                  primaryState: formData.primaryState,
+                  primaryZip: formData.primaryZip,
+                }}
+                onChange={handleInputChange}
+              />
+            </div>
           </div>
 
-          {/* Booking Summary Column */}
           <section className={cardClass} aria-labelledby="summary-heading">
             <h2 id="summary-heading" className="text-xl font-semibold text-ink">
               Booking summary
@@ -281,7 +407,6 @@ export default function ReservePage({ searchParams }: PageProps) {
             </p>
             <p className="text-sm text-slate">{room.guests} · 1 room</p>
 
-            {/* Check-In / Check-Out Schedule */}
             <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-paper p-3 text-xs">
               <div>
                 <span className="block font-semibold text-slate uppercase">Check-in</span>
@@ -293,26 +418,6 @@ export default function ReservePage({ searchParams }: PageProps) {
               </div>
             </div>
 
-            {/* Amenities Highlights */}
-            {room.amenities && room.amenities.length > 0 && (
-              <div className="mt-4 border-t border-edge pt-4">
-                <p className="text-xs font-semibold tracking-wider text-slate uppercase">
-                  Included Amenities
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {room.amenities.map((item) => (
-                    <span
-                      key={item}
-                      className="rounded-md border border-edge bg-paper px-2 py-1 text-xs text-ink"
-                    >
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Pricing Breakdown */}
             <dl className="mt-5 space-y-3 border-t border-edge pt-5 text-sm text-slate">
               <div className="flex justify-between">
                 <dt>
@@ -328,36 +433,50 @@ export default function ReservePage({ searchParams }: PageProps) {
                 <dt>LikeHome service fee</dt>
                 <dd>${room.fee}</dd>
               </div>
-              <div className="flex justify-between pt-2 text-lg font-bold text-ink">
+
+              {isSignedIn && formData.useRewardPoints && (
+                <div className="flex justify-between font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                  <dt>Reward points discount (2,400 pts)</dt>
+                  <dd>-$24</dd>
+                </div>
+              )}
+
+              <div className="flex justify-between pt-2 text-lg font-bold text-ink border-t border-edge">
                 <dt>Total</dt>
                 <dd>${grandTotal} USD</dd>
               </div>
             </dl>
 
-            <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border border-edge p-4 has-checked:border-blue has-checked:bg-blue/10 has-focus-visible:ring-2 has-focus-visible:ring-blue">
-              <input
-                type="checkbox"
-                name="useRewardPoints"
-                checked={formData.useRewardPoints}
-                onChange={handleInputChange}
-                className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-blue focus:outline-none"
-              />
-              <span>
-                <span className="block text-sm font-semibold text-ink">
-                  Use rewards points
+            {isSignedIn && (
+              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border border-edge p-4 has-checked:border-blue has-checked:bg-blue/10 has-focus-visible:ring-2 has-focus-visible:ring-blue">
+                <input
+                  type="checkbox"
+                  name="useRewardPoints"
+                  checked={formData.useRewardPoints}
+                  onChange={handleInputChange}
+                  className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-blue focus:outline-none"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-ink">
+                    Use rewards points
+                  </span>
+                  <span className="block text-sm text-slate">
+                    You have 2,400 points (worth $24)
+                  </span>
                 </span>
-                <span className="block text-sm text-slate">
-                  You have 2,400 points (worth $24)
-                </span>
-              </span>
-            </label>
+              </label>
+            )}
 
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="mt-5 h-[46px] w-full cursor-pointer rounded-[6.4px] bg-blue text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-blue focus-visible:ring-offset-2 focus-visible:outline-none"
+              disabled={!isSignedIn || isSubmitting}
+              className="mt-5 h-[46px] w-full cursor-pointer rounded-[6.4px] bg-blue text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-blue focus-visible:ring-offset-2 focus-visible:outline-none"
             >
-              {isSubmitting ? "Processing..." : "Confirm and book"}
+              {!isSignedIn
+                ? "Sign In Required to Book"
+                : isSubmitting
+                ? "Processing..."
+                : "Confirm and book"}
             </button>
 
             <p className="mt-3 text-center text-sm text-slate">

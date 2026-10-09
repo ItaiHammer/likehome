@@ -8,6 +8,8 @@ interface PageProps {
     roomId?: string;
     email?: string;
     firstName?: string;
+    total?: string;
+    usedPoints?: string;
   }>;
 }
 
@@ -17,10 +19,19 @@ export default async function ConfirmationPage({ searchParams }: PageProps) {
   const roomId = resolvedParams.roomId || "ocean-studio";
   const email = resolvedParams.email || "guest@example.com";
   const firstName = resolvedParams.firstName || "Valued Guest";
+  const passedTotal = resolvedParams.total;
+  const usedPoints = resolvedParams.usedPoints === "true";
 
   const room = RoomsData[roomId] || RoomsData["ocean-studio"];
   const subtotal = room.pricePerNight * room.nights;
-  const grandTotal = subtotal + room.taxes + room.fee;
+
+  const REWARD_DISCOUNT_VALUE = 24;
+  const rewardDiscount = usedPoints ? REWARD_DISCOUNT_VALUE : 0;
+  const calculatedTotal = Math.max(
+    0,
+    subtotal + room.taxes + room.fee - rewardDiscount
+  );
+  const displayTotal = passedTotal ? Number(passedTotal) : calculatedTotal;
 
   return (
     <main className="flex-1 bg-paper py-12 px-4 sm:px-8">
@@ -53,7 +64,7 @@ export default async function ConfirmationPage({ searchParams }: PageProps) {
 
           <div className="mt-6 inline-flex items-center gap-2 rounded-lg bg-paper px-4 py-2 border border-edge">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate">
-              Confirmation Code:
+              CONFIRMATION CODE:
             </span>
             <span className="font-mono text-lg font-bold text-blue">
               {bookingId}
@@ -136,18 +147,26 @@ export default async function ConfirmationPage({ searchParams }: PageProps) {
                 <dt>LikeHome service fee</dt>
                 <dd>${room.fee}</dd>
               </div>
+
+              {usedPoints && (
+                <div className="flex justify-between font-medium text-emerald-600">
+                  <dt>Reward points applied (2,400 pts)</dt>
+                  <dd>-$24</dd>
+                </div>
+              )}
+
               <div className="flex justify-between border-t border-edge pt-2 font-bold text-ink">
                 <dt>Total Paid</dt>
-                <dd>${grandTotal} USD</dd>
+                <dd>${displayTotal} USD</dd>
               </div>
             </dl>
           </div>
         </div>
 
-        {/* Back Home Button */}
+        {/* Back Home Button (Blank link left for teammates) */}
         <div className="mt-8 text-center">
           <Link
-            href="/"
+            href="#"
             className="inline-flex h-[46px] items-center justify-center rounded-[6.4px] bg-blue px-8 text-base font-semibold text-white transition-opacity hover:opacity-90"
           >
             Return to Homepage
