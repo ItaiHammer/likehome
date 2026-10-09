@@ -1,4 +1,4 @@
-import { MOCK_LISTINGS, MOCK_SAVE_FAILS } from "@/mocks/listings";
+import { MOCK_LISTINGS, MOCK_SAVE_FAILS, MOCK_SAVE_THROWS } from "@/mocks/listings";
 import type { Listing, ListingDraft } from "@/types/listing";
 
 // Mock data access for the listing editor. Same { data, error } shape as utils/hotels.ts on Chloe's branch,
@@ -26,15 +26,17 @@ export async function getListing(id: string) {
 
 export async function createListing(ownerId: string, draft: ListingDraft) {
   await delay(800);
+  if (MOCK_SAVE_THROWS) throw new Error("Mock server crash");
   if (MOCK_SAVE_FAILS) return { data: null, error: "Mock save failure" };
 
-  const listing: Listing = { ...draft, id: crypto.randomUUID(), ownerId, photos: [], rooms: [] };
+  const listing: Listing = { ...copy(draft), id: crypto.randomUUID(), ownerId };
   listings.push(listing);
   return { data: copy(listing), error: null };
 }
 
 export async function updateListing(id: string, updates: Partial<Omit<Listing, "id" | "ownerId">>) {
   await delay(800);
+  if (MOCK_SAVE_THROWS) throw new Error("Mock server crash");
   if (MOCK_SAVE_FAILS) return { data: null, error: "Mock save failure" };
 
   const index = listings.findIndex((l) => l.id === id);

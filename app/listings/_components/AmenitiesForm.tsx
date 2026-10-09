@@ -13,7 +13,7 @@ export function AmenitiesForm({ selected, onToggle }: Props) {
     <div className="space-y-12">
       {AMENITY_GROUPS.map((group) => (
         <FormSection key={group.title} title={group.title} description={group.description} group>
-          <ul className={`grid gap-x-10 gap-y-5 ${group.columns === 2 ? "sm:grid-cols-2" : ""}`}>
+          <ul className="grid gap-x-10 gap-y-5 sm:grid-cols-2">
             {group.amenities.map((amenity) => (
               <li key={amenity}>
                 <Checkbox

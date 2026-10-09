@@ -38,6 +38,10 @@ export const MAX_LENGTH: Record<keyof HotelInfo, number> = {
   description: 2000,
 };
 
+// Same caps in the editor and on the server, so the UI never builds a draft the server will refuse.
+export const MAX_ROOMS = 50;
+export const MAX_PHOTOS = 30;
+
 const asRecord = (input: unknown) => (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
 const asText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const ID = /^[\w-]{1,64}$/;
@@ -70,11 +74,12 @@ export function readAmenities(input: unknown): Amenity[] {
 export type RoomForm = Record<"roomType" | "bedConfiguration" | "maxGuests" | "roomCount" | "nightlyRate" | "description", string>;
 export type RoomFormErrors = Partial<Record<keyof RoomForm, string>>;
 
-// "189", "189.5" or "189.50" → 18950. Text, not float math, so no rounding surprises. null if it isn't an amount.
+// "189", "$189.5" or "1,189.50" → 118950. Text, not float math, so no rounding surprises. null if it isn't an amount.
 export function dollarsToCents(text: string): number | null {
-  const match = /^(\d{1,7})(?:\.(\d{1,2}))?$/.exec(text.trim());
-  if (!match) return null;
-  return Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
+  const match = /^\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?$/.exec(text.trim());
+  const dollars = match?.[1].replaceAll(",", "");
+  if (!match || !dollars || dollars.length > 7) return null;
+  return Number(dollars) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
 }
 
 export function centsToDollarText(cents: number) {
@@ -82,7 +87,7 @@ export function centsToDollarText(cents: number) {
 }
 
 export function roomToForm(room?: ListingRoom): RoomForm {
-  if (!room) return { roomType: "", bedConfiguration: "", maxGuests: "", roomCount: "", nightlyRate: "", description: "" };
+  if (!room) return { roomType: "", bedConfiguration: "", maxGuests: "2", roomCount: "", nightlyRate: "", description: "" };
   return {
     roomType: room.roomType,
     bedConfiguration: room.bedConfiguration,
@@ -125,7 +130,7 @@ export function checkRoomForm(form: RoomForm): { errors: RoomFormErrors; room: O
 
 // Server side: the same rules as the form, applied to saved rooms. null if anything is off.
 export function readRooms(input: unknown): ListingRoom[] | null {
-  if (!Array.isArray(input) || input.length > 50) return null;
+  if (!Array.isArray(input) || input.length > MAX_ROOMS) return null;
   const rooms: ListingRoom[] = [];
   for (const item of input) {
     const r = asRecord(item);
@@ -152,7 +157,7 @@ export function readRooms(input: unknown): ListingRoom[] | null {
 const PHOTO_URL = /^(\/(?!\/)|blob:|https:\/\/)/;
 
 export function readPhotos(input: unknown): ListingPhoto[] | null {
-  if (!Array.isArray(input) || input.length > 30) return null;
+  if (!Array.isArray(input) || input.length > MAX_PHOTOS) return null;
   const photos: ListingPhoto[] = [];
   for (const item of input) {
     const p = asRecord(item);

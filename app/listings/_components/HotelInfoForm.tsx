@@ -50,7 +50,7 @@ export function HotelInfoForm({ info, errors, onChange }: Props) {
       <FormSection title="Description" description="Tell guests what makes your stay special.">
         <TextArea
           label="Property description"
-          hint="Guests will see these details on your listing."
+          hint={`Guests will see this on your listing · ${info.description.length} / ${MAX_LENGTH.description}`}
           rows={3}
           maxLength={MAX_LENGTH.description}
           {...control("description")}

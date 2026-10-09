@@ -1,11 +1,8 @@
-import { formatLocation } from "@/lib/listing-display";
-import type { HotelInfo, ListingPhoto } from "@/types/listing";
 import type { EditorTab } from "./editor-state";
-import { ListingCover } from "./ListingCover";
 
 const iconProps = {
   viewBox: "0 0 24 24",
-  className: "h-5 w-5 shrink-0",
+  className: "h-[18px] w-[18px] shrink-0",
   fill: "none",
   stroke: "currentColor",
   strokeWidth: 1.5,
@@ -57,42 +54,53 @@ const TABS: { id: EditorTab; label: string; icon: React.ReactNode }[] = [
 ];
 
 type Props = {
-  saved: HotelInfo;
-  cover?: ListingPhoto;
-  isNew: boolean;
   tab: EditorTab;
+  changed: EditorTab[]; // tabs with unsaved changes
+  infoErrors: number; // invalid fields on Hotel information
   onSelectTab: (tab: EditorTab) => void;
   backLink: React.ReactNode;
 };
 
-export function EditorSidebar({ saved, cover, isNew, tab, onSelectTab, backLink }: Props) {
+export function EditorSidebar({ tab, changed, infoErrors, onSelectTab, backLink }: Props) {
   return (
-    <aside className="border-b border-edge px-4 py-6 md:w-60 md:shrink-0 md:border-r md:border-b-0 md:px-6 md:py-8">
+    <aside className="md:sticky md:top-6 md:w-48 md:shrink-0 md:self-start">
       {backLink}
 
-      {/* On phones the top bar already shows the name, so this block is desktop-only */}
-      <div className="mt-6 hidden md:block">
-        {!isNew && <ListingCover photo={cover} sizes="192px" className="aspect-[16/9] w-full" />}
-        <p className="mt-4 font-serif text-xl text-ink">{isNew ? "New property" : saved.name}</p>
-        <p className="mt-2 text-sm text-blue">{isNew ? "Add your property details" : formatLocation(saved)}</p>
-      </div>
-
-      <nav aria-label="Property sections" className="mt-4 md:mt-8">
+      <nav aria-label="Property sections" className="mt-4 md:mt-6">
         <ul className="-mx-1 flex gap-1 overflow-x-auto px-1 py-1 md:flex-col md:overflow-visible">
           {TABS.map((item) => {
             const active = item.id === tab;
+            const errors = item.id === "info" ? infoErrors : 0;
             return (
               <li key={item.id}>
                 <button
                   type="button"
                   aria-current={active ? "page" : undefined}
                   onClick={() => onSelectTab(item.id)}
-                  className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-blue ${
-                    active ? "bg-blue/10 font-semibold text-ink" : "text-blue hover:bg-blue/5"
+                  className={`group flex w-full items-center gap-3 rounded-lg border px-2.5 py-2 text-left leading-5 whitespace-nowrap transition-colors md:whitespace-normal focus-visible:outline-2 focus-visible:outline-blue ${
+                    active ? "border-edge bg-surface font-semibold text-ink" : "border-transparent text-slate hover:bg-blue/5 hover:text-ink"
                   }`}
                 >
-                  {item.icon}
-                  {item.label}
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${
+                      active ? "bg-blue text-on-blue" : "bg-blue/10 text-blue group-hover:bg-blue/15"
+                    }`}
+                  >
+                    {item.icon}
+                  </span>
+                  <span className="flex-1">{item.label}</span>
+                  {errors > 0 ? (
+                    <span className="rounded-full border border-danger px-2 text-xs leading-5 font-semibold text-danger">
+                      {errors}
+                      <span className="sr-only"> {errors === 1 ? "field needs" : "fields need"} attention</span>
+                    </span>
+                  ) : (
+                    changed.includes(item.id) && (
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-blue">
+                        <span className="sr-only">Unsaved changes</span>
+                      </span>
+                    )
+                  )}
                 </button>
               </li>
             );

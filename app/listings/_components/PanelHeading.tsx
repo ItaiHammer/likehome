@@ -3,7 +3,7 @@ export function PanelHeading({ title, subtitle, action }: { title: string; subti
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h2 className="text-[1.75rem] leading-9 font-medium text-ink">{title}</h2>
+        <h2 className="text-[32px] leading-10 font-bold text-ink">{title}</h2>
         {subtitle && <p className="mt-1 text-lg text-slate">{subtitle}</p>}
       </div>
       {action}

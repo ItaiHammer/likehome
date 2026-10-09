@@ -7,6 +7,9 @@ export const MOCK_OWNER_ID = "owner-1";
 // Set to true to make every save fail, to see the "Changes weren't saved" / Retry state.
 export const MOCK_SAVE_FAILS = false;
 
+// Set to true to make every save throw, like a server crash or a dropped connection, to see the "couldn't reach" state.
+export const MOCK_SAVE_THROWS = false;
+
 export const MOCK_LISTINGS: Listing[] = [
   {
     id: "harbor-house",

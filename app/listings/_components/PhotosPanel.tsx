@@ -1,20 +1,21 @@
 import { useRef, useState } from "react";
 import { Button } from "@/app/_components/ui";
+import { MAX_PHOTOS } from "@/lib/validation/listing";
 import { SAMPLE_PHOTOS } from "@/mocks/sample-photos";
 import type { ListingPhoto } from "@/types/listing";
-import { uploadPhoto } from "@/utils/photo-upload";
 import { ListingCover } from "./ListingCover";
 import { PanelHeading } from "./PanelHeading";
 import { PhotoMenu } from "./PhotoMenu";
+import type { Upload } from "./usePhotoUploads";
 
-const MAX_PHOTOS = 30; // same limit the server enforces
-
-type Upload = { id: string; source: File | string; caption: string; status: "uploading" | "failed"; attempt: number };
 type View = { kind: "gallery" } | { kind: "choose" } | { kind: "uploads" } | { kind: "coverUpdated"; photoId: string };
 
 type Props = {
   photos: ListingPhoto[];
-  onAddPhoto: (photo: ListingPhoto) => void;
+  uploads: Upload[];
+  onStartUploads: (items: { source: File | string; caption: string }[]) => void;
+  onRetryUpload: (upload: Upload) => void;
+  onRemoveUpload: (id: string) => void;
   onMakeCover: (id: string) => void;
   onMove: (id: string, by: -1 | 1) => void;
   onRemove: (id: string) => void;
@@ -27,43 +28,37 @@ function captionFromFileName(name: string) {
 }
 
 // The Photos tab: the gallery, the sample-photo picker, the "Cover photo updated" confirmation, or uploads in progress.
-export function PhotosPanel({ photos, onAddPhoto, onMakeCover, onMove, onRemove }: Props) {
-  const [view, setView] = useState<View>({ kind: "gallery" });
-  const [uploads, setUploads] = useState<Upload[]>([]);
+export function PhotosPanel({ photos, uploads, onStartUploads, onRetryUpload, onRemoveUpload, onMakeCover, onMove, onRemove }: Props) {
+  // Coming back to this tab mid-upload shows the uploads again
+  const [view, setView] = useState<View>({ kind: uploads.length > 0 ? "uploads" : "gallery" });
   const [picked, setPicked] = useState<string[]>([]); // sample photo URLs chosen in the picker
+  const [skipped, setSkipped] = useState<string | null>(null); // message about files that weren't images
   const fileInput = useRef<HTMLInputElement>(null);
-
-  function startUpload(upload: Upload) {
-    uploadPhoto(upload.source, upload.attempt).then((result) => {
-      if ("url" in result) {
-        onAddPhoto({ id: upload.id, url: result.url, caption: upload.caption });
-        setUploads((list) => list.filter((u) => u.id !== upload.id));
-      } else {
-        setUploads((list) => list.map((u) => (u.id === upload.id ? { ...u, status: "failed" } : u)));
-      }
-    });
-  }
 
   const spaceLeft = Math.max(MAX_PHOTOS - photos.length - uploads.length, 0);
 
   function startUploads(items: { source: File | string; caption: string }[]) {
-    const added: Upload[] = items
-      .slice(0, spaceLeft)
-      .map((item) => ({ ...item, id: crypto.randomUUID(), status: "uploading", attempt: 1 }));
+    const added = items.slice(0, spaceLeft);
     if (added.length === 0) return;
-    setUploads((list) => [...list, ...added]);
-    added.forEach(startUpload);
+    onStartUploads(added);
     setPicked([]);
     setView({ kind: "uploads" });
   }
 
   function addFiles(files: FileList | null) {
-    const images = Array.from(files ?? []).filter((file) => file.type.startsWith("image/"));
+    const all = Array.from(files ?? []);
+    const images = all.filter((file) => file.type.startsWith("image/"));
     if (fileInput.current) fileInput.current.value = ""; // lets the same file be picked again
+    if (images.length < all.length) {
+      setSkipped(images.length === 0 ? "Only image files can be added (JPG, PNG, WebP…)." : "Some files were skipped: only images can be added.");
+    } else {
+      setSkipped(null);
+    }
     startUploads(images.map((file) => ({ source: file, caption: captionFromFileName(file.name) })));
   }
 
   function addSamples() {
+    setSkipped(null);
     startUploads(SAMPLE_PHOTOS.filter((sample) => picked.includes(sample.url)).map((s) => ({ source: s.url, caption: s.caption })));
   }
 
@@ -71,11 +66,11 @@ export function PhotosPanel({ photos, onAddPhoto, onMakeCover, onMove, onRemove 
     setPicked((list) => (list.includes(url) ? list.filter((u) => u !== url) : [...list, url]));
   }
 
-  function retry(upload: Upload) {
-    const next: Upload = { ...upload, status: "uploading", attempt: upload.attempt + 1 };
-    setUploads((list) => list.map((u) => (u.id === upload.id ? next : u)));
-    startUpload(next);
-  }
+  const skippedNotice = skipped && (
+    <p role="alert" className="mt-4 text-sm text-danger">
+      {skipped}
+    </p>
+  );
 
   const picker = (
     <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => addFiles(e.target.files)} />
@@ -100,11 +95,11 @@ export function PhotosPanel({ photos, onAddPhoto, onMakeCover, onMove, onRemove 
                   type="button"
                   aria-pressed={selected}
                   onClick={() => togglePicked(sample.url)}
-                  className={`relative block w-full rounded-lg text-left outline-offset-2 focus-visible:outline-2 focus-visible:outline-blue ${
+                  className={`group relative block w-full rounded-lg text-left outline-offset-2 focus-visible:outline-2 focus-visible:outline-blue ${
                     selected ? "ring-3 ring-blue" : ""
                   }`}
                 >
-                  <ListingCover photo={{ id: sample.url, ...sample }} sizes="250px" className="aspect-[16/10] w-full" />
+                  <ListingCover photo={{ id: sample.url, ...sample }} sizes="250px" zoom className="aspect-[16/10] w-full" />
                   {selected && (
                     <span className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-blue text-on-blue" aria-hidden>
                       <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -135,6 +130,7 @@ export function PhotosPanel({ photos, onAddPhoto, onMakeCover, onMove, onRemove 
             Cancel
           </Button>
         </div>
+        {skippedNotice}
         {spaceLeft < picked.length && (
           <p className="mt-4 text-sm text-slate">Only the first {spaceLeft} will be added: listings can have up to {MAX_PHOTOS} photos.</p>
         )}
@@ -165,10 +161,10 @@ export function PhotosPanel({ photos, onAddPhoto, onMakeCover, onMove, onRemove 
               </p>
               {upload.status === "failed" && (
                 <div className="mt-3 flex flex-wrap gap-3">
-                  <Button onClick={() => retry(upload)}>
+                  <Button onClick={() => onRetryUpload(upload)}>
                     Retry<span className="sr-only">: {upload.caption}</span>
                   </Button>
-                  <Button variant="secondary" onClick={() => setUploads((list) => list.filter((u) => u.id !== upload.id))}>
+                  <Button variant="secondary" onClick={() => onRemoveUpload(upload.id)}>
                     Remove<span className="sr-only">: {upload.caption}</span>
                   </Button>
                 </div>
@@ -176,6 +172,7 @@ export function PhotosPanel({ photos, onAddPhoto, onMakeCover, onMove, onRemove 
             </li>
           ))}
         </ul>
+        {skippedNotice}
         {uploads.length === 0 && <p className="mt-8 text-slate">All your new photos are in the gallery.</p>}
         {backToGallery}
       </>
@@ -197,59 +194,69 @@ export function PhotosPanel({ photos, onAddPhoto, onMakeCover, onMove, onRemove 
     />
   );
 
+  // Dashed "+" tile in the next photo's spot; opens the same picker the old "Add photos" button did
+  const addTile = (className: string, label: string, hint: string, hintClass = "") => (
+    <button
+      type="button"
+      onClick={() => setView({ kind: "choose" })}
+      className={`group/add flex w-full flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-edge p-3 text-center transition-colors hover:border-blue hover:bg-blue/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${className}`}
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue/10 text-blue transition-colors group-hover/add:bg-blue group-hover/add:text-on-blue">
+        <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+          <path d="M10 4v12M4 10h12" />
+        </svg>
+      </span>
+      <span className="font-semibold text-ink">{label}</span>
+      <span className={`text-sm text-slate ${hintClass}`}>{hint}</span>
+    </button>
+  );
+  const canAdd = spaceLeft > 0;
+
   return (
     <>
-      <PanelHeading
-        title="Photos"
-        subtitle="Choose a cover photo and arrange the rest of your gallery."
-        action={
-          <Button variant="secondary" onClick={() => setView({ kind: "choose" })} disabled={spaceLeft === 0}>
-            Add photos
-          </Button>
-        }
-      />
+      <PanelHeading title="Photos" subtitle="Choose a cover photo and arrange the rest of your gallery." />
+      {photos.length >= MAX_PHOTOS && (
+        <p className="mt-4 text-sm text-slate">Listings can have up to {MAX_PHOTOS} photos. Remove one to add another.</p>
+      )}
 
       {!cover ? (
-        <p className="mt-8 text-slate">No photos yet. Add a few so guests can picture their stay.</p>
+        canAdd ? (
+          <div className="mt-8">{addTile("aspect-[16/9]", "Add your first photo", "It becomes your cover photo")}</div>
+        ) : (
+          <p className="mt-8 text-slate">Your photos are uploading.</p>
+        )
       ) : (
         <>
-          <div className="mt-8 grid gap-8 lg:grid-cols-[3fr_2fr]">
-            <figure>
-              <ListingCover photo={cover} sizes="(min-width: 1024px) 600px, 100vw" className="aspect-[16/10] w-full" />
-              <figcaption className="mt-3 flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm text-blue">Cover photo</p>
-                  <p className="mt-1 text-lg font-semibold text-ink">{cover.caption || "Untitled photo"}</p>
-                  <p className="mt-1 text-slate">Shown first on your listing.</p>
-                </div>
-                {menu(cover, 0)}
-              </figcaption>
-            </figure>
+          <figure className="group mt-8">
+            <ListingCover photo={cover} sizes="(min-width: 1024px) 900px, 100vw" zoom eager className="aspect-[16/9] w-full" />
+            <figcaption className="mt-3 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-blue">Cover photo</p>
+                <p className="mt-1 truncate text-lg font-semibold text-ink">{cover.caption || "Untitled photo"}</p>
+                <p className="mt-1 text-slate">Shown first on your listing.</p>
+              </div>
+              {menu(cover, 0)}
+            </figcaption>
+          </figure>
 
-            <ul className="space-y-6">
+          {(rest.length > 0 || canAdd) && (
+            <ul className="mt-8 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3">
               {rest.map((photo, i) => (
-                <li key={photo.id} className="flex items-center gap-4">
-                  <ListingCover photo={photo} sizes="200px" className="aspect-[16/10] w-36 sm:w-44" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-ink">{photo.caption || "Untitled photo"}</p>
-                    <p className="text-sm text-slate">Photo {i + 2}</p>
+                <li key={photo.id} className="group min-w-0">
+                  <ListingCover photo={photo} sizes="(min-width: 640px) 300px, 50vw" zoom className="aspect-[16/10] w-full" />
+                  <div className="mt-2 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-ink">{photo.caption || "Untitled photo"}</p>
+                      <p className="text-sm text-slate">Photo {i + 2}</p>
+                    </div>
+                    {menu(photo, i + 1)}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onMakeCover(photo.id);
-                      setView({ kind: "coverUpdated", photoId: photo.id });
-                    }}
-                    className="hidden text-sm text-blue hover:text-blue-dark sm:block"
-                  >
-                    Make cover<span className="sr-only">: {photo.caption}</span>
-                  </button>
-                  {menu(photo, i + 1)}
                 </li>
               ))}
+              {canAdd && <li>{addTile("aspect-[16/10]", "Add photos", "From samples or your computer", "hidden lg:block")}</li>}
             </ul>
-          </div>
-          <p className="mt-8 text-sm text-slate">Use each photo&apos;s menu to reorder or remove it.</p>
+          )}
+          <p className="mt-8 text-sm text-slate">Use each photo&apos;s ••• menu to make it the cover, reorder it or remove it.</p>
         </>
       )}
     </>

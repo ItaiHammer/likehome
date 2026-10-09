@@ -23,17 +23,15 @@ export const AMENITY_LABELS: Record<Amenity, string> = {
 };
 
 // How the Amenities tab groups the checkboxes.
-export const AMENITY_GROUPS: { title: string; description: string; columns: 1 | 2; amenities: Amenity[] }[] = [
+export const AMENITY_GROUPS: { title: string; description: string; amenities: Amenity[] }[] = [
   {
     title: "Property amenities",
     description: "Select all amenities available to guests.",
-    columns: 2,
     amenities: ["wifi", "parking", "restaurant", "pool", "fitness_center", "air_conditioning"],
   },
   {
     title: "Accessibility and family",
     description: "Help guests choose a stay that suits their needs.",
-    columns: 1,
     amenities: ["step_free_entrance", "elevator", "accessible_parking", "family_rooms"],
   },
 ];
@@ -80,3 +78,19 @@ export function formatRoomTypesSummary(rooms: Listing["rooms"]) {
   const types = NUMBER_WORDS[rooms.length] ?? String(rooms.length);
   return `Choose from ${formatRoomCount(rooms)} across ${types} room ${rooms.length === 1 ? "type" : "types"}.`;
 }
+
+// Cheapest nightly rate across room types, or null with no rooms.
+export function lowestRate(rooms: Listing["rooms"]) {
+  return rooms.length > 0 ? Math.min(...rooms.map((room) => room.nightlyRateCents)) : null;
+}
+
+// What a listing still needs before guests can book it, with the editor tab that fixes it.
+export function needsAttention(listing: Pick<Listing, "photos" | "rooms">) {
+  const todo: { label: string; tab: "photos" | "rooms" }[] = [];
+  if (listing.photos.length === 0) todo.push({ label: "Add photos", tab: "photos" });
+  if (listing.rooms.length === 0) todo.push({ label: "Add rooms", tab: "rooms" });
+  return todo;
+}
+
+// 1 → "1 photo", 4 → "4 photos"
+export const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
