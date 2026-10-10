@@ -2,11 +2,12 @@
 
 import { signInWithGoogle } from "@/components/sign-in-google-button";
 
+// Set available: true once a provider is wired up on the backend.
 const providers = [
-  { name: "Google", icon: "/google-logo.svg" },
-  { name: "Apple", icon: "/apple-logo.svg" },
-  { name: "Microsoft", icon: "/microsoft-logo.svg" },
-  { name: "Facebook", icon: "/facebook-logo.svg" },
+  { name: "Google", icon: "/login/google-logo.svg", available: true },
+  { name: "Apple", icon: "/login/apple-logo.svg", available: false },
+  { name: "Microsoft", icon: "/login/microsoft-logo.svg", available: false },
+  { name: "Facebook", icon: "/login/facebook-logo.svg", available: false },
 ];
 
 export default function SignInPage() {
@@ -23,7 +24,8 @@ export default function SignInPage() {
                 key={provider.name}
                 type="button"
                 className="provider-button"
-                // Only Google has a backend today. The others are visual only for now.
+                disabled={!provider.available}
+                title={provider.available ? undefined : "Coming soon"}
                 onClick={provider.name === "Google" ? signInWithGoogle : undefined}
               >
                 <span className="icon">
@@ -31,6 +33,8 @@ export default function SignInPage() {
                 </span>
 
                 <span>Continue with {provider.name}</span>
+
+                {!provider.available && <span className="badge">Soon</span>}
               </button>
             ))}
           </div>
@@ -38,7 +42,7 @@ export default function SignInPage() {
 
         <div className="artwork">
           <img
-            src="/likehome-coastal-room-signin.png"
+            src="/login/likehome-coastal-room-signin.png"
             alt="Coastal living room"
           />
         </div>
@@ -46,7 +50,7 @@ export default function SignInPage() {
 
       <img
         className="brand-icon"
-        src="/doorway-icon.svg"
+        src="/login/doorway-icon.svg"
         alt="LikeHome"
       />
 
@@ -146,19 +150,43 @@ export default function SignInPage() {
             transform 160ms ease;
         }
 
-        .provider-button:hover {
+        .provider-button:hover:not(:disabled) {
           border-color: #7199d7;
           background: #f7faff;
           transform: translateY(-1px);
         }
 
-        .provider-button:active {
+        .provider-button:active:not(:disabled) {
           transform: translateY(0);
         }
 
         .provider-button:focus-visible {
           outline: 3px solid rgba(57, 126, 225, 0.3);
           outline-offset: 2px;
+        }
+
+        .provider-button:disabled {
+          cursor: not-allowed;
+          color: #536383;
+          background: #f3f6fb;
+          border-color: #dde5f2;
+        }
+
+        .provider-button:disabled .icon {
+          opacity: 0.45;
+          filter: grayscale(1);
+        }
+
+        .badge {
+          padding: 2px 8px;
+          border-radius: 999px;
+          background: #e1e8f3;
+          color: #536383;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          line-height: 16px;
+          text-transform: uppercase;
         }
 
         .icon {
