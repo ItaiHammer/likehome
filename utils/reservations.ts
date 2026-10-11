@@ -49,6 +49,7 @@ export async function createReservation(reservation: {
   check_in: string
   check_out: string
   total_price: number
+  guests?: number
   status?: string
 }) {
   const cookieStore = await cookies()
@@ -63,6 +64,9 @@ export async function createReservation(reservation: {
 export async function updateReservation(
   id: string,
   updates: Partial<{
+    room_id: string
+    hotel_id: string
+    guests: number
     check_in: string
     check_out: string
     status: string

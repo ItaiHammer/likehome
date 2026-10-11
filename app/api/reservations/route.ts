@@ -85,6 +85,7 @@ export async function POST(request: Request) {
     check_in: input.check_in,
     check_out: input.check_out,
     total_price,
+    guests: input.guests,
   })
 
   if (error) {
