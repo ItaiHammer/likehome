@@ -9,7 +9,9 @@ export function SkyBackground() {
   const reduceMotion = useReducedMotion();
 
   return (
-    <div className="absolute inset-0" aria-hidden>
+    // The shader stretches with the canvas shape, so a short, wide strip (search, stay page) bunches
+    // the blend into a hard streak. Keep it at least hero-tall and let the parent crop it.
+    <div className="absolute inset-x-0 top-0 h-full min-h-[max(560px,40vw)]" aria-hidden>
       <Grainient
         color1="#CFE3F3"
         color2="#5583C6"
