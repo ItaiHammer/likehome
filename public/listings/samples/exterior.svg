@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750"><title>Coastal hotel exterior</title>
+<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9DBCE0"/><stop offset="1" stop-color="#E6EEF7"/></linearGradient>
+<linearGradient id="w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4C79BD"/><stop offset="1" stop-color="#2F5590"/></linearGradient></defs>
+<rect width="1200" height="750" fill="url(#s)"/>
+<ellipse cx="260" cy="150" rx="120" ry="28" fill="#fff" opacity=".7"/><ellipse cx="900" cy="110" rx="160" ry="30" fill="#fff" opacity=".6"/>
+<path d="M0 360 Q200 330 420 350 T900 340 T1200 330 V750 H0Z" fill="#8FA6B8"/>
+<rect y="390" width="1200" height="360" fill="url(#w)"/>
+<path d="M0 470 Q80 455 160 470 T320 470" stroke="#fff" stroke-width="4" fill="none" opacity=".6"/>
+<path d="M60 560 Q140 545 220 560 T380 560" stroke="#fff" stroke-width="4" fill="none" opacity=".5"/>
+<path d="M380 750 L520 470 Q640 420 800 430 L1200 400 V750Z" fill="#C9B79A"/>
+<path d="M430 750 L540 520 Q660 480 820 490 L1200 470 V750Z" fill="#B39E7E"/>
+<g><rect x="660" y="250" width="380" height="230" fill="#F4EFE6"/>
+<path d="M630 260 L850 140 L1070 260Z" fill="#7C6656"/><path d="M780 200 L850 162 L920 200Z" fill="#F4EFE6"/>
+<g fill="#5E86C2" stroke="#fff" stroke-width="6"><rect x="700" y="290" width="70" height="80"/><rect x="815" y="290" width="70" height="80"/><rect x="930" y="290" width="70" height="80"/>
+<rect x="700" y="395" width="70" height="80"/><rect x="930" y="395" width="70" height="80"/></g>
+<rect x="822" y="400" width="56" height="80" fill="#8A6F5A"/>
+<path d="M660 380 H1040" stroke="#fff" stroke-width="8"/><g stroke="#fff" stroke-width="4">
+<path d="M680 380 v-30M720 380 v-30M760 380 v-30M800 380 v-30M840 380 v-30M880 380 v-30M920 380 v-30M960 380 v-30M1000 380 v-30"/></g></g>
+<g fill="#6F8F6A"><circle cx="600" cy="500" r="60"/><circle cx="660" cy="530" r="50"/><circle cx="1080" cy="470" r="70"/><circle cx="1150" cy="500" r="60"/></g>
+<g fill="#8DAA7E"><circle cx="560" cy="540" r="45"/><circle cx="1010" cy="520" r="45"/></g>
+</svg>

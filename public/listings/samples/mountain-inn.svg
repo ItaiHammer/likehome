@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750"><title>Mountain inn with a porch</title>
+<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A9C6E6"/><stop offset="1" stop-color="#EEF3F9"/></linearGradient></defs>
+<rect width="1200" height="750" fill="url(#s)"/>
+<path d="M0 380 L200 180 L330 290 L520 110 L720 300 L880 170 L1200 400 V750 H0Z" fill="#8A9BB3"/>
+<path d="M470 160 L520 110 L570 160 L545 150 L520 170 L495 150Z" fill="#fff"/><path d="M845 205 L880 170 L915 205 L880 195Z" fill="#fff"/>
+<path d="M0 470 Q300 400 600 450 T1200 430 V750 H0Z" fill="#7E9C77"/>
+<rect y="580" width="1200" height="170" fill="#6F8F6A"/>
+<rect x="380" y="360" width="460" height="240" fill="#A7684B"/><path d="M350 370 L610 240 L870 370Z" fill="#5B4A3E"/>
+<g fill="#FFE8A8" stroke="#F7F1E6" stroke-width="6"><rect x="420" y="400" width="70" height="70"/><rect x="730" y="400" width="70" height="70"/><rect x="575" y="300" width="70" height="50"/></g>
+<rect x="580" y="480" width="60" height="120" fill="#4A3B31"/>
+<rect x="360" y="540" width="500" height="18" fill="#D9CBB4"/><g fill="#D9CBB4"><rect x="370" y="490" width="12" height="55"/><rect x="480" y="490" width="12" height="55"/><rect x="730" y="490" width="12" height="55"/><rect x="840" y="490" width="12" height="55"/></g>
+<g fill="#3F5F45"><path d="M150 620 L210 420 L270 620Z"/><path d="M60 640 L110 480 L160 640Z"/><path d="M960 620 L1020 410 L1080 620Z"/><path d="M1060 640 L1110 470 L1160 640Z"/></g>
+<rect x="890" y="250" width="40" height="120" fill="#7C6656"/><path d="M905 240 q-20 -30 5 -60 q-5 30 20 30 q10 -20 0 -40 q35 30 10 70Z" fill="#E6EEF7" opacity=".7"/>
+</svg>
