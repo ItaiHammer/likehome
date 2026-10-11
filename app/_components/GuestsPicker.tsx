@@ -10,9 +10,20 @@ const rows = [
 type Counts = Record<(typeof rows)[number]["key"], number>;
 
 // Themed replacement for a native <select>, whose popup ignores the site's light/dark theme.
-export function GuestsPicker({ className = "" }: { className?: string }) {
+export function GuestsPicker({
+  className = "",
+  initialAdults = 2,
+  initialChildren = 0,
+}: {
+  className?: string;
+  initialAdults?: number;
+  initialChildren?: number;
+}) {
   const [open, setOpen] = useState(false);
-  const [counts, setCounts] = useState<Counts>({ adults: 2, children: 0 });
+  const [counts, setCounts] = useState<Counts>({
+    adults: Math.min(16, Math.max(1, initialAdults)),
+    children: Math.min(10, Math.max(0, initialChildren)),
+  });
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -58,7 +69,8 @@ export function GuestsPicker({ className = "" }: { className?: string }) {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-base text-ink outline-none focus-visible:outline-hidden"
+        // after: covers the whole segment, padding included, so a click anywhere in it opens the picker
+        className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-base text-ink outline-none after:absolute after:inset-0 focus-visible:outline-hidden"
       >
         <span className="truncate">
           {total} {total === 1 ? "guest" : "guests"}

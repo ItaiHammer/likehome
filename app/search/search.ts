@@ -15,13 +15,22 @@ import { bedSizes, sorts, tags } from './types.ts';
 
 import { searchAvailableHotels } from '../../utils/search.ts';
 
-export async function search(searchParams: SearchRequest): Promise<SearchResponse> {
+// Paging stays out of SearchRequest: it picks which slice of results to show,
+// not which stays match, so the AI and filter parsing never see it.
+export type PageOptions = {
+    page?: number;
+    pageSize?: number;
+};
+
+export async function search(searchParams: SearchRequest, pageOptions?: PageOptions): Promise<SearchResponse> {
     const standardizedParams = getSearchParams(searchParams);
 
     const result = await searchAvailableHotels({
+        ...(pageOptions?.page !== undefined && { page: pageOptions.page }),
+        ...(pageOptions?.pageSize !== undefined && { page_size: pageOptions.pageSize }),
         city: standardizedParams?.location?.city,
         region: standardizedParams?.location?.region,
-        country: standardizedParams?.location?.country,
+        country: toStoredCountry(standardizedParams?.location?.country),
         check_in: standardizedParams?.dates?.checkIn,
         check_out: standardizedParams?.dates?.checkOut,
         guests: standardizedParams?.guests?.total,
@@ -38,6 +47,25 @@ export async function search(searchParams: SearchRequest): Promise<SearchRespons
         params: standardizedParams,
         results: result
     };
+}
+
+// The hotels table stores the US as "USA", but the AI spells it out ("United States of America")
+// and the destination picker says "United States", so those found nothing. Other countries are
+// stored by their full name. Only the database call is translated; params keep what was asked.
+const STORED_COUNTRY_NAMES: Record<string, string> = {
+    'united states of america': 'USA',
+    'united states': 'USA',
+    'usa': 'USA',
+    'us': 'USA',
+    'u.s.': 'USA',
+    'u.s.a.': 'USA',
+};
+
+function toStoredCountry(country?: string): string | undefined {
+    if (country === undefined) {
+        return undefined;
+    }
+    return STORED_COUNTRY_NAMES[country.toLowerCase()] ?? country;
 }
 
 function getSearchParams(searchParams: SearchRequest): PropertyFilter {
