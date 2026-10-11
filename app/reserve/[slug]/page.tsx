@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { countNights, MAX_NIGHTS, parseDate, todayUTC } from "@/utils/reservation-logic";
 import { createClient } from "@/utils/supabase/server";
-import { todayISO } from "../../_components/dates";
+import { addDays } from "../../_components/dates";
 import { PageBackdrop } from "../../_components/PageBackdrop";
 import { getStay, type Stay } from "../../_data/stays";
 import { getHotelStay } from "./hotelStay";
@@ -14,8 +15,6 @@ export const dynamic = "force-dynamic";
 
 // Cached per request, so the title and the page share one database lookup
 const findStay = cache(async (slug: string) => getStay(slug) ?? (await getHotelStay(slug)));
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Room, dates and guests carried in the link (e.g. coming back from sign-in). Anything that doesn't
 // fit this stay is dropped, so the card falls back to its defaults.
@@ -30,7 +29,16 @@ function readChoices(params: Record<string, string | string[] | undefined>, stay
   };
   const checkIn = one("checkIn");
   const checkOut = one("checkOut");
-  const datesOk = !!checkIn && !!checkOut && ISO_DATE.test(checkIn) && ISO_DATE.test(checkOut) && checkIn >= todayISO() && checkOut > checkIn;
+  // Server time is UTC in production; a day's slack keeps a US guest's "today" (the card checks it exactly)
+  const earliest = addDays(todayUTC(), -1);
+  const datesOk =
+    !!checkIn &&
+    !!checkOut &&
+    !!parseDate(checkIn) &&
+    !!parseDate(checkOut) &&
+    checkIn >= earliest &&
+    checkOut > checkIn &&
+    countNights(checkIn, checkOut) <= MAX_NIGHTS;
   const room = stay.rooms.find((r) => r.id === one("room") && !r.soldOut);
 
   return {

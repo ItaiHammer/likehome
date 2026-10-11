@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { MAX_NIGHTS, todayUTC } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Field, Stars } from "../../_components/ui";
@@ -33,6 +34,10 @@ type Booking = {
 
 /** Room, dates and guests to start the card with, e.g. when coming back from sign-in */
 export type StayChoices = { checkIn?: string; checkOut?: string; adults?: number; children?: number; roomId?: string };
+
+type StayProblem = { field: "dates" | "guests"; message: string };
+
+const noSubscribe = () => () => {};
 
 const CONTACT_FIELDS = ["firstName", "lastName", "email", "phone"] as const;
 
@@ -90,9 +95,11 @@ export function StayReservation({
   const taxes = Math.round((subtotal + cleaning) * (stay.taxRate ?? TAX_RATE));
   const total = subtotal + cleaning + taxes;
   const guests = adults + children;
-  // Free cancellation ends 2 days before check-in; for a stay that starts sooner, it's already over
+  // Free cancellation ends 2 days before check-in; for a stay that starts sooner, it's already over.
+  // Today is "" while rendering on the server, so the server and the browser agree on first render.
+  const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
   const cancelBy = checkIn ? addDays(checkIn, -2) : "";
-  const freeCancel = !checkIn || cancelBy > todayISO();
+  const freeCancel = !checkIn || !today || cancelBy > today;
 
   const setDatesOpen = useCallback((open: boolean) => setPopover((p) => (open ? "dates" : p === "dates" ? null : p)), []);
   const setGuestsOpen = useCallback((open: boolean) => setPopover((p) => (open ? "guests" : p === "guests" ? null : p)), []);
@@ -124,17 +131,22 @@ export function StayReservation({
 
   // What's wrong with the stay as chosen, if anything. Checked on Reserve and
   // again right before confirming.
-  function stayProblem(): { field: "dates" | "guests"; message: string } | null {
-    if (!nights) return { field: "dates", message: "Choose your dates." };
+  function stayProblem(): StayProblem | null {
+    if (!nights) return { field: "dates", message: "" };
+    if (nights > MAX_NIGHTS) return { field: "dates", message: `Stays can be up to ${MAX_NIGHTS} nights.` };
+    const booked = stay.blockedNights.map((o) => addDays(todayISO(), o));
+    if (booked.some((night) => night >= checkIn && night < checkOut)) return { field: "dates", message: "Some of those nights are already booked." };
+    // The booking API counts days in UTC, so in the US evening "today" has already passed for it
+    if (stay.bookable && checkIn < todayUTC()) return { field: "dates", message: "That check-in date is too soon to book. Pick a later date." };
     if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     return null;
   }
 
-  function showStayProblem(problem: { field: "dates" | "guests"; message: string }) {
+  function showStayProblem(problem: StayProblem) {
     setStep("stay");
     if (problem.field === "dates") {
-      setErrors({});
+      setErrors(problem.message ? { dates: problem.message } : {});
       setPopover("dates");
       return;
     }
@@ -170,7 +182,7 @@ export function StayReservation({
   }
 
   function backToStay() {
-    // Going back cancels a confirmation that's still in progress
+    // Cancels a sample stay's pretend confirmation; going back is disabled while a real booking saves
     window.clearTimeout(confirmTimer.current);
     saveRequest.current?.abort();
     setSubmitting(false);
@@ -304,7 +316,7 @@ export function StayReservation({
           </legend>
           {roomsLocked && (
             <p id="rooms-locked" className="mt-2 text-sm text-slate">
-              {step === "done" ? "Your room is booked." : "To change rooms, go back to your stay."}
+              {step !== "done" ? "To change rooms, go back to your stay." : booking?.saved ? "Your room is booked." : "Sample stay, so nothing was booked."}
             </p>
           )}
           <div className="mt-5 space-y-4">
@@ -397,10 +409,12 @@ export function StayReservation({
                 onChange={(a, b) => {
                   setCheckIn(a);
                   setCheckOut(b);
+                  clear("dates");
                 }}
                 blockedOffsets={stay.blockedNights}
                 open={popover === "dates"}
                 onOpenChange={setDatesOpen}
+                error={errors.dates}
               />
 
               <GuestsField
@@ -460,7 +474,9 @@ export function StayReservation({
               <button
                 type="button"
                 onClick={backToStay}
-                className="inline-flex h-11 items-center gap-1.5 text-base font-semibold text-blue hover:text-blue-dark"
+                // Once a real booking is sent the server saves it either way, so going back would hide it
+                disabled={submitting && stay.bookable}
+                className="inline-flex h-11 items-center gap-1.5 text-base font-semibold text-blue hover:text-blue-dark disabled:cursor-not-allowed disabled:text-slate"
               >
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M15 6l-6 6 6 6" />
@@ -492,7 +508,7 @@ export function StayReservation({
                 <Field id="firstName" name="firstName" label="First name" autoComplete="given-name" defaultValue={contact.firstName} error={errors.firstName} onChange={() => clear("firstName")} />
                 <Field id="lastName" name="lastName" label="Last name" autoComplete="family-name" defaultValue={contact.lastName} error={errors.lastName} onChange={() => clear("lastName")} />
               </div>
-              <Field id="email" name="email" label="Email address" type="email" autoComplete="email" hint="We’ll send your confirmation here." defaultValue={contact.email || account?.email} error={errors.email} onChange={() => clear("email")} />
+              <Field id="email" name="email" label="Email address" type="email" autoComplete="email" defaultValue={contact.email || account?.email} error={errors.email} onChange={() => clear("email")} />
               <Field id="phone" name="phone" label="Phone (optional)" type="tel" autoComplete="tel" defaultValue={contact.phone} />
 
               <div className="space-y-5 border-t border-edge pt-5">
@@ -582,7 +598,7 @@ export function StayReservation({
             <div className="space-y-5">
               <div>
                 <h2 ref={headingRef} tabIndex={-1} className="text-[32px] font-bold leading-10 text-ink outline-none">
-                  You’re booked.
+                  {booking.saved ? "You’re booked." : "That was a sample stay."}
                 </h2>
                 <p className="mt-2 text-base text-slate">
                   {booking.saved ? (
@@ -590,7 +606,7 @@ export function StayReservation({
                       Confirmation <span className="font-semibold text-ink">{booking.confirmation}</span>. Your booking is saved to your account.
                     </>
                   ) : (
-                    "This is a sample stay, so nothing was booked. Real hotels from Stays are saved to your account."
+                    "Nothing was booked. Hotels you find in Stays are saved to your account when you book."
                   )}
                 </p>
               </div>
