@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { DAY, formatDate, formatShort, fromUTC, nightsBetween, toUTC } from "../../_components/dates";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Field, Stars } from "../../_components/ui";
 import { getFacts } from "../../_data/facts";
@@ -68,6 +68,9 @@ export function StayReservation({ stay }: { stay: Stay }) {
   const taxes = Math.round((subtotal + cleaning) * TAX_RATE);
   const total = subtotal + cleaning + taxes;
   const guests = adults + children;
+  // Free cancellation ends 2 days before check-in; for a stay that starts sooner, it's already over
+  const cancelBy = checkIn ? addDays(checkIn, -2) : "";
+  const freeCancel = !checkIn || cancelBy > todayISO();
 
   const setDatesOpen = useCallback((open: boolean) => setPopover((p) => (open ? "dates" : p === "dates" ? null : p)), []);
   const setGuestsOpen = useCallback((open: boolean) => setPopover((p) => (open ? "guests" : p === "guests" ? null : p)), []);
@@ -188,12 +191,13 @@ export function StayReservation({ stay }: { stay: Stay }) {
 
   return (
     <>
-      <Link href="/#stays" className="inline-flex items-center gap-1 text-base font-semibold text-blue hover:text-blue-dark">
-        <span aria-hidden>←</span> Back to stays
+      {/* Ink, not blue, even on hover: blue text on the sky strip is too faint to read */}
+      <Link href="/search" className="group inline-flex items-center gap-1 text-base font-semibold text-ink">
+        <span aria-hidden className="transition-transform duration-200 group-hover:-translate-x-1">←</span> Back to stays
       </Link>
 
       <div className="mt-4">
-        <h1 className="font-serif text-[56px] leading-[64px] text-ink">{stay.name}</h1>
+        <h1 className="break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[56px] sm:leading-[64px]">{stay.name}</h1>
         <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-slate">
           <span>{stay.location}</span>
           <span aria-hidden>·</span>
@@ -207,7 +211,9 @@ export function StayReservation({ stay }: { stay: Stay }) {
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_514px] lg:items-start">
         <fieldset id="rooms" disabled={roomsLocked} aria-describedby={roomsLocked ? "rooms-locked" : undefined} className="min-w-0 scroll-mt-6">
-          <legend className="text-[32px] font-bold leading-10 text-ink">Choose a room</legend>
+          <legend className="text-[32px] font-bold leading-10 text-ink">
+            <h2>Choose a room</h2>
+          </legend>
           {roomsLocked && (
             <p id="rooms-locked" className="mt-2 text-sm text-slate">
               {step === "done" ? "Your room is booked." : "To change rooms, go back to your stay."}
@@ -221,7 +227,8 @@ export function StayReservation({ stay }: { stay: Stay }) {
                 <label
                   key={r.id}
                   // Room options follow the sheet's field states: default, selected (focus look), disabled.
-                  className={`flex items-center gap-4 rounded-control border p-4 transition sm:gap-6 sm:px-5 has-[:focus-visible]:border-blue has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-blue ${
+                  // Keyboard focus always lands on the selected room, so it needs the outline on top.
+                  className={`flex items-center gap-4 rounded-control border p-4 transition sm:gap-6 sm:px-5 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-blue ${
                     off
                       ? "cursor-not-allowed border-disabled bg-disabled"
                       : on
@@ -246,9 +253,18 @@ export function StayReservation({ stay }: { stay: Stay }) {
                   <div className="min-w-0 flex-1">
                     <p className={`text-base font-semibold leading-5 ${off ? "text-slate" : "text-ink"}`}>{r.name}</p>
                     <p className="mt-1 text-sm text-slate">
-                      {r.description} · Sleeps {r.sleeps}
+                      {/* Each dot is glued to the label after it, so a wrapped line never ends on a dot */}
+                      {[...r.description.split(" · "), `Sleeps ${r.sleeps}`].map((part, i) => (
+                        <Fragment key={part}>
+                          {i > 0 && " "}
+                          <span className="whitespace-nowrap">
+                            {i > 0 && "· "}
+                            {part}
+                          </span>
+                        </Fragment>
+                      ))}
                     </p>
-                    <p className="text-sm text-slate">{off ? "Sold out right now" : "Free cancellation"}</p>
+                    <p className="text-sm text-slate">{off ? "Sold out right now" : freeCancel ? "Free cancellation" : "No free cancellation"}</p>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className={`text-base font-semibold ${off ? "text-slate line-through" : "text-ink"}`}>{money(r.nightly)}</p>
@@ -363,7 +379,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
               <div className="rounded-control border border-edge bg-paper p-4 text-sm text-slate">
                 <p className="text-base font-semibold leading-5 text-ink">{room.name}</p>
                 <p className="mt-1">
-                  {formatShort(checkIn)} – {formatShort(checkOut)} · {nights} {nights === 1 ? "night" : "nights"}
+                  {formatShort(checkIn)} - {formatShort(checkOut)} · {nights} {nights === 1 ? "night" : "nights"}
                 </p>
                 <p>{guestLabel(adults, children)}</p>
                 <p className="mt-2 flex justify-between text-base font-bold text-ink">
@@ -373,11 +389,11 @@ export function StayReservation({ stay }: { stay: Stay }) {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field id="firstName" name="firstName" label="First name" placeholder="Alex" autoComplete="given-name" defaultValue={contact.firstName} error={errors.firstName} onChange={() => clear("firstName")} />
-                <Field id="lastName" name="lastName" label="Last name" placeholder="Rivera" autoComplete="family-name" defaultValue={contact.lastName} error={errors.lastName} onChange={() => clear("lastName")} />
+                <Field id="firstName" name="firstName" label="First name" autoComplete="given-name" defaultValue={contact.firstName} error={errors.firstName} onChange={() => clear("firstName")} />
+                <Field id="lastName" name="lastName" label="Last name" autoComplete="family-name" defaultValue={contact.lastName} error={errors.lastName} onChange={() => clear("lastName")} />
               </div>
-              <Field id="email" name="email" label="Email address" type="email" placeholder="you@example.com" autoComplete="email" hint="We’ll send your confirmation here." defaultValue={contact.email} error={errors.email} onChange={() => clear("email")} />
-              <Field id="phone" name="phone" label="Phone (optional)" type="tel" placeholder="+1 555 010 0000" autoComplete="tel" defaultValue={contact.phone} />
+              <Field id="email" name="email" label="Email address" type="email" autoComplete="email" hint="We’ll send your confirmation here." defaultValue={contact.email} error={errors.email} onChange={() => clear("email")} />
+              <Field id="phone" name="phone" label="Phone (optional)" type="tel" autoComplete="tel" defaultValue={contact.phone} />
 
               <div className="space-y-5 border-t border-edge pt-5">
                 <h3 className="text-base font-semibold leading-5 text-ink">Payment</h3>
@@ -423,12 +439,14 @@ export function StayReservation({ stay }: { stay: Stay }) {
                     }}
                   />
                 </div>
-                <Field id="cardName" name="cardName" label="Name on card" autoComplete="cc-name" placeholder="Alex Rivera" error={errors.cardName} onChange={() => clear("cardName")} />
-                <Field id="postalCode" name="postalCode" label="Billing postal code" autoComplete="postal-code" placeholder="94107" error={errors.postalCode} onChange={() => clear("postalCode")} />
+                <Field id="cardName" name="cardName" label="Name on card" autoComplete="cc-name" error={errors.cardName} onChange={() => clear("cardName")} />
+                <Field id="postalCode" name="postalCode" label="Billing postal code" autoComplete="postal-code" error={errors.postalCode} onChange={() => clear("postalCode")} />
               </div>
 
               <p className="text-sm text-slate">
-                Free cancellation until {formatDate(fromUTC(toUTC(checkIn) - 2 * DAY))}. After that, the first night is non-refundable.
+                {freeCancel
+                  ? `Free cancellation until ${formatDate(cancelBy)}. After that, the first night is non-refundable.`
+                  : "This booking can’t be cancelled for free. The first night is non-refundable."}
               </p>
               <button type="submit" disabled={submitting} className={`${buttonPrimary} w-full`}>
                 {submitting ? (
@@ -469,7 +487,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
                 Back to home
               </Link>
               <button type="button" onClick={startOver} className={`${buttonSecondary} w-full`}>
-                Book another stay
+                Book different dates
               </button>
             </div>
           )}

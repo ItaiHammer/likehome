@@ -10,7 +10,7 @@ export function SignInButton() {
     <button
       type="button"
       onClick={() => router.push(PAGE_ROUTES.LOGIN)}
-      className="rounded-control px-3 py-2 text-base font-semibold text-blue hover:text-blue-dark"
+      className="rounded-control px-3 py-2 text-base font-semibold text-blue hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
     >
       Sign in
     </button>

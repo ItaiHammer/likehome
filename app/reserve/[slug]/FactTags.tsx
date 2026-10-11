@@ -99,7 +99,8 @@ export function FactTags({ groups, stayName, location }: { groups: FactGroup[]; 
           All facts
         </button>
       </div>
-      <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
+      {/* py-1 leaves room for the focus outline, which the scroll row would otherwise clip */}
+      <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 py-1 sm:-mx-6 sm:px-6 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
         {groups.map((g) => {
           const on = active === g.id;
           return (
@@ -109,8 +110,9 @@ export function FactTags({ groups, stayName, location }: { groups: FactGroup[]; 
               onClick={() => toggle(g.id)}
               aria-expanded={on}
               aria-controls="stay-facts"
-              // Same shape as the sheet's outline button; the open tag takes the focus look (blue border).
-              className={`inline-flex h-[46px] shrink-0 items-center gap-2 rounded-control border bg-surface px-4 text-base font-semibold text-ink transition-colors focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue ${
+              // Same shape as the sheet's outline button; the open tag takes the field focus look (blue border),
+              // so keyboard focus gets the buttons' outline instead.
+              className={`inline-flex h-[46px] shrink-0 items-center gap-2 rounded-control border bg-surface px-4 text-base font-semibold text-ink transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${
                 on ? "border-blue ring-1 ring-blue" : "border-edge hover:border-blue"
               }`}
             >
@@ -150,21 +152,23 @@ export function FactTags({ groups, stayName, location }: { groups: FactGroup[]; 
         ref={dialogRef}
         aria-labelledby="all-facts-title"
         onClick={(e) => e.target === e.currentTarget && e.currentTarget.close()}
-        className="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-5xl overflow-y-auto rounded-2xl border border-edge bg-surface p-0 text-ink backdrop:bg-[#070d2f]/60"
+        className="m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-5xl overflow-y-auto overscroll-contain rounded-2xl border border-edge bg-surface p-0 text-ink backdrop:bg-[#070d2f]/60"
       >
-        <div className="p-6 sm:p-10">
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              <h2 id="all-facts-title" className="text-[32px] font-bold leading-10">
-                Good to know before you book
-              </h2>
-              <p className="mt-1 text-base text-slate">
-                {stayName} · {location}
-              </p>
-            </div>
-            <CloseButton label="Close" onClick={() => dialogRef.current?.close()} />
+        {/* Sticky so Close stays in reach on phones, where the facts run several screens long.
+            The fade below it lands on empty padding until the facts scroll under. */}
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-6 bg-surface px-6 pb-4 pt-6 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-linear-to-b after:from-surface after:to-transparent sm:px-10 sm:pt-10">
+          <div>
+            <h2 id="all-facts-title" className="text-2xl font-bold leading-8 sm:text-[32px] sm:leading-10">
+              Good to know before you book
+            </h2>
+            <p className="mt-1 text-base text-slate">
+              {stayName} <span className="whitespace-nowrap">· {location}</span>
+            </p>
           </div>
-          <div className="mt-8 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+          <CloseButton label="Close" onClick={() => dialogRef.current?.close()} />
+        </div>
+        <div className="px-6 pb-6 pt-4 sm:px-10 sm:pb-10">
+          <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
             {groups.map((g) => (
               <section key={g.id} aria-labelledby={`all-${g.id}`} className="border-t border-edge pt-4">
                 <h3 id={`all-${g.id}`} className="flex items-center gap-2 text-base font-semibold leading-5">

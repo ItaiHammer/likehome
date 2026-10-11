@@ -7,7 +7,7 @@ import { AuthButton } from "@/components/auth-button";
 
 function Logo() {
   return (
-    <Link href="/" className="flex items-center gap-3 text-ink">
+    <Link href="/" className="-m-1 flex items-center gap-3 rounded-control p-1 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue">
       <LogoMark className="h-9 w-auto text-slate" />
       <span className="text-xl font-bold tracking-tight">LikeHome</span>
     </Link>

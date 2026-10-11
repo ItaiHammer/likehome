@@ -1,7 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
+import BlurText from "./_components/BlurText";
 import { PopularDestinations } from "./_components/PopularDestinations";
 import { SearchExperience } from "./_components/SearchExperience";
+import { ShinyLabel } from "./_components/ShinyLabel";
 import { SkyBackground } from "./_components/SkyBackground";
 import { Button, SectionHeading, Stars, Tag } from "./_components/ui";
 import { WindowScene } from "./_components/WindowScene";
@@ -21,14 +23,14 @@ const features = [
     title: "Homes, not just rooms",
     body: "Kitchens, living rooms and space to unpack.",
     link: "Browse stays",
-    href: "#stays",
+    href: "/search",
     icon: <path d="M4 11l8-6 8 6v9H4v-9z M10 20v-5h4v5" strokeLinejoin="round" />,
   },
   {
     title: "Plans change. We get it.",
     body: "Free cancellation on most stays.",
     link: "Find a flexible stay",
-    href: "#stays",
+    href: "/search",
     icon: (
       <>
         <rect x="4" y="5" width="16" height="15" rx="2" />
@@ -58,7 +60,7 @@ const perks = ["Member prices on every stay", "Rewards on every night you book",
 
 export default function Home() {
   return (
-    <div className="flex flex-1 flex-col">
+    <main className="flex flex-1 flex-col">
       {/* Hero: z-10 so the search bar's dropdowns open over the sections below */}
       <section className="relative isolate z-10 px-4 pb-24 pt-14 sm:px-6 sm:pb-32 sm:pt-20">
         {/* The sky fades out toward the bottom, into the page background (either theme) */}
@@ -66,9 +68,17 @@ export default function Home() {
           <SkyBackground />
         </div>
         <div className="mx-auto max-w-5xl">
-          <h1 className="text-center font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px] lg:text-[72px] lg:leading-[80px]">
-            Feel at home, anywhere.
-          </h1>
+          <BlurText
+            as="h1"
+            text="Feel at home, anywhere."
+            delay={120}
+            stepDuration={1}
+            // transform, not y: motion runs it as a browser animation, so it doesn't stutter while the page loads
+            animationFrom={{ filter: "blur(8px)", opacity: 0, transform: "translateY(10px)" }}
+            animationTo={[{ filter: "blur(0px)", opacity: 1, transform: "translateY(0px)" }]}
+            easing={[0.33, 1, 0.68, 1]}
+            className="justify-center text-center font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px] lg:text-[72px] lg:leading-[80px]"
+          />
           <p className="mx-auto mt-3 max-w-xl text-center text-xl leading-7 text-ink">
             A new favorite stay starts with a hello.
           </p>
@@ -80,14 +90,16 @@ export default function Home() {
         </div>
       </section>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-12 sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-12 sm:px-6">
         {/* Promo and feature cards sit close together, as one block */}
         <div className="flex flex-col gap-4">
           {/* Promo: the "Come on in." card sets the row height; the illustration
               sits beside it in its own card, portrait-sized to that height */}
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_300px] lg:grid-cols-[minmax(0,1fr)_360px]">
             <section className="flex flex-col justify-center rounded-lg border border-edge bg-surface p-8 sm:p-12">
-              <p className="text-sm font-semibold text-blue">LikeHome Members</p>
+              <p className="text-sm font-semibold">
+                <ShinyLabel text="LikeHome Members" />
+              </p>
               <h2 className="mt-3 font-serif text-[40px] leading-[48px] text-ink sm:text-[48px] sm:leading-[56px]">Come on in.</h2>
               <p className="mt-3 max-w-md text-base leading-7 text-slate">
                 Members save on thousands of handpicked homes. It’s free, and it takes about a minute.
@@ -128,20 +140,22 @@ export default function Home() {
                 className="object-cover"
               />
               {/* Dim it a little in dark mode so it doesn't glare */}
-              <div className="absolute inset-0 bg-[#070D2F]/25 opacity-0 dark:opacity-100" />
+              <div className="absolute inset-0 bg-[#070D2F]/40 opacity-0 dark:opacity-100" />
             </div>
           </div>
   
           {/* Feature cards: the whole card is the link. A soft blue tint sets them
               apart from the white cards around them; the link text uses blue-dark
               because plain blue drops under 4.5:1 contrast on the tint, and the
-              hover tint stops at 14% so blue-dark keeps 4.5:1 on it too. */}
+              hover tint stops at 14% so blue-dark keeps 4.5:1 on it too. Light mode
+              mixes the tint into white: over the warm paper it read as the grey
+              disabled fill. */}
           <section className="grid gap-4 md:grid-cols-3">
             {features.map((f) => (
               <Link
                 key={f.title}
                 href={f.href}
-                className="group flex flex-col rounded-lg border border-blue/20 bg-blue/10 p-6 transition-colors duration-200 hover:bg-blue/14 focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue sm:p-7"
+                className="group flex flex-col rounded-lg border border-blue/20 bg-[color-mix(in_srgb,var(--blue)_8%,var(--surface))] p-6 transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--blue)_12%,var(--surface))] focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue dark:bg-blue/10 dark:hover:bg-blue/14 sm:p-7"
               >
                 <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue text-on-blue transition-colors duration-200 group-hover:bg-blue-dark">
                   <Icon className="h-6 w-6">{f.icon}</Icon>
@@ -203,7 +217,7 @@ export default function Home() {
             ))}
           </ul>
         </section>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }

@@ -30,8 +30,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   // SearchExperience asks Cara's /api/search/ai endpoint, then links here.
   const aiReply = params.aiReply?.trim();
   const navigationParams = toRawParams(params);
-  // Nothing to search for yet (e.g. /search on its own): ask for something instead
-  const shouldSearch = aiPrompt ? hasStructuredSearchCriteria(params) : hasSearchCriteria(params);
+  // A standard search with nothing filled in lists every hotel (the nav's "Stays" links here)
+  const shouldSearch = aiPrompt ? hasStructuredSearchCriteria(params) : true;
 
   let data: HotelSearchResult[] = [];
   let total = 0;
@@ -123,14 +123,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           </div>
         )}
 
-        {!shouldSearch ? (
-          aiPrompt ? null : (
-            <StatePanel
-              title="Add something to your search"
-              body="Enter a destination, dates, guest preferences, or filters to find stays."
-            />
-          )
-        ) : searchError ? (
+        {!shouldSearch ? null : searchError ? (
           <StatePanel
             title="We couldn't load stays"
             body="Try the search again. If this keeps happening, the search service may be temporarily unavailable."
@@ -261,23 +254,6 @@ function hasStructuredSearchCriteria(params: SearchParams) {
       params.numBeds ||
       params.bedSize ||
       params.tags.length,
-  );
-}
-
-// A standard search counts once something differs from the bar's defaults (2 adults, no children)
-function hasSearchCriteria(params: SearchParams) {
-  return Boolean(
-    params.where ||
-      params.checkIn ||
-      params.checkOut ||
-      params.minPrice ||
-      params.maxPrice ||
-      params.minRating ||
-      params.numBeds ||
-      params.bedSize ||
-      params.tags.length ||
-      (params.adults && params.adults !== "2") ||
-      (params.children && params.children !== "0"),
   );
 }
 

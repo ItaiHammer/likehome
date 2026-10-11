@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { PageBackdrop } from "../../_components/PageBackdrop";
 import { getStay, STAYS } from "../../_data/stays";
 import { StayReservation } from "./StayReservation";
 
@@ -18,8 +19,11 @@ export default async function ReservePage(props: PageProps<"/reserve/[slug]">) {
   if (!stay) notFound();
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
-      <StayReservation stay={stay} />
-    </main>
+    <div className="relative isolate flex flex-1 flex-col">
+      <PageBackdrop />
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
+        <StayReservation stay={stay} />
+      </main>
+    </div>
   );
 }

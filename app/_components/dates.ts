@@ -20,6 +20,8 @@ const format = (iso: string, options: Intl.DateTimeFormatOptions) =>
 export const formatDate = (iso: string) => format(iso, { weekday: "short", month: "short", day: "numeric" });
 /** "Oct 14" */
 export const formatShort = (iso: string) => format(iso, { month: "short", day: "numeric" });
+/** "Oct 14 - Oct 17" */
+export const formatRange = (from: string, to: string) => `${formatShort(from)} - ${formatShort(to)}`;
 /** "Wednesday, October 14" (for screen readers) */
 export const formatLong = (iso: string) => format(iso, { weekday: "long", month: "long", day: "numeric" });
 

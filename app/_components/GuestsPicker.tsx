@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { iconButtonClass } from "./ui";
 
 const rows = [
   { key: "adults", label: "Adults", hint: "Ages 13 or above", min: 1, max: 16 },
@@ -89,7 +90,7 @@ export function GuestsPicker({
         aria-label="Choose guests"
         data-open={open}
         inert={!open}
-        className="dropdown absolute right-0 left-0 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:left-auto md:w-80"
+        className="dropdown absolute right-0 left-0 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:left-1/2 md:right-auto md:w-80 md:-translate-x-1/2"
       >
         {rows.map((r, i) => (
           <div
@@ -148,7 +149,7 @@ function StepButton({
       aria-label={label}
       aria-disabled={disabled}
       onClick={() => !disabled && onClick()}
-      className="flex h-8 w-8 items-center justify-center rounded-control border border-edge text-ink transition hover:border-blue hover:text-blue aria-disabled:cursor-not-allowed aria-disabled:opacity-35 aria-disabled:hover:border-edge aria-disabled:hover:text-ink"
+      className={`${iconButtonClass("sm")} relative after:absolute after:-inset-[5px]`}
     >
       <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
         {children}

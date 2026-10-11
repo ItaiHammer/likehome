@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { addDays, formatLong, formatShort, nightsBetween, todayISO } from "./dates";
+import { addDays, formatLong, formatRange, formatShort, nightsBetween, todayISO } from "./dates";
 import { buttonPrimary, buttonSecondary, iconButton } from "./ui";
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -128,7 +128,7 @@ export function RangeCalendar({
       setView(monthOf(start));
       setNotice({
         tone: "info",
-        text: `${formatShort(firstBooked)} is already booked, so we moved your ${nights}-night stay to the next dates that fit: ${formatShort(start)} – ${formatShort(end)}.`,
+        text: `${formatShort(firstBooked)} is already booked, so we moved your ${nights}-night stay to the next dates that fit: ${formatRange(start, end)}.`,
       });
       return;
     }
@@ -177,7 +177,7 @@ export function RangeCalendar({
 
   const hint =
     checkIn && checkOut
-      ? `${formatShort(checkIn)} – ${formatShort(checkOut)} · ${nights} ${nights === 1 ? "night" : "nights"}`
+      ? `${formatRange(checkIn, checkOut)} · ${nights} ${nights === 1 ? "night" : "nights"}`
       : pickingOut
         ? checkIn
           ? "Now pick your check-out date."
@@ -244,8 +244,9 @@ export function RangeCalendar({
                   onPointerEnter={() => setHover(day)}
                   aria-pressed={isStart || isEnd}
                   aria-label={`${formatLong(day)}${isBooked ? ", booked" : ""}${isStart ? ", check-in" : ""}${isEnd ? ", check-out" : ""}`}
+                  // A booked night can still be the guest's own check-out, so their picked ends aren't struck
                   className={`relative h-[46px] border text-base tabular-nums transition-colors outline-none focus-visible:z-10 focus-visible:border-blue focus-visible:ring-1 focus-visible:ring-blue ${tone} ${
-                    isBooked ? "line-through" : ""
+                    isBooked && !isStart && !isEnd && !isPreviewEnd ? "line-through" : ""
                   }`}
                 >
                   {Number(day.slice(8))}

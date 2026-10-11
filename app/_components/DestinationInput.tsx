@@ -70,7 +70,16 @@ function PinIcon({ className }: { className: string }) {
 }
 
 // Destination field with instant suggestions from a bundled list (no network round-trip).
-export function DestinationInput({ className = "", initialValue = "" }: { className?: string; initialValue?: string }) {
+export function DestinationInput({
+  className = "",
+  initialValue = "",
+  autoFocusFrom,
+}: {
+  className?: string;
+  initialValue?: string;
+  /** Focus the field when it mounts, e.g. back from AI search; "pointer" keeps the keyboard ring off */
+  autoFocusFrom?: "keyboard" | "pointer";
+}) {
   const listId = useId();
   const [query, setQuery] = useState(initialValue);
   const [focused, setFocused] = useState(false);
@@ -79,7 +88,7 @@ export function DestinationInput({ className = "", initialValue = "" }: { classN
   const [picked, setPicked] = useState(initialValue);
   // Text fields match :focus-visible even when clicked, so the search bar's
   // keyboard focus ring is turned off while the field was focused by mouse or touch
-  const [pointerFocus, setPointerFocus] = useState(false);
+  const [pointerFocus, setPointerFocus] = useState(autoFocusFrom === "pointer");
   const inputRef = useRef<HTMLInputElement>(null);
   const results = useMemo(() => search(query), [query]);
 
@@ -166,6 +175,7 @@ export function DestinationInput({ className = "", initialValue = "" }: { classN
           aria-autocomplete="list"
           aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
           autoComplete="off"
+          autoFocus={!!autoFocusFrom}
           data-trigger
           data-pointer-focus={pointerFocus || undefined}
           className="w-full min-w-0 bg-transparent text-base text-ink placeholder:text-slate outline-none focus:outline-hidden"
