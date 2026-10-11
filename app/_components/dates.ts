@@ -27,3 +27,13 @@ export const todayISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+
+/** The browser's IANA time zone, e.g. "America/Los_Angeles". Sent with searches and
+ *  bookings so the server judges "today" in the guest's calendar, not UTC. */
+export const browserTimeZone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+  } catch {
+    return "";
+  }
+};

@@ -401,3 +401,24 @@ describe('card data never leaks', () => {
     })
   }
 })
+
+// "Today" is the guest's today (from time_zone), not UTC's.
+// 6pm Pacific on Oct 10 is already Oct 11 in UTC.
+describe('guest time zone', () => {
+  const sameDayStay = { check_in: '2026-10-10', check_out: '2026-10-12' }
+
+  test('6pm Pacific: a same-day check-in is accepted with the guest time zone', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-11T01:00:00Z') })
+    const r = await post({ ...validBody(), ...sameDayStay, time_zone: 'America/Los_Angeles' })
+    assert.equal(r.status, 201)
+    assert.equal(r.json.reservation.check_in, '2026-10-10')
+  })
+
+  test('without a time zone it falls back to UTC, where that day is already past', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-11T01:00:00Z') })
+    const r = await post({ ...validBody(), ...sameDayStay })
+    assert.equal(r.status, 400)
+    assert.equal(r.json.error, 'check_in cannot be in the past.')
+    assert.equal(writes(), 0)
+  })
+})
