@@ -1,6 +1,23 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
 
+// check_in / check_out are timestamptz in the db, so reads come back like "2099-01-01T00:00:00+00:00".
+// The rest of the app (validation, pricing, UI) works with YYYY-MM-DD, so reads are normalized to that.
+function toDateOnly(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toISOString().slice(0, 10)
+}
+
+function normalizeReservationDates<T extends { check_in?: string; check_out?: string }>(
+  reservation: T
+): T {
+  return {
+    ...reservation,
+    ...(reservation.check_in ? { check_in: toDateOnly(reservation.check_in) } : {}),
+    ...(reservation.check_out ? { check_out: toDateOnly(reservation.check_out) } : {}),
+  }
+}
+
 export async function getReservationsByAccount(accountId: string) {
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)
@@ -8,7 +25,7 @@ export async function getReservationsByAccount(accountId: string) {
     .from('reservations')
     .select('*')
     .eq('account_id', accountId)
-  return { data, error }
+  return { data: data?.map(normalizeReservationDates) ?? data, error }
 }
 
 export async function getReservationsByHotel(hotelId: string) {
@@ -18,7 +35,7 @@ export async function getReservationsByHotel(hotelId: string) {
     .from('reservations')
     .select('*')
     .eq('hotel_id', hotelId)
-  return { data, error }
+  return { data: data?.map(normalizeReservationDates) ?? data, error }
 }
 
 export async function getReservationsByRoom(roomId: string) {
@@ -28,7 +45,7 @@ export async function getReservationsByRoom(roomId: string) {
     .from('reservations')
     .select('*')
     .eq('room_id', roomId)
-  return { data, error }
+  return { data: data?.map(normalizeReservationDates) ?? data, error }
 }
 
 export async function getReservation(id: string) {
@@ -39,7 +56,7 @@ export async function getReservation(id: string) {
     .select('*')
     .eq('id', id)
     .single()
-  return { data, error }
+  return { data: data ? normalizeReservationDates(data) : data, error }
 }
 
 export async function createReservation(reservation: {
@@ -58,7 +75,7 @@ export async function createReservation(reservation: {
     .from('reservations')
     .insert(reservation)
     .select()
-  return { data, error }
+  return { data: data?.map(normalizeReservationDates) ?? data, error }
 }
 
 export async function updateReservation(
@@ -80,7 +97,7 @@ export async function updateReservation(
     .update(updates)
     .eq('id', id)
     .select()
-  return { data, error }
+  return { data: data?.map(normalizeReservationDates) ?? data, error }
 }
 
 export async function deleteReservation(id: string) {
