@@ -30,7 +30,7 @@ export async function search(searchParams: SearchRequest, pageOptions?: PageOpti
         ...(pageOptions?.pageSize !== undefined && { page_size: pageOptions.pageSize }),
         city: standardizedParams?.location?.city,
         region: standardizedParams?.location?.region,
-        country: standardizedParams?.location?.country,
+        country: toStoredCountry(standardizedParams?.location?.country),
         check_in: standardizedParams?.dates?.checkIn,
         check_out: standardizedParams?.dates?.checkOut,
         guests: standardizedParams?.guests?.total,
@@ -47,6 +47,25 @@ export async function search(searchParams: SearchRequest, pageOptions?: PageOpti
         params: standardizedParams,
         results: result
     };
+}
+
+// The hotels table stores the US as "USA", but the AI spells it out ("United States of America")
+// and the destination picker says "United States", so those found nothing. Other countries are
+// stored by their full name. Only the database call is translated; params keep what was asked.
+const STORED_COUNTRY_NAMES: Record<string, string> = {
+    'united states of america': 'USA',
+    'united states': 'USA',
+    'usa': 'USA',
+    'us': 'USA',
+    'u.s.': 'USA',
+    'u.s.a.': 'USA',
+};
+
+function toStoredCountry(country?: string): string | undefined {
+    if (country === undefined) {
+        return undefined;
+    }
+    return STORED_COUNTRY_NAMES[country.toLowerCase()] ?? country;
 }
 
 function getSearchParams(searchParams: SearchRequest): PropertyFilter {

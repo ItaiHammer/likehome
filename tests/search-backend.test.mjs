@@ -182,6 +182,38 @@ describe('Search Module Integration', () => {
             assert.strictEqual(dbCall.city, 'Paris');
             assert.deepStrictEqual(result.params, { location: { city: 'Paris', country: 'France' } });
         });
+
+        test('sends US spellings to the database as "USA", the way hotels store it', async () => {
+            for (const where of [
+                'San Diego, California, United States of America',
+                'San Diego, California, United States',
+                'San Diego, California, usa',
+            ]) {
+                // Arrange
+                searchAvailableHotels.mock.resetCalls();
+                searchAvailableHotels.mock.mockImplementationOnce(async () => ({}));
+
+                // Act
+                const result = await search({ where });
+
+                // Assert
+                const dbCall = searchAvailableHotels.mock.calls[0].arguments[0];
+                assert.strictEqual(dbCall.country, 'USA', where);
+                assert.strictEqual(dbCall.city, 'San Diego');
+                assert.strictEqual(result.params.location.country, where.split(', ')[2]); // params keep the request's wording
+            }
+        });
+
+        test('leaves other countries as written', async () => {
+            // Arrange
+            searchAvailableHotels.mock.mockImplementationOnce(async () => ({}));
+
+            // Act
+            await search({ where: 'Vancouver, British Columbia, Canada' });
+
+            // Assert
+            assert.strictEqual(searchAvailableHotels.mock.calls[0].arguments[0].country, 'Canada');
+        });
     });
 });
 
