@@ -121,14 +121,11 @@ function getLocationParams(location?: string): LocationParams | undefined {
 }
 
 function getDatesParams(checkIn?: string, checkOut?: string): DateParams | undefined {
-    if (checkIn) {
-        checkIn = checkIn.split('T')[0];
-    }
-    if (checkOut) {
-        checkOut = checkOut.split('T')[0];
-    }
-    const validCheckIn = checkIn && !isNaN(new Date(checkIn).getTime());
-    const validCheckOut = checkOut && !isNaN(new Date(checkOut).getTime());
+    const cleanedCheckIn = checkIn ? checkIn.split('T')[0] : undefined;
+    const cleanedCheckOut = checkOut ? checkOut.split('T')[0] : undefined;
+    
+    const validCheckIn = cleanedCheckIn && !isNaN(new Date(cleanedCheckIn).getTime());
+    const validCheckOut = cleanedCheckOut && !isNaN(new Date(cleanedCheckOut).getTime());
 
     let checkInDate = new Date();
     let checkOutDate = new Date();
@@ -140,10 +137,10 @@ function getDatesParams(checkIn?: string, checkOut?: string): DateParams | undef
 
     // Defaults if one is omitted
     if (validCheckIn) {
-        checkInDate = new Date(checkIn);
+        checkInDate = new Date(cleanedCheckIn);
     }
     if (validCheckOut) {
-        checkOutDate = new Date(checkOut);
+        checkOutDate = new Date(cleanedCheckOut);
     }
     if (validCheckIn && !validCheckOut) {
         checkOutDate = new Date(checkInDate);
