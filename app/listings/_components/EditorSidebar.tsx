@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { EditorTab } from "./editor-state";
 
 const iconProps = {
@@ -62,12 +63,30 @@ type Props = {
 };
 
 export function EditorSidebar({ tab, changed, infoErrors, onSelectTab, backLink }: Props) {
+  const listRef = useRef<HTMLUListElement>(null);
+  const firstScroll = useRef(true);
+
+  // On phones the tabs are one row that scrolls sideways, so the open tab can start out of view
+  // (e.g. arriving on ?tab=rooms). Scroll just the row, never the page, to bring it in.
+  useEffect(() => {
+    const list = listRef.current;
+    const active = list?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!list || !active) return;
+    const row = list.getBoundingClientRect();
+    const item = active.getBoundingClientRect();
+    const offBy = item.left < row.left ? item.left - row.left : item.right > row.right ? item.right - row.right : 0;
+    if (offBy === 0) return; // already in view, which is always the case for the desktop column
+    const instant = firstScroll.current || document.documentElement.dataset.motion === "reduce";
+    list.scrollBy({ left: offBy, behavior: instant ? "auto" : "smooth" });
+    firstScroll.current = false;
+  }, [tab]);
+
   return (
     <aside className="md:sticky md:top-6 md:w-48 md:shrink-0 md:self-start">
       {backLink}
 
       <nav aria-label="Property sections" className="mt-4 md:mt-6">
-        <ul className="-mx-1 flex gap-1 overflow-x-auto px-1 py-1 md:flex-col md:overflow-visible">
+        <ul ref={listRef} className="-mx-1 flex gap-1 overflow-x-auto px-1 py-1 md:flex-col md:overflow-visible">
           {TABS.map((item) => {
             const active = item.id === tab;
             const errors = item.id === "info" ? infoErrors : 0;
