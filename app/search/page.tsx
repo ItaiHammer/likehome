@@ -8,6 +8,7 @@ import type { SearchRequest } from "./types";
 import { Pagination } from "./components/Pagination";
 import { SearchResultCard, type HotelSearchResult } from "./components/SearchResultCard";
 import { SortSelect } from "./components/SortSelect";
+import { FilterSheetButton, FilterSidebar, type FilterValues } from "./components/FilterSidebar";
 import { getMockSearchResults } from "./mockResults";
 
 type RawParams = Record<string, string | string[] | undefined>;
@@ -78,6 +79,14 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const activeFilterCount = getActiveFilterCount(params);
   const locationHeading = params.where ? `Stays in ${params.where}` : "Stays for you";
+  const filterValues: FilterValues = {
+    minPrice: params.minPrice,
+    maxPrice: params.maxPrice,
+    minRating: params.minRating,
+    numBeds: params.numBeds,
+    bedSize: params.bedSize,
+    tags: params.tags,
+  };
 
   return (
     <div className="flex flex-1 flex-col">
@@ -87,12 +96,13 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         </div>
 
         {/* Same box as <main> below, so the bar lines up with the results */}
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 lg:px-10">
           <p className="mb-3 text-sm font-semibold text-ink">Find your next stay</p>
           {/* Keyed by the search, so a new search (e.g. from AI mode) refills the bar */}
           <SearchExperience
             key={searchKey(navigationParams)}
             compact
+            hideFilters
             initialMode={aiPrompt ? "ai" : "standard"}
             initialValues={{
               where: params.where,
@@ -112,7 +122,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         </div>
       </section>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 sm:px-6">
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 pb-16 sm:px-6 lg:px-10">
         {aiReply && <AiReplyCard reply={aiReply} params={params} />}
         {usingMockData && <MockDataNotice />}
 
@@ -128,41 +138,55 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               </p>
             </div>
 
-            {data.length > 0 && <SortSelect current={params.sort} params={navigationParams} />}
+            <div className="flex items-center gap-2">
+              <FilterSheetButton className="lg:hidden" initial={filterValues} params={navigationParams} total={total} />
+              {data.length > 0 && <SortSelect current={params.sort} params={navigationParams} />}
+            </div>
           </div>
         )}
 
-        {!shouldSearch ? null : searchError ? (
-          <StatePanel
-            title="We couldn't load stays"
-            body="Try the search again. If this keeps happening, the search service may be temporarily unavailable."
-            action={
-              <Button href={`/search?${searchKey(navigationParams)}`} variant="secondary">
-                Try again
-              </Button>
-            }
-          />
-        ) : data.length === 0 ? (
-          <StatePanel
-            title="No stays found"
-            body="Try changing the destination, dates, guest count, or filters."
-            action={
-              activeFilterCount > 0 && (
-                <Button href={clearFiltersHref(params)} variant="secondary">
-                  Clear filters
-                </Button>
-              )
-            }
-          />
-        ) : (
-          <>
-            <div className="mt-7 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {data.map((stay, index) => (
-                <SearchResultCard key={String(stay.id ?? index)} stay={stay} eager={index < 3} />
-              ))}
+        {shouldSearch && (
+          <div className="mt-7 grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start lg:gap-10">
+            <FilterSidebar
+              className="hidden lg:sticky lg:top-6 lg:block lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:overscroll-contain"
+              initial={filterValues}
+              params={navigationParams}
+            />
+            <div className="min-w-0">
+              {searchError ? (
+                <StatePanel
+                  title="We couldn't load stays"
+                  body="Try the search again. If this keeps happening, the search service may be temporarily unavailable."
+                  action={
+                    <Button href={`/search?${searchKey(navigationParams)}`} variant="secondary">
+                      Try again
+                    </Button>
+                  }
+                />
+              ) : data.length === 0 ? (
+                <StatePanel
+                  title="No stays found"
+                  body="Try changing the destination, dates, guest count, or filters."
+                  action={
+                    activeFilterCount > 0 && (
+                      <Button href={clearFiltersHref(params)} variant="secondary">
+                        Clear filters
+                      </Button>
+                    )
+                  }
+                />
+              ) : (
+                <>
+                  <div className="grid gap-5 sm:grid-cols-2 2xl:grid-cols-3">
+                    {data.map((stay, index) => (
+                      <SearchResultCard key={String(stay.id ?? index)} stay={stay} eager={index < 3} />
+                    ))}
+                  </div>
+                  <Pagination currentPage={currentPage} totalPages={totalPages} params={navigationParams} />
+                </>
+              )}
             </div>
-            <Pagination currentPage={currentPage} totalPages={totalPages} params={navigationParams} />
-          </>
+          </div>
         )}
       </main>
     </div>

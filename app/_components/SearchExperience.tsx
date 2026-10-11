@@ -54,10 +54,12 @@ export function SearchExperience({
   initialValues = {},
   initialMode = initialValues.aiPrompt ? "ai" : "standard",
   compact = false,
+  hideFilters = false,
 }: {
   initialValues?: SearchInitialValues;
   initialMode?: SearchMode;
   compact?: boolean;
+  hideFilters?: boolean;
 }) {
   const [mode, setMode] = useState<SearchMode>(initialMode);
   const router = useRouter();
@@ -158,10 +160,19 @@ export function SearchExperience({
               initialAdults={initialValues.adults ?? 2}
               initialChildren={initialValues.children ?? 0}
             />
-            <SearchFiltersPicker
-              className={`${field} ${divider} md:flex-none md:justify-center ${compact ? "md:w-[76px]" : "md:w-[88px]"}`}
-              initialValues={filters}
-            />
+            {hideFilters ? (
+              <>
+                {(["minPrice", "maxPrice", "minRating", "numBeds", "bedSize"] as const).map(
+                  (key) => filters[key] && <input key={key} type="hidden" name={key} value={filters[key]} />,
+                )}
+                {filters.tags?.map((tag) => <input key={tag} type="hidden" name="tags" value={tag} />)}
+              </>
+            ) : (
+              <SearchFiltersPicker
+                className={`${field} ${divider} md:flex-none md:justify-center ${compact ? "md:w-[76px]" : "md:w-[88px]"}`}
+                initialValues={filters}
+              />
+            )}
           </div>
 
           <div className="flex gap-2.5 lg:contents">
