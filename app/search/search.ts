@@ -121,29 +121,60 @@ function getLocationParams(location?: string): LocationParams | undefined {
 }
 
 function getDatesParams(checkIn?: string, checkOut?: string): DateParams | undefined {
-    const { ymd: checkInYmd, time: checkInTime } = getDate(checkIn);
-    const { ymd: checkOutYmd, time: checkOutTime } = getDate(checkOut);
+    if (checkIn) {
+        checkIn = checkIn.split('T')[0];
+    }
+    if (checkOut) {
+        checkOut = checkOut.split('T')[0];
+    }
+    const validCheckIn = checkIn && !isNaN(new Date(checkIn).getTime());
+    const validCheckOut = checkOut && !isNaN(new Date(checkOut).getTime());
 
-    if (checkInYmd === undefined && checkOutYmd === undefined) {
+    let checkInDate = new Date();
+    let checkOutDate = new Date();
+
+    // Both invalid, omit
+    if (!validCheckIn && !validCheckOut) {
         return undefined;
     }
 
-    // Check valid range
-    if (checkInTime !== undefined && checkOutTime !== undefined &&
-        checkInTime >= checkOutTime) {
-        return undefined;
+    // Defaults if one is omitted
+    if (validCheckIn) {
+        checkInDate = new Date(checkIn);
+    }
+    if (validCheckOut) {
+        checkOutDate = new Date(checkOut);
+    }
+    if (validCheckIn && !validCheckOut) {
+        checkOutDate = new Date(checkInDate);
+        checkOutDate.setUTCDate(checkInDate.getUTCDate() + 1);
+    }
+    if (!validCheckIn && validCheckOut) {
+        checkInDate = new Date(checkOutDate);
+        checkInDate.setUTCDate(checkOutDate.getUTCDate() - 1);
     }
 
-    return Object.fromEntries(
-        Object.entries({
-            checkIn: checkInYmd,
-            checkOut: checkOutYmd
-        }).filter(([_, value]) => value !== undefined)
-    );
+    const nowUTC = new Date(new Date().toISOString().split('T')[0]);
+
+    // Enforce checkIn >= today
+    if (checkInDate < nowUTC) {
+        checkInDate = new Date(nowUTC);
+    }
+
+    // Enforce checkOut > checkIn
+    if (checkOutDate <= checkInDate) {
+        checkOutDate = new Date(checkInDate);
+        checkOutDate.setUTCDate(checkInDate.getUTCDate() + 1);
+    }
+
+    return {
+        checkIn: checkInDate.toISOString().split('T')[0],
+        checkOut: checkOutDate.toISOString().split('T')[0]
+    };
 }
 
 function getBedsParams(num?: string, size?: string): BedParams | undefined {
-    const numBeds = getNumberOrUndefined(num);
+    const numBeds = getPositiveNumberOrUndefined(num);
     const bedSize = getAsTypeOrUndefined(size, bedSizes);
     
     if (numBeds === undefined && bedSize === undefined) {
@@ -159,8 +190,8 @@ function getBedsParams(num?: string, size?: string): BedParams | undefined {
 }
 
 function getGuestsParams(adults?: string, children?: string): GuestParams | undefined {
-    let adultGuests = getNumberOrUndefined(adults);
-    const childGuests = getNumberOrUndefined(children);
+    let adultGuests = getPositiveNumberOrUndefined(adults);
+    const childGuests = getPositiveNumberOrUndefined(children);
     let total = 0;
 
     if (adultGuests === undefined && childGuests === undefined) {
@@ -185,17 +216,17 @@ function getGuestsParams(adults?: string, children?: string): GuestParams | unde
 }
 
 function getPriceParams(min?: string, max?: string): PriceParams | undefined {
-    const minPrice = getNumberOrUndefined(min);
-    const maxPrice = getNumberOrUndefined(max);
+    let minPrice = getPositiveNumberOrUndefined(min, 2);
+    let maxPrice = getPositiveNumberOrUndefined(max, 2);
     
     if (minPrice === undefined && maxPrice === undefined) {
         return undefined;
     }
 
-    // Check valid range, allow 1 value in range
+    // Enforce valid range, allow 1 value in range
     if (minPrice !== undefined && maxPrice !== undefined &&
         minPrice > maxPrice) {
-        return undefined;
+        [minPrice, maxPrice] = [maxPrice, minPrice]         
     }
     
     return Object.fromEntries(
@@ -207,7 +238,7 @@ function getPriceParams(min?: string, max?: string): PriceParams | undefined {
 }
 
 function getRatingParams(min?: string): RatingParams | undefined {
-    const minStarRating = getNumberOrUndefined(min);
+    const minStarRating = getPositiveNumberOrUndefined(min, 1);
 
     if (minStarRating === undefined) {
         return undefined;
@@ -245,25 +276,9 @@ function getTagParams(tagInput?: SearchRequest['tags']): Tag[] | undefined {
 
 // Helpers
 
-function getDate(dateStr?: string): { ymd?: string, time?: number} {
-    if (dateStr === undefined) {
-        return {};
-    }
-
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) {
-        return {};
-    }
-
-    return {
-        ymd: date.toISOString().split('T')[0],
-        time: date.getTime()
-    };
-}
-
-function getNumberOrUndefined(value?: string): number | undefined {
+function getPositiveNumberOrUndefined(value?: string, decimalDigits: number = 0): number | undefined {
     if (!isNaN(Number(value)) && value?.trim() != "") {
-        return Number(value);
+        return Math.max(+Number(value).toFixed(decimalDigits), 0);
     }
     return undefined;
 }

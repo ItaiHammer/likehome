@@ -2,6 +2,7 @@ import { streamText, Output, convertToModelMessages, createUIMessageStreamRespon
 import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import { bedSizes, sorts, tags } from '../../../search/types';
+import { todayUTC } from '@/utils/reservation-logic';
 
 export async function POST(req: Request) {
     const { messages } = await req.json();
@@ -48,9 +49,20 @@ const instructions =
             - If no valid city can be determined, output nothing (leave blank).
             - Spell out all names fully. NO abbreviations (e.g., use "California", not "CA"; use "United States of America", not "US" or "USA").
 
+        'checkIn' and 'checkOut':
+            - Must be on or after today's date in UTC (${todayUTC()}).
+            - Include both xor none. Never include one but not the other.
+            - If checkIn and checkOut are both undefined, omit these fields from output.
+            - Otherwise, handle the following cases IN ORDER:
+            1. If checkIn is defined but checkOut is omitted, set checkOut to checkIn + 1 day.
+            2. If checkOut is defined but checkIn is omitted, set checkIn to checkOut - 1 day.
+            3. If checkIn is before today's date in UTC, set checkIn to today's date in UTC.
+            4. If checkIn is on or after checkOut, set checkOut to checkIn + 1 day.
+
         'minPrice' and 'maxPrice:
             - Units are price per night.
             - Accurately calculate the equivalent price per night if given input provides in another unit.
+            - minPrice must be less than or equal to maxPrice. Swap minPrice and maxPrice to make this true if needed.
             - Include none, both, xor one or the other field.
             - Including 'minPrice' does not mean 'maxPrice' must be specified and vice versa.
 
@@ -65,7 +77,7 @@ const instructions =
 
         Paragraph format:
         Based on your description, the following travel accommodations would suit your plans best.
-        They are all located in 'where' and available from 'checkIn in Month name, Day number, Year number' to 'checkOut in Month name, Day number, Year number'.
+        They are all located in 'where' and available from 'checkIn in Month name, Day number, Year number' to 'checkOut in Month name, Day number, Year number' in UTC.
         The accommodations have at least 'numBeds' 'bedSize' beds.
         The accommodations are perfect for 'adults' adults and 'children' children.
         The price per night is between 'minPrice' and 'maxPrice'.
