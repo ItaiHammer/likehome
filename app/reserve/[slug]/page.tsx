@@ -1,14 +1,13 @@
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { PageBackdrop } from "../../_components/PageBackdrop";
-import { getStay, STAYS } from "../../_data/stays";
+import { getStay } from "../../_data/stays";
 import { getHotelStay } from "./hotelStay";
 import { StayReservation } from "./StayReservation";
 
-// The sample stays are built ahead of time; database hotels (by id) render when visited
-export function generateStaticParams() {
-  return STAYS.map((s) => ({ slug: s.slug }));
-}
+// Database hotels are read per request with the cookie-based Supabase client, which a prerendered
+// page can't do: a production build would answer every hotel id with a 500.
+export const dynamic = "force-dynamic";
 
 // Cached per request, so the title and the page share one database lookup
 const findStay = cache(async (slug: string) => getStay(slug) ?? (await getHotelStay(slug)));

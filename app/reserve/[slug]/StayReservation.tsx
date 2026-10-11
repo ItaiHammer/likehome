@@ -40,12 +40,15 @@ const formatExpiry = (v: string) => {
 // One page: photos, fact tags, rooms, and a booking card that walks through
 // dates and guests → your details and payment → confirmation.
 export function StayReservation({ stay }: { stay: Stay }) {
-  const facts = getFacts(stay);
+  const facts = stay.facts ?? getFacts(stay);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
-  const [roomId, setRoomId] = useState(() => (stay.rooms.find((r) => !r.soldOut) ?? stay.rooms[0]).id);
+  // Start on the first open room that fits the default 2 guests, not just the cheapest one
+  const [roomId, setRoomId] = useState(
+    () => (stay.rooms.find((r) => !r.soldOut && r.sleeps >= 2) ?? stay.rooms.find((r) => !r.soldOut) ?? stay.rooms[0]).id,
+  );
   const [popover, setPopover] = useState<Popover>(null);
   const [step, setStep] = useState<Step>("stay");
   const [errors, setErrors] = useState<Errors>({});
@@ -258,7 +261,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
                     <p className={`text-base font-semibold leading-5 ${off ? "text-slate" : "text-ink"}`}>{r.name}</p>
                     <p className="mt-1 text-sm text-slate">
                       {/* Each dot is glued to the label after it, so a wrapped line never ends on a dot */}
-                      {[...r.description.split(" · "), `Sleeps ${r.sleeps}`].map((part, i) => (
+                      {[...r.description.split(" · ").filter(Boolean), `Sleeps ${r.sleeps}`].map((part, i) => (
                         <Fragment key={part}>
                           {i > 0 && " "}
                           <span className="whitespace-nowrap">

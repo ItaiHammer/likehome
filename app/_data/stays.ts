@@ -1,4 +1,5 @@
 import type { SceneVariant } from "../_components/WindowScene";
+import type { FactGroup } from "./facts";
 
 // Placeholder listings until the backend exists. The names borrow real hotel
 // brands so the template reads like a real booking site; prices, ratings and
@@ -26,6 +27,8 @@ export type Stay = {
   variant?: SceneVariant;
   /** Photo URLs; the gallery shows numbered placeholders without them */
   photos?: string[];
+  /** "Good to know" facts; the placeholder facts in facts.ts without them */
+  facts?: FactGroup[];
   cleaningFee: number;
   /** Nights already booked, as days from today. Placeholder until availability comes from the backend. */
   blockedNights: number[];
