@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 
 const EXCLUSION_VIOLATION = '23P01'
 
-function getFutureDate(daysFromToday) {
+function getDateFromToday(daysFromToday) {
   const d = new Date()
   d.setDate(d.getDate() + daysFromToday)
   return d.toISOString().split('T')[0]
@@ -13,18 +13,24 @@ function getFutureDate(daysFromToday) {
 // Mock state to control behavior per test
 let mockAuthUser = { id: 'user-1' }
 let mockReservationResult = {
-  data: { id: 'res-1', account_id: 'user-1', room_id: 'room-1', check_in: getFutureDate(2), check_out: getFutureDate(5), status: 'confirmed' },
+  data: { 
+    id: 'res-1', 
+    account_id: 'user-1',
+    hotel_id: 'hotel-1',
+    room_id: 'room-1', 
+    check_in: getDateFromToday(2), 
+    check_out: getDateFromToday(5), 
+    total_price: 300,
+    guests: 2, 
+    status: 'confirmed', 
+  },
   error: null,
 }
 let mockRoomResult = {
   data: { id: 'room-1', hotel_id: 'hotel-1', price_per_night: 100, capacity: 2 },
   error: null,
 }
-let mockUpdateResult = {
-  data: [{ id: 'res-1', check_in: getFutureDate(5), check_out: getFutureDate(8), total_price: 300 }],
-  error: null,
-}
-
+let mockUpdateError = null
 mock.module('../utils/user.ts', {
   namedExports: {
     getUserId: async () => ({
@@ -50,7 +56,16 @@ mock.module('../utils/user.ts', {
 mock.module('../utils/reservations.ts', {
   namedExports: {
     getReservation: async (id) => mockReservationResult,
-    updateReservation: async (id, payload) => mockUpdateResult,
+    updateReservation: async (id, payload) => {
+      if (mockUpdateError) {
+        return { data: null, error: mockUpdateError }
+      }
+      // Dynamically return the id combined with whatever payload was passed
+      return {
+        data: [{ id, ...payload }],
+        error: null,
+      }
+    },
   },
 })
 
@@ -60,17 +75,24 @@ beforeEach(() => {
   // Reset default successful mock states before each test
   mockAuthUser = { id: 'user-1' }
   mockReservationResult = {
-    data: { id: 'res-1', account_id: 'user-1', room_id: 'room-1', check_in: getFutureDate(2), check_out: getFutureDate(5) },
+    data: {
+      id: 'res-1',
+      account_id: 'user-1',
+      hotel_id: 'hotel-1',
+      room_id: 'room-1',
+      check_in: getDateFromToday(2),
+      check_out: getDateFromToday(5),
+      total_price: 300,
+      guests: 2,
+      status: 'confirmed',
+    },
     error: null,
   }
   mockRoomResult = {
     data: { id: 'room-1', hotel_id: 'hotel-1', price_per_night: 100, capacity: 2 },
     error: null,
   }
-  mockUpdateResult = {
-    data: [{ id: 'res-1', check_in: getFutureDate(5), check_out: getFutureDate(8), total_price: 300 }],
-    error: null,
-  }
+  mockUpdateError = null
 })
 
 function createMockRequest(body) {
@@ -83,7 +105,7 @@ function createMockRequest(body) {
 
 test('returns 401 if user is not logged in', async () => {
   mockAuthUser = null
-  const req = createMockRequest({ check_in: getFutureDate(5), check_out: getFutureDate(8) })
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(8) })
   const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
   
   assert.equal(res.status, 401)
@@ -93,7 +115,7 @@ test('returns 401 if user is not logged in', async () => {
 
 test('returns 404 if reservation does not exist', async () => {
   mockReservationResult = { data: null, error: { message: 'Not found' } }
-  const req = createMockRequest({ check_in: getFutureDate(5), check_out: getFutureDate(8) })
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(8) })
   const res = await PATCH(req, { params: Promise.resolve({ id: 'res-999' }) })
   
   assert.equal(res.status, 404)
@@ -102,16 +124,23 @@ test('returns 404 if reservation does not exist', async () => {
 })
 
 test('returns 403 if reservation belongs to a different user', async () => {
-  mockReservationResult = {
-    data: { id: 'res-1', account_id: 'other-user', room_id: 'room-1', check_in: getFutureDate(2), check_out: getFutureDate(5) },
-    error: null,
-  }
-  const req = createMockRequest({ check_in: getFutureDate(5), check_out: getFutureDate(8) })
+  mockReservationResult.data.account_id = 'other-user';
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(8) })
   const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
   
   assert.equal(res.status, 403)
   const json = await res.json()
-  assert.equal(json.error, 'Reservation change is forbidden. ')
+  assert.equal(json.error, 'Reservation change for another user is forbidden. ')
+})
+
+test('returns 422 if reservation is for past dates', async () => {
+  mockReservationResult.data.check_in = getDateFromToday(0)
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(8) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+  
+  assert.equal(res.status, 422)
+  const json = await res.json()
+  assert.equal(json.error, 'Reservation for past dates cannot be changed. ')
 })
 
 test('returns 400 on invalid JSON body', async () => {
@@ -128,7 +157,7 @@ test('returns 400 on invalid JSON body', async () => {
 
 test('returns 400 when reservation input validation fails', async () => {
   // Check-out before check-in (triggers validation error)
-  const req = createMockRequest({ check_in: getFutureDate(10), check_out: getFutureDate(8) })
+  const req = createMockRequest({ check_in: getDateFromToday(10), check_out: getDateFromToday(8) })
   const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
   
   assert.equal(res.status, 400)
@@ -138,7 +167,7 @@ test('returns 400 when reservation input validation fails', async () => {
 
 test('returns 404 if room is not found', async () => {
   mockRoomResult = { data: null, error: { message: 'Room not found' } }
-  const req = createMockRequest({ check_in: getFutureDate(5), check_out: getFutureDate(8) })
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(8) })
   const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
   
   assert.equal(res.status, 404)
@@ -147,7 +176,7 @@ test('returns 404 if room is not found', async () => {
 })
 
 test('returns 400 if guest count exceeds room capacity', async () => {
-  const req = createMockRequest({ check_in: getFutureDate(5), check_out: getFutureDate(8), guests: 5 })
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(8), guests: 5 })
   const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
   
   assert.equal(res.status, 400)
@@ -156,8 +185,8 @@ test('returns 400 if guest count exceeds room capacity', async () => {
 })
 
 test('returns 409 on database exclusion-constraint violation (double booking)', async () => {
-  mockUpdateResult = { data: null, error: { code: EXCLUSION_VIOLATION } }
-  const req = createMockRequest({ check_in: getFutureDate(5), check_out: getFutureDate(8) })
+  mockUpdateError = { code: EXCLUSION_VIOLATION }
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(8) })
   const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
   
   assert.equal(res.status, 409)
@@ -166,8 +195,8 @@ test('returns 409 on database exclusion-constraint violation (double booking)', 
 })
 
 test('returns 500 on another database error', async () => {
-  mockUpdateResult = { data: null, error: { code: EXCLUSION_VIOLATION + '1' } }
-  const req = createMockRequest({ check_in: getFutureDate(5), check_out: getFutureDate(8) })
+  mockUpdateError = { code: EXCLUSION_VIOLATION + '1' }
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(8) })
   const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
   
   assert.equal(res.status, 500)
@@ -176,11 +205,18 @@ test('returns 500 on another database error', async () => {
 })
 
 test('successfully updates reservation and returns 200', async () => {
-  const req = createMockRequest({ check_in: getFutureDate(5), check_out: getFutureDate(8), guests: 2 })
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(9) })
   const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
   
   assert.equal(res.status, 200)
   const json = await res.json()
-  assert.ok(json.reservation)
-  assert.equal(json.reservation.id, 'res-1')
+  assert.deepEqual(json.reservation, {
+    id: 'res-1',
+    hotel_id: 'hotel-1',
+    room_id: 'room-1',
+    check_in: getDateFromToday(5),
+    check_out: getDateFromToday(9),
+    total_price: 400,
+    guests: 2,
+  })
 })

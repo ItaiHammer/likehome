@@ -6,6 +6,7 @@ import {
   checkCapacity,
   validateReservationInput,
   type RoomForBooking,
+  todayUTC,
 } from '../../../../utils/reservation-logic.ts'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
@@ -32,7 +33,13 @@ export async function PATCH(
   // Validate reservation belongs to user
   const curReservationAccount = curReservation?.account_id
   if (!curReservationAccount || curReservationAccount !== userId) {
-    return Response.json({ error: 'Reservation change is forbidden. '}, { status: 403 })
+    return Response.json({ error: 'Reservation change for another user is forbidden. '}, { status: 403 })
+  }
+ 
+  // Validate reservation in the future
+  const today = todayUTC()
+  if ( curReservation?.check_in <= today) { 
+    return Response.json({ error: 'Reservation for past dates cannot be changed. '}, { status: 422 })
   }
 
   let body: unknown
@@ -69,18 +76,19 @@ export async function PATCH(
     return Response.json({ error: capacityError }, { status: 400 })
   }
 
-  // Price + insert
+  // Price
   const total_price = calculateTotalPrice(input.check_in, input.check_out, room.price_per_night)
 
-  // TODO(Database): update function call with final interface
   const { data, error } = await updateReservation(
     reservationId,
     {
-    // room_id: room.id,
-    check_in: input.check_in,
-    check_out: input.check_out,
-    total_price,
-  })
+      room_id: room.id,
+      hotel_id: room.hotel_id,
+      guests: input.guests,
+      check_in: input.check_in,
+      check_out: input.check_out,
+      total_price,
+    })
 
   if (error) {
     if (error.code === EXCLUSION_VIOLATION) {
