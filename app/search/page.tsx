@@ -30,37 +30,40 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   // SearchExperience asks Cara's /api/search/ai endpoint, then links here.
   const aiReply = params.aiReply?.trim();
   const navigationParams = toRawParams(params);
+  // Nothing to search for yet (e.g. /search on its own): ask for something instead
+  const shouldSearch = aiPrompt ? hasStructuredSearchCriteria(params) : hasSearchCriteria(params);
 
   let data: HotelSearchResult[] = [];
   let total = 0;
   let searchError = "";
   let usingMockData = false;
 
-  try {
-    const { results } = await search(toSearchRequest(params), {
-      page: positiveInt(params.page, 1),
-      pageSize: PAGE_SIZE,
-    });
-    data = Array.isArray(results.data) ? (results.data as HotelSearchResult[]) : [];
-    total = Number(results.total ?? 0);
-    if (results.error) {
-      console.error("Search failed", results.error);
+  if (shouldSearch) {
+    try {
+      const { results } = await search(toSearchRequest(params), {
+        page: positiveInt(params.page, 1),
+        pageSize: PAGE_SIZE,
+      });
+      data = Array.isArray(results.data) ? (results.data as HotelSearchResult[]) : [];
+      total = Number(results.total ?? 0);
+      if (results.error) {
+        console.error("Search failed", results.error);
+        searchError = "We couldn't load stays right now. Please try again.";
+      }
+    } catch (error) {
+      console.error("Search failed", error);
       searchError = "We couldn't load stays right now. Please try again.";
     }
-  } catch (error) {
-    console.error("Search failed", error);
-    searchError = "We couldn't load stays right now. Please try again.";
-  }
 
-  // TODO(INTEGRATION): Remove this local-only fallback once the shared Supabase
-  // project has enough seeded hotel/room data for reliable frontend testing.
-  // It never runs in production and never replaces real database results.
-  if (process.env.NODE_ENV === "development" && data.length === 0) {
-    const mock = getMockSearchResults(params);
-    data = mock.data;
-    total = mock.total;
-    usingMockData = true;
-    searchError = "";
+    // TODO(INTEGRATION): Remove this local-only fallback once the shared Supabase
+    // project has enough seeded hotel/room data for reliable frontend testing.
+    // It never runs in production and never hides a real search error.
+    if (process.env.NODE_ENV === "development" && !searchError && data.length === 0) {
+      const mock = getMockSearchResults(params);
+      data = mock.data;
+      total = mock.total;
+      usingMockData = true;
+    }
   }
 
   const currentPage = positiveInt(params.page, 1);
@@ -104,20 +107,30 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         {aiReply && <AiReplyCard reply={aiReply} params={params} />}
         {usingMockData && <MockDataNotice />}
 
-        <div className="flex flex-col gap-5 border-b border-edge pb-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-blue">Search results</p>
-            <h1 className="mt-1 font-serif text-[36px] leading-[44px] text-ink sm:text-[44px] sm:leading-[52px]">{locationHeading}</h1>
-            <p className="mt-2 text-sm text-slate">
-              {searchError ? "Results unavailable" : `${total} ${total === 1 ? "stay" : "stays"} found`}
-              {activeFilterCount > 0 && ` · ${activeFilterCount} ${activeFilterCount === 1 ? "filter" : "filters"} applied`}
-            </p>
+        {shouldSearch && (
+          <div className="flex flex-col gap-5 border-b border-edge pb-6 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-blue">Search results</p>
+              <h1 className="mt-1 font-serif text-[36px] leading-[44px] text-ink sm:text-[44px] sm:leading-[52px]">{locationHeading}</h1>
+              <p className="mt-2 text-sm text-slate">
+                {searchError ? "Results unavailable" : `${total} ${total === 1 ? "stay" : "stays"} found`}
+                {activeFilterCount > 0 &&
+                  ` · ${activeFilterCount} ${aiPrompt ? "AI " : ""}${activeFilterCount === 1 ? "filter" : "filters"} applied`}
+              </p>
+            </div>
+
+            <SortSelect current={params.sort} params={navigationParams} />
           </div>
+        )}
 
-          <SortSelect current={params.sort} params={navigationParams} />
-        </div>
-
-        {searchError ? (
+        {!shouldSearch ? (
+          aiPrompt ? null : (
+            <StatePanel
+              title="Add something to your search"
+              body="Enter a destination, dates, guest preferences, or filters to find stays."
+            />
+          )
+        ) : searchError ? (
           <StatePanel
             title="We couldn't load stays"
             body="Try the search again. If this keeps happening, the search service may be temporarily unavailable."
@@ -217,13 +230,54 @@ function toSearchRequest(params: SearchParams): SearchRequest {
   };
 }
 
+// Zero or blank values (e.g. an AI answer with minPrice "0") aren't filters
 function getActiveFilterCount(params: SearchParams) {
   return (
-    Number(Boolean(params.minPrice || params.maxPrice)) +
-    Number(Boolean(params.minRating)) +
-    Number(Boolean(params.numBeds)) +
-    Number(Boolean(params.bedSize)) +
+    Number(hasPositiveNumber(params.minPrice) || hasPositiveNumber(params.maxPrice)) +
+    Number(hasPositiveNumber(params.minRating)) +
+    Number(hasPositiveNumber(params.numBeds)) +
+    Number(Boolean(params.bedSize?.trim())) +
     params.tags.length
+  );
+}
+
+function hasPositiveNumber(value?: string) {
+  if (!value) return false;
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0;
+}
+
+// Anything an AI answer can set
+function hasStructuredSearchCriteria(params: SearchParams) {
+  return Boolean(
+    params.where ||
+      params.checkIn ||
+      params.checkOut ||
+      params.adults ||
+      params.children ||
+      params.minPrice ||
+      params.maxPrice ||
+      params.minRating ||
+      params.numBeds ||
+      params.bedSize ||
+      params.tags.length,
+  );
+}
+
+// A standard search counts once something differs from the bar's defaults (2 adults, no children)
+function hasSearchCriteria(params: SearchParams) {
+  return Boolean(
+    params.where ||
+      params.checkIn ||
+      params.checkOut ||
+      params.minPrice ||
+      params.maxPrice ||
+      params.minRating ||
+      params.numBeds ||
+      params.bedSize ||
+      params.tags.length ||
+      (params.adults && params.adults !== "2") ||
+      (params.children && params.children !== "0"),
   );
 }
 

@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  bedSizes,
+  propertyAmenities,
+  roomAmenities,
+  travelerTypes,
+} from "../search/types";
 
 export type SearchFilterValues = {
   minPrice?: string;
@@ -12,27 +18,16 @@ export type SearchFilterValues = {
 };
 
 const BED_COUNTS = ["1", "2", "3", "4"];
-const BED_SIZES = ["Twin", "Twin XL", "Double", "Queen", "King"];
 const RATINGS = ["3", "4", "4.5"];
 
-// These labels mirror the tags currently supported by the search backend.
-// TODO(INTEGRATION): Keep this list in sync with the backend's canonical tag list.
+const BED_SIZES = bedSizes;
+
 const AMENITY_TAGS = [
-  "Washer & Dryer",
-  "Parking",
-  "EV Charging",
-  "Free Meals",
-  "Pool",
-  "Gym",
-  "Gift Shops",
-  "ADA Compliant",
-  "Kitchen",
-  "Free Wi-Fi",
-  "Housekeeping",
+  ...propertyAmenities,
+  ...roomAmenities,
 ];
 
-const TRAVELER_TAGS = ["Families", "Kids", "Pets", "Couples", "Friends"];
-
+const TRAVELER_TAGS = travelerTypes;
 type PriceField = "min" | "max";
 
 function SlidersIcon() {
@@ -323,27 +318,47 @@ export function SearchFiltersPicker({
           </fieldset>
         </div>
 
-        <fieldset className="cascade mt-5 border-t border-edge pt-5" style={{ "--i": 3 } as React.CSSProperties}>
-          <legend className="text-sm font-semibold text-ink">Amenities</legend>
+        <section
+            className="cascade mt-5 border-t border-edge pt-5"
+            style={{ "--i": 3 } as React.CSSProperties}
+        >
+          <h3 className="text-sm font-semibold text-ink">
+            Amenities
+          </h3>
+
           <div className="mt-2 flex flex-wrap gap-2">
             {AMENITY_TAGS.map((tag) => (
-              <FilterChip key={tag} active={tags.includes(tag)} onClick={() => toggleTag(tag)}>
-                {tag}
-              </FilterChip>
+                <FilterChip
+                    key={tag}
+                    active={tags.includes(tag)}
+                    onClick={() => toggleTag(tag)}
+                >
+                  {tag}
+                </FilterChip>
             ))}
           </div>
-        </fieldset>
+        </section>
 
-        <fieldset className="cascade mt-5 border-t border-edge pt-5" style={{ "--i": 4 } as React.CSSProperties}>
-          <legend className="text-sm font-semibold text-ink">Good for</legend>
+        <section
+            className="cascade mt-5 border-t border-edge pt-5"
+            style={{ "--i": 4 } as React.CSSProperties}
+        >
+          <h3 className="text-sm font-semibold text-ink">
+            Good for
+          </h3>
+
           <div className="mt-2 flex flex-wrap gap-2">
             {TRAVELER_TAGS.map((tag) => (
-              <FilterChip key={tag} active={tags.includes(tag)} onClick={() => toggleTag(tag)}>
-                {tag}
-              </FilterChip>
+                <FilterChip
+                    key={tag}
+                    active={tags.includes(tag)}
+                    onClick={() => toggleTag(tag)}
+                >
+                  {tag}
+                </FilterChip>
             ))}
           </div>
-        </fieldset>
+        </section>
 
         <div className="cascade mt-5 flex items-center justify-between gap-4 border-t border-edge pt-4" style={{ "--i": 5 } as React.CSSProperties}>
           <div>
