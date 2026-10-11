@@ -1,7 +1,7 @@
 -- US 7.2.4: store points balances and redemption records.
 -- points_transactions is the ledger (earn / redeem / refund / adjust); a trigger keeps
--- points_balances in sync. Both are read-only to clients via RLS; writes must go through
--- security definer functions or the service role.
+-- points_balances in sync. Balances are read-only to clients; transactions are temporarily 
+-- insertable by their owner (demo).
 create table
     public.points_balances (
         account_id uuid primary key references public.accounts (id) on delete cascade,
@@ -67,7 +67,7 @@ insert
     on public.points_transactions for each row
 execute function public.apply_points_transaction ();
 
--- users read their own data; no client writes
+-- users read their own data; can insert own transactions (temp, see below)
 alter table public.points_balances enable row level security;
 
 alter table public.points_transactions enable row level security;
@@ -84,6 +84,19 @@ select
 create policy "Users read own points history" on public.points_transactions for
 select
     to authenticated using (
+        account_id = (
+            select
+                auth.uid ()
+        )
+    );
+
+-- TEMP (demo): lets users write their own ledger rows from the app.
+-- Users can grant themselves points; replace with a security definer function later.
+create policy "Users insert own points transactions" on public.points_transactions for
+insert
+    to authenticated
+with
+    check (
         account_id = (
             select
                 auth.uid ()
