@@ -116,9 +116,12 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
     rating: Number.isFinite(rating) ? rating : null,
     photos: (hotel.photo_urls ?? []).filter(Boolean),
     cleaningFee: 0,
+    // /api/reservations saves nights × nightly price, so the page shows that total instead of adding tax
+    taxRate: 0,
     // No booked-dates lookup exists yet, so every night shows as open
     blockedNights: [],
     rooms,
+    bookable: true,
   };
   return { ...stay, facts: hotelFacts(stay, tags) };
 }

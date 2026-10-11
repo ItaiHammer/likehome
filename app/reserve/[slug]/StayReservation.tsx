@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
@@ -26,7 +27,12 @@ type Booking = {
   adults: number;
   children: number;
   total: number;
+  /** false for the sample stays, which can't be saved */
+  saved: boolean;
 };
+
+/** Room, dates and guests to start the card with, e.g. when coming back from sign-in */
+export type StayChoices = { checkIn?: string; checkOut?: string; adults?: number; children?: number; roomId?: string };
 
 const CONTACT_FIELDS = ["firstName", "lastName", "email", "phone"] as const;
 
@@ -39,15 +45,27 @@ const formatExpiry = (v: string) => {
 
 // One page: photos, fact tags, rooms, and a booking card that walks through
 // dates and guests → your details and payment → confirmation.
-export function StayReservation({ stay }: { stay: Stay }) {
+export function StayReservation({
+  stay,
+  account,
+  initial = {},
+}: {
+  stay: Stay;
+  /** The signed-in guest, or null when signed out (booking needs an account) */
+  account: { email: string } | null;
+  initial?: StayChoices;
+}) {
+  const router = useRouter();
   const facts = stay.facts ?? getFacts(stay);
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
-  const [adults, setAdults] = useState(2);
-  const [children, setChildren] = useState(0);
+  const [checkIn, setCheckIn] = useState(initial.checkIn ?? "");
+  const [checkOut, setCheckOut] = useState(initial.checkOut ?? "");
+  const [adults, setAdults] = useState(initial.adults ?? 2);
+  const [children, setChildren] = useState(initial.children ?? 0);
   // Start on the first open room that fits the default 2 guests, not just the cheapest one
   const [roomId, setRoomId] = useState(
-    () => (stay.rooms.find((r) => !r.soldOut && r.sleeps >= 2) ?? stay.rooms.find((r) => !r.soldOut) ?? stay.rooms[0]).id,
+    () =>
+      initial.roomId ??
+      (stay.rooms.find((r) => !r.soldOut && r.sleeps >= 2) ?? stay.rooms.find((r) => !r.soldOut) ?? stay.rooms[0]).id,
   );
   const [popover, setPopover] = useState<Popover>(null);
   const [step, setStep] = useState<Step>("stay");
@@ -60,6 +78,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const confirmTimer = useRef<number | undefined>(undefined);
+  const saveRequest = useRef<AbortController | null>(null);
   const lastStep = useRef(step);
   // After Reserve, the room list is locked until the guest goes back to their stay
   const roomsLocked = step !== "stay";
@@ -68,7 +87,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
   const nights = nightsBetween(checkIn, checkOut);
   const subtotal = room.nightly * nights;
   const cleaning = nights ? stay.cleaningFee : 0;
-  const taxes = Math.round((subtotal + cleaning) * TAX_RATE);
+  const taxes = Math.round((subtotal + cleaning) * (stay.taxRate ?? TAX_RATE));
   const total = subtotal + cleaning + taxes;
   const guests = adults + children;
   // Free cancellation ends 2 days before check-in; for a stay that starts sooner, it's already over
@@ -87,7 +106,13 @@ export function StayReservation({ stay }: { stay: Stay }) {
   }, [step]);
 
   // A confirmation still pending when the page goes away shouldn't fire later
-  useEffect(() => () => window.clearTimeout(confirmTimer.current), []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(confirmTimer.current);
+      saveRequest.current?.abort();
+    },
+    [],
+  );
 
   const clear = (name: string) =>
     setErrors((e) => {
@@ -117,9 +142,20 @@ export function StayReservation({ stay }: { stay: Stay }) {
     document.getElementById("guests")?.focus();
   }
 
+  // Sign-in, then straight back to this stay with the same room, dates and guests picked
+  function signInHref() {
+    const back = new URLSearchParams({ room: room.id, adults: String(adults), children: String(children) });
+    if (checkIn && checkOut) {
+      back.set("checkIn", checkIn);
+      back.set("checkOut", checkOut);
+    }
+    return `/auth/login?next=${encodeURIComponent(`/reserve/${stay.slug}?${back}`)}`;
+  }
+
   function reserve() {
     const problem = stayProblem();
     if (problem) return showStayProblem(problem);
+    if (!account) return router.push(signInHref());
     setErrors({});
     setPopover(null);
     setStep("details");
@@ -136,6 +172,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
   function backToStay() {
     // Going back cancels a confirmation that's still in progress
     window.clearTimeout(confirmTimer.current);
+    saveRequest.current?.abort();
     setSubmitting(false);
     saveContact();
     setErrors({});
@@ -175,13 +212,57 @@ export function StayReservation({ stay }: { stay: Stay }) {
     // Freeze exactly what's being confirmed; the confirmation shows this, not live state
     const snapshot = { email: text("email"), roomName: room.name, checkIn, checkOut, adults, children, total };
     setSubmitting(true);
-    // TODO: send the reservation to the backend (app/api/reservations). Simulated for now.
-    window.clearTimeout(confirmTimer.current);
-    confirmTimer.current = window.setTimeout(() => {
-      setBooking({ ...snapshot, confirmation: `LH-${Math.random().toString(36).slice(2, 8).toUpperCase()}` });
+
+    if (!stay.bookable) {
+      // The sample stays aren't in the database, so their booking is only shown, never saved
+      window.clearTimeout(confirmTimer.current);
+      confirmTimer.current = window.setTimeout(() => {
+        setBooking({ ...snapshot, saved: false, confirmation: `LH-${Math.random().toString(36).slice(2, 8).toUpperCase()}` });
+        setSubmitting(false);
+        setStep("done");
+      }, 900);
+      return;
+    }
+
+    saveRequest.current?.abort();
+    const request = new AbortController();
+    saveRequest.current = request;
+    void saveBooking(snapshot, request.signal);
+  }
+
+  async function saveBooking(snapshot: Omit<Booking, "confirmation" | "saved">, signal: AbortSignal) {
+    const fail = (message: string, signIn = false) => {
+      setSubmitting(false);
+      setErrors(signIn ? { form: message, signIn: "yes" } : { form: message });
+    };
+    try {
+      const res = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room_id: room.id, check_in: snapshot.checkIn, check_out: snapshot.checkOut, guests: snapshot.adults + snapshot.children }),
+        signal,
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string; reservation?: { id?: string; total_price?: number | string } };
+      if (res.status === 401) return fail("Your sign-in has ended. Sign in again to finish booking.", true);
+      if (res.status === 409) return fail(`${body.error ?? "Those dates were just booked."} Go back and pick other dates.`);
+      if (!res.ok || !body.reservation) return fail(body.error ?? "We couldn’t save your booking. Try again.");
+
+      const { id, total_price } = body.reservation;
+      const savedTotal = Number(total_price);
+      setBooking({
+        ...snapshot,
+        saved: true,
+        // The saved total, in case the server priced it differently from the card
+        total: Number.isFinite(savedTotal) && total_price !== null ? savedTotal : snapshot.total,
+        confirmation: id ? `LH-${id.slice(0, 8).toUpperCase()}` : "LH-SAVED",
+      });
       setSubmitting(false);
       setStep("done");
-    }, 900);
+    } catch (err) {
+      if (signal.aborted) return;
+      console.error("Saving the booking failed", err);
+      fail("We couldn’t reach LikeHome. Check your connection and try again.");
+    }
   }
 
   function startOver() {
@@ -350,7 +431,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
                 <dl className="space-y-2 text-base">
                   <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
                   {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
-                  <Line label="Taxes and fees" value={money(taxes)} />
+                  {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
                   <div className="flex justify-between border-t border-edge pt-3 text-base font-bold text-ink">
                     <dt>Total</dt>
                     <dd>{money(total)}</dd>
@@ -360,8 +441,15 @@ export function StayReservation({ stay }: { stay: Stay }) {
                 <p className="text-sm text-slate">Add your dates to see the total for your stay.</p>
               )}
 
+              {!account && (
+                <div className="rounded-control border border-blue/30 bg-blue/5 p-4 text-sm text-slate">
+                  <p className="text-base font-semibold leading-5 text-ink">Sign in to reserve</p>
+                  <p className="mt-1">You need a LikeHome account to book. Pick your room and dates first, and we’ll bring you back here after you sign in.</p>
+                </div>
+              )}
+
               <button type="button" onClick={reserve} className={`${buttonPrimary} w-full`}>
-                {nights > 0 ? "Reserve" : "Check availability"}
+                {nights === 0 ? "Check availability" : account ? "Reserve" : "Sign in to reserve"}
               </button>
               <p className="text-center text-sm text-slate">You won’t be charged yet.</p>
             </div>
@@ -382,6 +470,11 @@ export function StayReservation({ stay }: { stay: Stay }) {
               <h2 ref={headingRef} tabIndex={-1} className="text-[32px] font-bold leading-10 text-ink outline-none">
                 Your details
               </h2>
+              {account?.email && (
+                <p className="text-sm text-slate">
+                  Signed in as <span className="font-semibold text-ink">{account.email}</span>
+                </p>
+              )}
 
               <div className="rounded-control border border-edge bg-paper p-4 text-sm text-slate">
                 <p className="text-base font-semibold leading-5 text-ink">{room.name}</p>
@@ -399,7 +492,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
                 <Field id="firstName" name="firstName" label="First name" autoComplete="given-name" defaultValue={contact.firstName} error={errors.firstName} onChange={() => clear("firstName")} />
                 <Field id="lastName" name="lastName" label="Last name" autoComplete="family-name" defaultValue={contact.lastName} error={errors.lastName} onChange={() => clear("lastName")} />
               </div>
-              <Field id="email" name="email" label="Email address" type="email" autoComplete="email" hint="We’ll send your confirmation here." defaultValue={contact.email} error={errors.email} onChange={() => clear("email")} />
+              <Field id="email" name="email" label="Email address" type="email" autoComplete="email" hint="We’ll send your confirmation here." defaultValue={contact.email || account?.email} error={errors.email} onChange={() => clear("email")} />
               <Field id="phone" name="phone" label="Phone (optional)" type="tel" autoComplete="tel" defaultValue={contact.phone} />
 
               <div className="space-y-5 border-t border-edge pt-5">
@@ -455,6 +548,19 @@ export function StayReservation({ stay }: { stay: Stay }) {
                   ? `Free cancellation until ${formatDate(cancelBy)}. After that, the first night is non-refundable.`
                   : "This booking can’t be cancelled for free. The first night is non-refundable."}
               </p>
+              {errors.form && (
+                <p role="alert" className="text-sm text-danger">
+                  {errors.form}
+                  {errors.signIn && (
+                    <>
+                      {" "}
+                      <Link href={signInHref()} className="font-semibold underline">
+                        Sign in
+                      </Link>
+                    </>
+                  )}
+                </p>
+              )}
               <button type="submit" disabled={submitting} className={`${buttonPrimary} w-full`}>
                 {submitting ? (
                   <>
@@ -479,7 +585,13 @@ export function StayReservation({ stay }: { stay: Stay }) {
                   You’re booked.
                 </h2>
                 <p className="mt-2 text-base text-slate">
-                  Confirmation <span className="font-semibold text-ink">{booking.confirmation}</span> is on its way to {booking.email}.
+                  {booking.saved ? (
+                    <>
+                      Confirmation <span className="font-semibold text-ink">{booking.confirmation}</span>. Your booking is saved to your account.
+                    </>
+                  ) : (
+                    "This is a sample stay, so nothing was booked. Real hotels from Stays are saved to your account."
+                  )}
                 </p>
               </div>
               {/* From the snapshot taken on confirm, so later edits can't change it */}

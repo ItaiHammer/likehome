@@ -29,6 +29,10 @@ export type Stay = {
   photos?: string[];
   /** "Good to know" facts; the placeholder facts in facts.ts without them */
   facts?: FactGroup[];
+  /** A real hotel whose rooms can be booked through /api/reservations (the sample stays can't) */
+  bookable?: boolean;
+  /** Tax added to the room and cleaning fee; TAX_RATE when not set */
+  taxRate?: number;
   cleaningFee: number;
   /** Nights already booked, as days from today. Placeholder until availability comes from the backend. */
   blockedNights: number[];

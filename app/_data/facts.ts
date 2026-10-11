@@ -14,6 +14,7 @@ export type FactGroup = {
 // Placeholder facts until the backend provides them per stay. Fees and the
 // cancellation window match what the reservation card charges.
 export function getFacts(stay: Stay): FactGroup[] {
+  const taxRate = stay.taxRate ?? TAX_RATE;
   return [
     {
       id: "amenities",
@@ -58,7 +59,10 @@ export function getFacts(stay: Stay): FactGroup[] {
       title: "Fees and taxes",
       items: [
         { label: "Cleaning fee", value: stay.cleaningFee ? `$${stay.cleaningFee} per stay` : "None" },
-        { label: "Taxes", value: `${Math.round(TAX_RATE * 100)}% of the room${stay.cleaningFee ? " and cleaning fee" : ""}` },
+        {
+          label: "Taxes",
+          value: taxRate ? `${Math.round(taxRate * 100)}% of the room${stay.cleaningFee ? " and cleaning fee" : ""}` : "None added",
+        },
         { label: "Service fee", value: "None" },
         { label: "Security deposit", value: "None" },
       ],
