@@ -200,12 +200,16 @@ export function StayReservation({ stay }: { stay: Stay }) {
         <h1 className="break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[56px] sm:leading-[64px]">{stay.name}</h1>
         <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-slate">
           <span>{stay.location}</span>
-          <span aria-hidden>·</span>
-          <Stars rating={stay.rating} reviews={stay.reviews} />
+          {stay.rating !== null && (
+            <>
+              <span aria-hidden>·</span>
+              <Stars rating={stay.rating} reviews={stay.reviews} />
+            </>
+          )}
         </p>
       </div>
 
-      <PhotoGallery stayName={stay.name} />
+      <PhotoGallery stayName={stay.name} photos={stay.photos} />
 
       <FactTags groups={facts} stayName={stay.name} location={stay.location} />
 
@@ -342,7 +346,7 @@ export function StayReservation({ stay }: { stay: Stay }) {
               {nights > 0 ? (
                 <dl className="space-y-2 text-base">
                   <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
-                  <Line label="Cleaning fee" value={money(cleaning)} />
+                  {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
                   <Line label="Taxes and fees" value={money(taxes)} />
                   <div className="flex justify-between border-t border-edge pt-3 text-base font-bold text-ink">
                     <dt>Total</dt>

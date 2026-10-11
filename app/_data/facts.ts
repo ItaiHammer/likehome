@@ -57,8 +57,8 @@ export function getFacts(stay: Stay): FactGroup[] {
       tag: "Fees",
       title: "Fees and taxes",
       items: [
-        { label: "Cleaning fee", value: `$${stay.cleaningFee} per stay` },
-        { label: "Taxes", value: `${Math.round(TAX_RATE * 100)}% of the room and cleaning fee` },
+        { label: "Cleaning fee", value: stay.cleaningFee ? `$${stay.cleaningFee} per stay` : "None" },
+        { label: "Taxes", value: `${Math.round(TAX_RATE * 100)}% of the room${stay.cleaningFee ? " and cleaning fee" : ""}` },
         { label: "Service fee", value: "None" },
         { label: "Security deposit", value: "None" },
       ],
