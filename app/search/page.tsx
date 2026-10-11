@@ -319,12 +319,16 @@ function getFrontendValidationError(params: SearchParams) {
         return "Please select both a check-in and check-out date.";
     }
 
-    if (
-        params.checkIn &&
-        params.checkOut &&
-        params.checkIn >= params.checkOut
-    ) {
-        return "Check-out must be after check-in.";
+    if (params.checkIn && params.checkOut) {
+        const today = new Date().toISOString().slice(0, 10);
+
+        if (params.checkIn < today || params.checkOut < today) {
+            return "Please select dates that are today or later.";
+        }
+
+        if (params.checkIn >= params.checkOut) {
+            return "Check-out must be after check-in.";
+        }
     }
 
     return "";
