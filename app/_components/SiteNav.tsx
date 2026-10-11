@@ -9,7 +9,7 @@ import { Tag } from "./ui";
 // Pages that don't exist yet are shown, but marked "Soon" and not clickable.
 const NAV_ITEMS: { label: string; href?: string }[] = [
   { label: "Stays", href: "/search" },
-  { label: "My bookings" },
+  { label: "My bookings", href: "/MyBookings" },
   { label: "My listings", href: "/listings" },
 ];
 

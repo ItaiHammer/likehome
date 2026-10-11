@@ -107,3 +107,13 @@ export async function deleteRoom(id: string) {
     .eq('id', id)
   return { error }
 }
+
+export async function getRoomsByIds(ids: string[]) {
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+  const { data, error } = await supabase
+    .from('rooms')
+    .select('*')
+    .in('id', ids)
+  return { data, error }
+}
