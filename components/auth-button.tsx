@@ -1,6 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
-import { SignInWithGoogleOAuthButton } from "./sign-in-google-button";
+import { SignInButton } from "./sign-in-button";
 import { SignOutButton } from "./sign-out-button";
 
 export async function AuthButton() {
@@ -13,6 +13,6 @@ export async function AuthButton() {
     return user ? (
         <SignOutButton />
     ) : (
-        <SignInWithGoogleOAuthButton/>
+        <SignInButton/>
     );
 }

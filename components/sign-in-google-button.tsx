@@ -13,7 +13,7 @@ export async function signInWithGoogle() {
 }
 
 export function SignInWithGoogleOAuthButton() {
-    return <button onClick={signInWithGoogle}>Sign In With Google</button>;
+    return <button onClick={signInWithGoogle}>Sign In</button>;
 }
 
 function getRedirectUrl(): string {
