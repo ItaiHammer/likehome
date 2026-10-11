@@ -1,4 +1,5 @@
-// Checkbox from the LikeHome component sheet: edge border, blue fill with a white tick when checked.
+// Checkbox from the LikeHome component sheet: blue fill with a white tick when checked.
+// Slate border, not edge: edge is under the 3:1 a control's outline needs (1.7:1 light, 1.5:1 dark).
 // A real <input type="checkbox"> underneath, so keyboard, forms and screen readers work as usual.
 // Candidate for Nolan's shared app/_components/ui once he agrees.
 export function Checkbox({
@@ -20,7 +21,7 @@ export function Checkbox({
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-edge bg-surface transition-colors checked:border-blue checked:bg-blue hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
+          className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-slate bg-surface transition-colors checked:border-blue checked:bg-blue hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
         />
         <svg
           viewBox="0 0 20 20"

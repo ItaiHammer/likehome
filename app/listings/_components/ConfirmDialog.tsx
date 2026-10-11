@@ -35,7 +35,8 @@ export function ConfirmDialog({ request, onDone }: { request: ConfirmRequest | n
       onClose={() => request && cancel()}
       aria-labelledby="confirm-title"
       aria-describedby="confirm-description"
-      className="m-auto w-[min(30rem,calc(100%-2rem))] rounded-lg border border-edge bg-surface p-6 text-ink shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop:bg-disabled/90"
+      // In dark mode the disabled tint would lighten the page past the dialog, so it dims with black instead
+      className="m-auto w-[min(30rem,calc(100%-2rem))] rounded-lg border border-edge bg-surface p-6 text-ink shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop:bg-disabled/90 dark:backdrop:bg-black/60"
     >
       {request && (
         <>
