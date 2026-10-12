@@ -6,7 +6,7 @@ import {
   checkCapacity,
   validateReservationInput,
   type RoomForBooking,
-  todayUTC,
+  todayInTimeZone,
 } from '../../../../utils/reservation-logic.ts'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
@@ -36,12 +36,6 @@ export async function PATCH(
     return Response.json({ error: 'Reservation change for another user is forbidden. '}, { status: 403 })
   }
  
-  // Validate reservation in the future
-  const today = todayUTC()
-  if ( curReservation?.check_in <= today) { 
-    return Response.json({ error: 'Reservation for past dates cannot be changed. '}, { status: 422 })
-  }
-
   let body: unknown
   try {
     body = await request.json()
@@ -49,11 +43,20 @@ export async function PATCH(
     return Response.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
+  // "Today" is the guest's today, from the time_zone the browser sends
+  // (e.g. "America/Los_Angeles"); UTC if it's missing.
+  const today = todayInTimeZone((body as Record<string, unknown> | null)?.time_zone)
+
+  // Validate reservation in the future
+  if ( curReservation?.check_in <= today) { 
+    return Response.json({ error: 'Reservation for past dates cannot be changed. '}, { status: 422 })
+  }
+
   // Merge current and requested for validation
   const requestedReservation = curReservation ? { ...curReservation, ...(body as object) } : body
 
   // Validate input
-  const result = validateReservationInput(requestedReservation)
+  const result = validateReservationInput(requestedReservation, today)
   if (!result.ok) {
     return Response.json({ error: result.error }, { status: 400 })
   }

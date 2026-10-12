@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { formatRange, formatShort, nightsBetween } from "./dates";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { browserTimeZone, formatRange, formatShort, nightsBetween } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
 import { RangeCalendar, type RangeField } from "./RangeCalendar";
 
 // The search bar's dates segment: one field that opens the same range calendar
-// the stay pages use. Sends checkIn / checkOut with the form.
+// the stay pages use. Sends checkIn / checkOut with the form, plus the browser's
+// time zone (tz) so the server judges "today" in the guest's calendar, not UTC.
+const noSubscribe = () => () => {};
+
 export function DatesField({
   className = "",
   initialCheckIn = "",
@@ -16,6 +19,8 @@ export function DatesField({
   initialCheckIn?: string;
   initialCheckOut?: string;
 }) {
+  // Empty during the server render; filled in from the browser after hydration
+  const timeZone = useSyncExternalStore(noSubscribe, browserTimeZone, () => "");
   const [open, setOpen] = useState(false);
   const [checkIn, setCheckIn] = useState(initialCheckIn);
   const [checkOut, setCheckOut] = useState(initialCheckOut);
@@ -100,6 +105,7 @@ export function DatesField({
 
       <input type="hidden" name="checkIn" value={checkIn} />
       <input type="hidden" name="checkOut" value={checkOut} />
+      <input type="hidden" name="tz" value={timeZone} />
 
       <div
         ref={panelRef}
