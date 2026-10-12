@@ -55,6 +55,12 @@ export function bookingSummary(booking: Booking): string {
   return [formatStayDates(booking.checkIn, booking.checkOut), booking.roomType, guests].filter(Boolean).join(' · ')
 }
 
+// Whole dollars stay whole ($756); anything with cents shows both digits ($1,234.50)
+export const money = (n: number) => {
+  const cents = Math.round(n * 100) / 100
+  return `$${cents.toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(cents) ? 0 : 2, maximumFractionDigits: 2 })}`
+}
+
 export function firstName(fullName: string | null | undefined): string | null {
   return fullName?.trim().split(/\s+/)[0] || null
 }

@@ -1,6 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bookingCode, bookingSummary, firstName, formatStayDates, groupBookings, initials } from '../lib/bookings.ts'
+import {
+  bookingCode,
+  bookingSummary,
+  firstName,
+  formatStayDates,
+  groupBookings,
+  initials,
+  money,
+} from '../lib/bookings.ts'
 
 const TODAY = '2026-10-10'
 const booking = (id, checkIn, checkOut, status = 'confirmed') => ({
@@ -82,4 +90,11 @@ test('first name and initials', () => {
   assert.equal(initials('Cher', null), 'C')
   assert.equal(initials(null, 'nolan@example.com'), 'N')
   assert.equal(initials(null, null), '?')
+})
+
+test('money shows cents only when there are some', () => {
+  assert.equal(money(756), '$756')
+  assert.equal(money(1234.5), '$1,234.50')
+  assert.equal(money(569.97), '$569.97')
+  assert.equal(money(64.4 * 15), '$966')
 })

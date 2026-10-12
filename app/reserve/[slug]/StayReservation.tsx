@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { money } from "@/lib/bookings";
 import { MAX_NIGHTS, todayUTC } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
@@ -13,6 +14,7 @@ import { DateRangePicker } from "./DateRangePicker";
 import { FactTags } from "./FactTags";
 import { GuestsField, guestLabel } from "./GuestsField";
 import { PhotoGallery } from "./PhotoGallery";
+import { RoomOptions } from "./RoomOptions";
 
 type Step = "stay" | "details" | "done";
 type Errors = Partial<Record<string, string>>;
@@ -41,7 +43,6 @@ const noSubscribe = () => () => {};
 
 const CONTACT_FIELDS = ["firstName", "lastName", "email", "phone"] as const;
 
-const money = (n: number) => `$${n.toLocaleString("en-US")}`;
 const formatCard = (v: string) => v.replace(/\D/g, "").slice(0, 19).replace(/(\d{4})(?=\d)/g, "$1 ");
 const formatExpiry = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 4);
@@ -319,69 +320,16 @@ export function StayReservation({
               {step !== "done" ? "To change rooms, go back to your stay." : booking?.saved ? "Your room is booked." : "Sample stay, so nothing was booked."}
             </p>
           )}
-          <div className="mt-5 space-y-4">
-            {stay.rooms.map((r) => {
-              const on = r.id === roomId;
-              const off = !!r.soldOut;
-              return (
-                <label
-                  key={r.id}
-                  // Room options follow the sheet's field states: default, selected (focus look), disabled.
-                  // Keyboard focus always lands on the selected room, so it needs the outline on top.
-                  className={`flex items-center gap-4 rounded-control border p-4 transition sm:gap-6 sm:px-5 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-blue ${
-                    off
-                      ? "cursor-not-allowed border-disabled bg-disabled"
-                      : on
-                        ? `border-blue bg-surface ring-1 ring-blue ${roomsLocked ? "cursor-default" : "cursor-pointer"}`
-                        : roomsLocked
-                          ? "cursor-not-allowed border-edge bg-surface opacity-60"
-                          : "cursor-pointer border-edge bg-surface hover:border-blue"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="room"
-                    value={r.id}
-                    checked={on}
-                    disabled={off}
-                    onChange={() => {
-                      setRoomId(r.id);
-                      clear("guests");
-                    }}
-                    className="sr-only"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-base font-semibold leading-5 ${off ? "text-slate" : "text-ink"}`}>{r.name}</p>
-                    <p className="mt-1 text-sm text-slate">
-                      {/* Each dot is glued to the label after it, so a wrapped line never ends on a dot */}
-                      {[...r.description.split(" · ").filter(Boolean), `Sleeps ${r.sleeps}`].map((part, i) => (
-                        <Fragment key={part}>
-                          {i > 0 && " "}
-                          <span className="whitespace-nowrap">
-                            {i > 0 && "· "}
-                            {part}
-                          </span>
-                        </Fragment>
-                      ))}
-                    </p>
-                    <p className="text-sm text-slate">{off ? "Sold out right now" : freeCancel ? "Free cancellation" : "No free cancellation"}</p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className={`text-base font-semibold ${off ? "text-slate line-through" : "text-ink"}`}>{money(r.nightly)}</p>
-                    <p className="text-sm text-slate">per night</p>
-                  </div>
-                  <span
-                    aria-hidden
-                    className={`hidden h-[46px] w-28 shrink-0 items-center justify-center rounded-control text-base font-semibold sm:inline-flex ${
-                      off ? "border border-edge text-slate" : on ? "bg-blue text-on-blue" : "border border-edge bg-surface text-ink"
-                    }`}
-                  >
-                    {off ? "Sold out" : on ? "Selected" : "Select"}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
+          <RoomOptions
+            rooms={stay.rooms}
+            selectedId={roomId}
+            onSelect={(id) => {
+              setRoomId(id);
+              clear("guests");
+            }}
+            locked={roomsLocked}
+            note={() => (freeCancel ? "Free cancellation" : "No free cancellation")}
+          />
         </fieldset>
 
         <aside
