@@ -15,6 +15,9 @@ type RawParams = Record<string, string | string[] | undefined>;
 type SortValue = "recommended" | "price-low" | "price-high";
 
 const PAGE_SIZE = 21;
+// The bar and the AI's reply to it sit 84px inside the results on wide screens; lined up edge to edge,
+// the page read as one flat column. 84px keeps the bar at 1152px where the results reach 1400px.
+const barColumn = "xl:mx-[84px]";
 
 
 function SparklesIcon() {
@@ -98,35 +101,40 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           <SkyBackground />
         </div>
 
-        {/* Same box as <main> below, so the bar lines up with the results */}
         <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 lg:px-10">
-          <p className="mb-3 text-sm font-semibold text-ink">Find your next stay</p>
-          {/* Keyed by the search, so a new search (e.g. from AI mode) refills the bar */}
-          <SearchExperience
-            key={searchKey(navigationParams)}
-            compact
-            hideFilters
-            initialMode={aiPrompt ? "ai" : "standard"}
-            initialValues={{
-              where: params.where,
-              checkIn: params.checkIn,
-              checkOut: params.checkOut,
-              adults: positiveInt(params.adults, 2),
-              children: nonNegativeInt(params.children, 0),
-              minPrice: params.minPrice,
-              maxPrice: params.maxPrice,
-              minRating: params.minRating,
-              numBeds: params.numBeds,
-              bedSize: params.bedSize,
-              tags: params.tags,
-              aiPrompt,
-            }}
-          />
+          <div className={barColumn}>
+            <p className="mb-3 text-sm font-semibold text-ink">Find your next stay</p>
+            {/* Keyed by the search, so a new search (e.g. from AI mode) refills the bar */}
+            <SearchExperience
+              key={searchKey(navigationParams)}
+              compact
+              hideFilters
+              initialMode={aiPrompt ? "ai" : "standard"}
+              initialValues={{
+                where: params.where,
+                checkIn: params.checkIn,
+                checkOut: params.checkOut,
+                adults: positiveInt(params.adults, 2),
+                children: nonNegativeInt(params.children, 0),
+                minPrice: params.minPrice,
+                maxPrice: params.maxPrice,
+                minRating: params.minRating,
+                numBeds: params.numBeds,
+                bedSize: params.bedSize,
+                tags: params.tags,
+                aiPrompt,
+              }}
+            />
+          </div>
         </div>
       </section>
 
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 pb-16 sm:px-6 lg:px-10">
-        {aiReply && <AiReplyCard reply={aiReply} params={params} />}
+        {aiReply && (
+          <div className={barColumn}>
+            <AiReplyCard reply={aiReply} params={params} />
+          </div>
+        )}
         {usingMockData && <MockDataNotice />}
 
         {shouldSearch && (
