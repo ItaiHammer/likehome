@@ -6,7 +6,7 @@ import {Pagination} from "./components/Pagination";
 import {SearchResultCard, type HotelSearchResult} from "./components/SearchResultCard";
 import {SortSelect} from "./components/SortSelect";
 import {getMockSearchResults} from "./mockResults";
-import {todayInTimeZone} from "@/utils/reservation-logic";
+import {parseDate, todayInTimeZone} from "@/utils/reservation-logic";
 
 type RawParams = Record<string, string | string[] | undefined>;
 type SortValue = "recommended" | "price-low" | "price-high";
@@ -188,8 +188,8 @@ function normalizeParams(raw: RawParams): SearchParams {
     const sort = first(raw.sort);
     return {
         where: first(raw.where),
-        checkIn: first(raw.checkIn),
-        checkOut: first(raw.checkOut),
+        checkIn: first(raw.checkIn)?.split("T")[0],
+        checkOut: first(raw.checkOut)?.split("T")[0],
         adults: first(raw.adults),
         children: first(raw.children),
         minPrice: first(raw.minPrice),
@@ -325,6 +325,9 @@ function getFrontendValidationError(params: SearchParams) {
     }
 
     if (params.checkIn && params.checkOut) {
+        if (!parseDate(params.checkIn) || !parseDate(params.checkOut)) {
+            return "Please select valid check-in and check-out dates.";
+        }
         // The guest's today (tz is sent by the search bar), not UTC's: after 5pm
         // Pacific it's already tomorrow in UTC, which would reject tonight's stays
         const today = todayInTimeZone(params.tz);
