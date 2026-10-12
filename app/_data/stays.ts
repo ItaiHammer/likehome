@@ -10,7 +10,14 @@ export type Room = {
   sleeps: number;
   nightly: number;
   soldOut?: boolean;
+  /** Database rooms only: what the search filters check per room */
+  beds?: number;
+  bedSize?: string | null;
+  tags?: string[];
 };
+
+/** Something a stay has, named like the search filter it matches */
+export type Offer = { label: string; /** Only some of its rooms have it */ someRooms?: boolean };
 
 export type Stay = {
   slug: string;
@@ -20,18 +27,32 @@ export type Stay = {
   type: string;
   /** A few standout amenities, shown as tags on stay cards */
   tags: string[];
-  rating: number;
-  reviews: number;
-  variant: SceneVariant;
+  /** null until the hotel has a rating */
+  rating: number | null;
+  reviews?: number;
+  variant?: SceneVariant;
+  /** Photo URLs; the gallery shows numbered placeholders without them */
+  photos?: string[];
+  /** What it offers, from its database tags; the sample stays show their tags instead */
+  offers?: Offer[];
+  /** The "Good for" filters it matches (Families, Pets…) */
+  goodFor?: string[];
+  /** A real hotel whose rooms can be booked through /api/reservations (the sample stays can't) */
+  bookable?: boolean;
+  /** Tax added to the room and cleaning fee; TAX_RATE when not set */
+  taxRate?: number;
   cleaningFee: number;
   /** Nights already booked, as days from today. Placeholder until availability comes from the backend. */
   blockedNights: number[];
   rooms: Room[];
 };
 
+/** The made-up stays on the home page always have a rating, reviews and an illustration */
+export type SampleStay = Stay & { rating: number; reviews: number; variant: SceneVariant };
+
 export const TAX_RATE = 0.12;
 
-export const STAYS: Stay[] = [
+export const STAYS: SampleStay[] = [
   {
     slug: "four-seasons-positano",
     name: "Four Seasons Positano",

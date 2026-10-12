@@ -103,7 +103,12 @@ export function Stars({ rating, reviews }: { rating: number; reviews?: number })
       <svg viewBox="0 0 20 20" className="h-4 w-4 text-blue" fill="currentColor" aria-hidden>
         <path d="M10 1.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L10 14.9l-5.2 2.8 1-5.9L1.5 7.7l5.9-.8z" />
       </svg>
-      <span className="font-semibold">{rating.toFixed(2)}</span>
+      {/* The star is hidden from screen readers, so say what the number is */}
+      <span className="font-semibold">
+        <span className="sr-only">Rated </span>
+        {rating.toFixed(2)}
+        <span className="sr-only"> out of 5</span>
+      </span>
       {reviews !== undefined && <span className="text-slate">· {reviews} reviews</span>}
     </span>
   );

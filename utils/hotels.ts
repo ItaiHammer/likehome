@@ -150,3 +150,13 @@ export async function deleteHotel(id: string) {
     .eq('id', id)
   return { error }
 }
+
+export async function getHotelsByIds(ids: string[]) {
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+  const { data, error } = await supabase
+    .from('hotels')
+    .select('*')
+    .in('id', ids)
+  return { data, error }
+}
