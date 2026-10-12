@@ -81,7 +81,6 @@ export function SearchExperience({
   const [aiPointerFocus, setAiPointerFocus] = useState(false);
   // Set by a mode switch, so the newly shown field takes focus (never on page load)
   const [switchedBy, setSwitchedBy] = useState<"keyboard" | "pointer">();
-  const [transport] = useState(() => new DefaultChatTransport({ api: "/api/search/ai" }));
   const { sendMessage, setMessages, status, stop } = useChat({
     transport,
     onFinish: ({ message, isError, isAbort, isDisconnect }) => {
