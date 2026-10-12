@@ -168,6 +168,7 @@ type SearchParams = {
   page?: string;
   aiPrompt?: string;
   aiReply?: string;
+  tz?: string;
 };
 
 function normalizeParams(raw: RawParams): SearchParams {
@@ -188,6 +189,7 @@ function normalizeParams(raw: RawParams): SearchParams {
     page: first(raw.page),
     aiPrompt: first(raw.aiPrompt),
     aiReply: first(raw.aiReply),
+    tz: first(raw.tz),
   };
 }
 
@@ -208,6 +210,7 @@ function toRawParams(params: SearchParams): RawParams {
     page: params.page,
     aiPrompt: params.aiPrompt,
     aiReply: params.aiReply,
+    tz: params.tz,
   };
 }
 
@@ -227,6 +230,7 @@ function toSearchRequest(params: SearchParams): SearchRequest {
     bedSize: params.bedSize,
     tags: params.tags.length ? params.tags : undefined,
     sort: params.sort,
+    tz: params.tz,
   };
 }
 

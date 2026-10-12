@@ -19,6 +19,10 @@ export type SearchRequest = {
     sort?: string;
 
     tags?: string | string[];
+
+    // The guest's IANA time zone (e.g. "America/Los_Angeles"), sent by the search form.
+    // Use todayInTimeZone(tz) from utils/reservation-logic.ts for "today" checks.
+    tz?: string;
 }
 
 // Backend to Frontend contract

@@ -5,19 +5,29 @@ import { createClient } from "@/utils/supabase/client";
 import { PAGE_ROUTES } from "@/constants/routes";
 
 export function SignOutButton() {
-    const router = useRouter();
+  const router = useRouter();
 
-    const signOut = async() => {
-        const supabase = createClient();
-        await supabase.auth.signOut();
-        // Refresh page to update button
-        router.push(PAGE_ROUTES.LOGIN);
-    };
+  async function signOut() {
+    const supabase = createClient();
 
-    return <button
-            onClick={signOut}
-           >
-            Sign Out
-           </button> 
+    const { error } = await supabase.auth.signOut();
 
+    if (error) {
+      console.error("Sign-out failed:", error.message);
+      return;
+    }
+
+    router.push(PAGE_ROUTES.LOGIN);
+    router.refresh();
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={signOut}
+      className="rounded-control px-3 py-2 text-base font-semibold text-blue hover:text-blue-dark"
+    >
+      Sign Out
+    </button>
+  );
 }
