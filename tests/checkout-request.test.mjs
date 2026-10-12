@@ -17,6 +17,7 @@ const form = (overrides = {}) => ({
   expiry: '12/28',
   cvc: '123',
   cardName: 'Test Guest',
+  timeZone: 'America/Los_Angeles',
   ...overrides,
 })
 
@@ -50,6 +51,12 @@ test('typed formatting is cleaned up the way the route expects', () => {
   assert.equal(payment.exp_month, 3)
   assert.equal(payment.exp_year, 2031)
   assert.equal(payment.name_on_card, 'Test Guest')
+})
+
+test("the guest's time zone is sent, so the API judges \"today\" in it (#79)", () => {
+  assert.equal(checkoutRequest(form()).time_zone, 'America/Los_Angeles')
+  // Left out when the browser can't tell; the API then falls back to UTC
+  assert.equal(checkoutRequest(form({ timeZone: undefined })).time_zone, undefined)
 })
 
 test('adults and children are sent together as guests', () => {

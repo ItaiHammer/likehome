@@ -7,7 +7,7 @@ import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
 import { cardErrors } from "@/lib/card";
-import { MAX_NIGHTS, todayUTC } from "@/utils/reservation-logic";
+import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Card, Field, Stars } from "../../_components/ui";
@@ -176,8 +176,8 @@ export function StayReservation({
     if (nights > MAX_NIGHTS) return { field: "dates", message: `Stays can be up to ${MAX_NIGHTS} nights.` };
     const booked = stay.blockedNights.map((o) => addDays(todayISO(), o));
     if (booked.some((night) => night >= checkIn && night < checkOut)) return { field: "dates", message: "Some of those nights are already booked." };
-    // The booking API counts days in UTC, so in the US evening "today" has already passed for it
-    if (stay.bookable && checkIn < todayUTC()) return { field: "dates", message: "That check-in date is too soon to book. Pick a later date." };
+    // The booking API judges "today" in the guest's time zone (sent with the booking), so this uses the local date
+    if (stay.bookable && checkIn < todayISO()) return { field: "dates", message: "That check-in date is too soon to book. Pick a later date." };
     const clash = stay.bookable ? findOverlap(otherStays, checkIn, checkOut) : null;
     if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
@@ -325,6 +325,7 @@ export function StayReservation({
       expiry: text("expiry"),
       cvc: text("cvc"),
       cardName: text("cardName"),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
     saveRequest.current?.abort();
     const request = new AbortController();

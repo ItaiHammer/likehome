@@ -11,6 +11,8 @@ export type CheckoutForm = {
   expiry: string;
   cvc: string;
   cardName: string;
+  /** The guest's IANA time zone, e.g. "America/Los_Angeles": the API judges "today" in it (#79) */
+  timeZone?: string;
 };
 
 export function checkoutRequest(form: CheckoutForm) {
@@ -20,6 +22,7 @@ export function checkoutRequest(form: CheckoutForm) {
     check_in: form.checkIn,
     check_out: form.checkOut,
     guests: form.guests,
+    time_zone: form.timeZone,
     payment: {
       card_number: form.cardNumber.replace(/[\s-]/g, ""),
       exp_month: expMonth,
