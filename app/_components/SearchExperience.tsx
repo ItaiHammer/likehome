@@ -5,6 +5,7 @@ import { DefaultChatTransport } from "ai";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState } from "react";
 import { readAiAnswer } from "./aiSearch";
+import { browserTimeZone } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
 import { DatesField } from "./DatesField";
 import { DestinationInput } from "./DestinationInput";
@@ -54,10 +55,12 @@ export function SearchExperience({
   initialValues = {},
   initialMode = initialValues.aiPrompt ? "ai" : "standard",
   compact = false,
+  hideFilters = false,
 }: {
   initialValues?: SearchInitialValues;
   initialMode?: SearchMode;
   compact?: boolean;
+  hideFilters?: boolean;
 }) {
   const [mode, setMode] = useState<SearchMode>(initialMode);
   const router = useRouter();
@@ -71,7 +74,13 @@ export function SearchExperience({
   // The AI box rolls through example requests while it's empty
   const [aiText, setAiText] = useState(initialValues.aiPrompt ?? "");
   const [aiFocused, setAiFocused] = useState(false);
-  const [transport] = useState(() => new DefaultChatTransport({ api: "/api/search/ai" }));
+  // tz goes with every AI request so the assistant's "today" is the guest's today
+  const [transport] = useState(
+    () => new DefaultChatTransport({ api: "/api/search/ai", body: () => ({ tz: browserTimeZone() }) }),
+  );
+  const [aiPointerFocus, setAiPointerFocus] = useState(false);
+  // Set by a mode switch, so the newly shown field takes focus (never on page load)
+  const [switchedBy, setSwitchedBy] = useState<"keyboard" | "pointer">();
   const { sendMessage, setMessages, status, stop } = useChat({
     transport,
     onFinish: ({ message, isError, isAbort, isDisconnect }) => {
@@ -79,7 +88,12 @@ export function SearchExperience({
       const text = message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
       const answer = readAiAnswer(text, promptRef.current);
       if (!answer) setAiError("Sorry, that didn't come through. Try asking again.");
-      else if (answer.query) router.push(`/search?${answer.query}`);
+      else if (answer.query) {
+        // Same as the standard search bar: send the time zone so date checks use the guest's today
+        const tz = browserTimeZone();
+        if (tz) answer.query.set("tz", tz);
+        router.push(`/search?${answer.query}`);
+      }
       else setAiNote(answer.reply || "Tell us where you're going, when, and who's coming.");
     },
     onError: () => setAiError("AI search isn't available right now. Try the standard search instead."),
@@ -88,12 +102,14 @@ export function SearchExperience({
 
   // Switching modes starts fresh: no leftover reply or error, and an AI search
   // still running is cancelled so it can't open results after you've left.
-  const switchMode = (next: SearchMode) => {
+  const switchMode = (next: SearchMode, viaPointer: boolean) => {
     if (aiBusy) stop();
     setAiNote("");
     setAiError("");
     // The AI box remounts with its starting text, so match it
     setAiText(initialValues.aiPrompt ?? "");
+    setSwitchedBy(viaPointer ? "pointer" : "keyboard");
+    setAiPointerFocus(viaPointer);
     setMode(next);
   };
 
@@ -115,8 +131,9 @@ export function SearchExperience({
     "md:before:absolute md:before:inset-y-[26%] md:before:left-0 md:before:w-px md:before:bg-edge has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:before:opacity-0";
 
   const barPadding = compact ? "p-1.5 md:py-0" : "p-2 md:py-0";
-  const searchButtonSize = compact ? "h-12 md:h-auto md:w-[56px]" : "h-14 md:h-auto md:w-[66px]";
-  const toggleSize = compact ? "h-12 md:h-auto md:w-[54px]" : "h-14 md:h-auto md:w-[58px]";
+  // On tablets Search and Ask AI sit under the fields, so picked dates and the guest count fit in the row
+  const searchButtonSize = compact ? "h-12 lg:h-auto lg:w-[56px]" : "h-14 lg:h-auto lg:w-[66px]";
+  const toggleSize = compact ? "h-12 lg:h-auto lg:w-[54px]" : "h-14 lg:h-auto lg:w-[58px]";
 
   const submitAiSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -133,13 +150,14 @@ export function SearchExperience({
   return (
     <SearchDrift>
       {mode === "standard" ? (
-        <form action="/search" className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row">
+        <form action="/search" className="flex min-w-0 flex-1 flex-col gap-2.5 lg:flex-row">
           <div
             className={`grid min-w-0 flex-1 grid-cols-1 divide-y divide-edge/60 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md sm:grid-cols-2 sm:divide-y-0 md:flex md:flex-row ${barPadding}`}
           >
             <DestinationInput
-              className={`${field} sm:col-span-1 sm:border-b sm:border-r sm:border-edge/60 md:flex-[1.6] md:border-0`}
+              className={`${field} sm:col-span-1 sm:border-b sm:border-r sm:border-edge/60 md:flex-[1.45] md:border-0 lg:flex-[1.6]`}
               initialValue={initialValues.where ?? ""}
+              autoFocusFrom={switchedBy === "keyboard" ? "keyboard" : undefined}
             />
             <DatesField
               className={`${field} ${divider} sm:col-span-1 sm:border-b sm:border-edge/60 md:flex-[1.15] md:border-0`}
@@ -151,43 +169,53 @@ export function SearchExperience({
               initialAdults={initialValues.adults ?? 2}
               initialChildren={initialValues.children ?? 0}
             />
-            <SearchFiltersPicker
-              className={`${field} ${divider} md:flex-none md:justify-center ${compact ? "md:w-[76px]" : "md:w-[88px]"}`}
-              initialValues={filters}
-            />
+            {hideFilters ? (
+              <>
+                {(["minPrice", "maxPrice", "minRating", "numBeds", "bedSize"] as const).map(
+                  (key) => filters[key] && <input key={key} type="hidden" name={key} value={filters[key]} />,
+                )}
+                {filters.tags?.map((tag) => <input key={tag} type="hidden" name="tags" value={tag} />)}
+              </>
+            ) : (
+              <SearchFiltersPicker
+                className={`${field} ${divider} md:flex-none md:justify-center ${compact ? "md:w-[76px]" : "md:w-[88px]"}`}
+                initialValues={filters}
+              />
+            )}
           </div>
 
-          <div className="flex gap-2.5 md:contents">
+          <div className="flex gap-2.5 lg:contents">
             <button
               type="submit"
               aria-label="Search"
               title="Search"
-              className={`flex flex-1 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:flex-none ${searchButtonSize}`}
+              className={`flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue text-base font-semibold text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,translate] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue lg:flex-none ${searchButtonSize}`}
             >
               <SearchIcon className={compact ? "h-5 w-5" : "h-6 w-6"} />
+              <span className="lg:sr-only">Search</span>
             </button>
             <button
               type="button"
               aria-pressed="false"
-              onClick={() => switchMode("ai")}
-              className={`flex flex-1 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#8B5CF6,#4C79BD,#49B6C8,#F09A8A)] p-[3px] transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:flex-none ${toggleSize}`}
+              // detail is 0 when Enter or Space pressed the button
+              onClick={(e) => switchMode("ai", e.detail > 0)}
+              className={`flex flex-1 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#8B5CF6,#4C79BD,#49B6C8,#F09A8A)] p-[3px] transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue lg:flex-none ${toggleSize}`}
               title="Search with AI"
-              aria-label="Search with AI"
             >
-              <span className="flex h-full w-full items-center justify-center rounded-[13px] bg-surface text-blue">
+              <span className="flex h-full w-full items-center justify-center gap-2 rounded-[13px] bg-surface text-base font-semibold text-blue">
                 <SparklesIcon />
-                <span className="sr-only">Search with AI</span>
+                <span className="lg:sr-only">Ask AI</span>
               </span>
             </button>
           </div>
         </form>
       ) : (
         <>
-        <form action="/search" onSubmit={submitAiSearch} aria-busy={aiBusy} className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row">
+        <form action="/search" onSubmit={submitAiSearch} aria-busy={aiBusy} className="flex min-w-0 flex-1 flex-col gap-2.5 lg:flex-row">
           <div
             className={`flex min-w-0 flex-1 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md ${barPadding}`}
           >
-            <label className={`${field} w-full`}>
+            <label className={`${field} w-full`} onPointerDown={() => setAiPointerFocus(true)}>
               <span className={`flex shrink-0 items-center justify-center rounded-xl bg-blue/10 text-blue ${compact ? "h-8 w-8" : "h-9 w-9"}`}>
                 <SparklesIcon />
               </span>
@@ -202,11 +230,17 @@ export function SearchExperience({
                     setAiError("");
                   }}
                   onFocus={() => setAiFocused(true)}
-                  onBlur={() => setAiFocused(false)}
+                  onBlur={() => {
+                    setAiFocused(false);
+                    setAiPointerFocus(false);
+                  }}
                   defaultValue={initialValues.aiPrompt ?? ""}
                   autoComplete="off"
+                  autoFocus={!!switchedBy}
                   readOnly={aiBusy}
-                  className="w-full min-w-0 bg-transparent text-base text-ink outline-none"
+                  data-trigger
+                  data-pointer-focus={aiPointerFocus || undefined}
+                  className="w-full min-w-0 bg-transparent text-base text-ink outline-none focus:outline-hidden"
                 />
                 {!aiText && (
                   <span className="pointer-events-none absolute inset-0 flex items-center">
@@ -217,30 +251,31 @@ export function SearchExperience({
             </label>
           </div>
 
-          <div className="flex gap-2.5 md:contents">
+          <div className="flex gap-2.5 lg:contents">
             <button
               type="submit"
               aria-label={aiBusy ? "Searching with AI" : "Search with AI"}
               title="Search with AI"
               aria-disabled={aiBusy}
-              className={`flex flex-1 shrink-0 items-center justify-center rounded-2xl bg-blue text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue aria-disabled:cursor-progress md:flex-none ${searchButtonSize}`}
+              className={`flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue text-base font-semibold text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,translate] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue aria-disabled:cursor-progress lg:flex-none ${searchButtonSize}`}
             >
               {aiBusy ? (
                 <span className={`animate-spin rounded-full border-2 border-on-blue/40 border-t-on-blue ${compact ? "h-5 w-5" : "h-6 w-6"}`} aria-hidden />
               ) : (
                 <SearchIcon className={compact ? "h-5 w-5" : "h-6 w-6"} />
               )}
+              <span className="lg:sr-only">Search</span>
             </button>
             <button
                 type="button"
                 aria-pressed="true"
-                onClick={() => switchMode("standard")}
-                className={`standard-return-button flex flex-1 shrink-0 items-center justify-center rounded-2xl text-blue transition-[border-color,color,background-color,transform] duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue md:flex-none ${toggleSize}`}
+                onClick={(e) => switchMode("standard", e.detail > 0)}
+                className={`standard-return-button flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl text-blue transition-[border-color,color,background-color,translate] duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue lg:flex-none ${toggleSize}`}
                 title="Return to standard search"
                 aria-label="Return to standard search"
             >
               <ReturnIcon />
-              <span className="sr-only">Return to standard search</span>
+              <span className="text-center text-base leading-tight font-semibold text-blue-dark lg:sr-only">Standard search</span>
             </button>
           </div>
         </form>

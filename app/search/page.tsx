@@ -1,16 +1,24 @@
-import {SearchExperience} from "../_components/SearchExperience";
-import {SkyBackground} from "../_components/SkyBackground";
-import {search} from "./search";
-import type {SearchRequest} from "./types";
-import {Pagination} from "./components/Pagination";
-import {SearchResultCard, type HotelSearchResult} from "./components/SearchResultCard";
-import {SortSelect} from "./components/SortSelect";
-import {getMockSearchResults} from "./mockResults";
+import type { Metadata } from "next";
+import { formatShort } from "../_components/dates";
+import { SearchExperience } from "../_components/SearchExperience";
+import { SkyBackground } from "../_components/SkyBackground";
+import { Button } from "../_components/ui";
+import { search } from "./search";
+import type { SearchRequest } from "./types";
+import { Pagination } from "./components/Pagination";
+import { searchQuery } from "@/lib/stay-filters";
+import { SearchResultCard, type HotelSearchResult } from "./components/SearchResultCard";
+import { SortSelect } from "./components/SortSelect";
+import { FilterSheetButton, FilterSidebar, type FilterValues } from "./components/FilterSidebar";
+import { getMockSearchResults } from "./mockResults";
 
 type RawParams = Record<string, string | string[] | undefined>;
 type SortValue = "recommended" | "price-low" | "price-high";
 
 const PAGE_SIZE = 21;
+// The bar and the AI's reply to it sit 84px inside the results on wide screens; lined up edge to edge,
+// the page read as one flat column. 84px keeps the bar at 1152px where the results reach 1400px.
+const barColumn = "xl:mx-[84px]";
 
 
 function SparklesIcon() {
@@ -24,18 +32,26 @@ function SparklesIcon() {
     );
 }
 
-export default async function SearchPage({searchParams}: { searchParams: Promise<RawParams> }) {
-    const raw = await searchParams;
-    const params = normalizeParams(raw);
-    const aiPrompt = params.aiPrompt?.trim();
-    // An AI search arrives as normal filters plus the assistant's summary (aiReply):
-    // SearchExperience asks Cara's /api/search/ai endpoint, then links here.
-    const aiReply = params.aiReply?.trim();
-    const navigationParams = toRawParams(params);
-    const validationError = getFrontendValidationError(params);
+export async function generateMetadata({ searchParams }: { searchParams: Promise<RawParams> }): Promise<Metadata> {
+  const where = first((await searchParams).where)?.trim();
+  return { title: `${where ? `Stays in ${where}` : "Search stays"} — LikeHome` };
+}
 
-// Nothing to search for yet (e.g. /search on its own): ask for something instead
-    const shouldSearch = aiPrompt ? hasStructuredSearchCriteria(params) : hasSearchCriteria(params);
+export default async function SearchPage({ searchParams }: { searchParams: Promise<RawParams> }) {
+  const raw = await searchParams;
+  const params = normalizeParams(raw);
+  const aiPrompt = params.aiPrompt?.trim();
+  // An AI search arrives as normal filters plus the assistant's summary (aiReply):
+  // SearchExperience asks Cara's /api/search/ai endpoint, then links here.
+  const aiReply = params.aiReply?.trim();
+  const navigationParams = toRawParams(params);
+  const stayLinkSearch = searchQuery(navigationParams);
+  const validationError = getFrontendValidationError(params);
+  // New on every server render (a new search, a filter change, Search pressed again, a refresh), so
+  // the results remount and cascade in each time they're shown
+  const resultsKey = crypto.randomUUID();
+  // A standard search with nothing filled in lists every hotel (the nav's "Stays" links here)
+  const shouldSearch = aiPrompt ? hasStructuredSearchCriteria(params) : true;
 
     let data: HotelSearchResult[] = [];
     let total = 0;
@@ -70,176 +86,211 @@ export default async function SearchPage({searchParams}: { searchParams: Promise
         }
     }
 
-    const currentPage = positiveInt(params.page, 1);
-    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    const activeFilterCount = getActiveFilterCount(params);
-    const locationHeading = params.where ? `Stays in ${params.where}` : "Stays for you";
+  const currentPage = positiveInt(params.page, 1);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const activeFilterCount = getActiveFilterCount(params);
+  const locationHeading = params.where ? `Stays in ${params.where}` : "Stays for you";
+  const filterValues: FilterValues = {
+    minPrice: params.minPrice,
+    maxPrice: params.maxPrice,
+    minRating: params.minRating,
+    numBeds: params.numBeds,
+    bedSize: params.bedSize,
+    tags: params.tags,
+  };
 
-    return (
-        <div className="flex flex-1 flex-col">
-            <section className="relative isolate z-10 px-4 pb-10 pt-8 sm:px-6 sm:pb-12 sm:pt-10">
-                <div
-                    className="absolute inset-0 -z-10 overflow-hidden [mask-image:linear-gradient(to_bottom,black_30%,transparent)]">
-                    <SkyBackground/>
-                </div>
-
-                <div className="mx-auto max-w-6xl">
-                    <p className="mb-3 text-sm font-semibold text-blue">Find your next stay</p>
-                    {/* Keyed by the search, so a new search (e.g. from AI mode) refills the bar */}
-                    <SearchExperience
-                        key={searchKey(navigationParams)}
-                        compact
-                        initialMode={aiPrompt ? "ai" : "standard"}
-                        initialValues={{
-                            where: params.where,
-                            checkIn: params.checkIn,
-                            checkOut: params.checkOut,
-                            adults: positiveInt(params.adults, 2),
-                            children: nonNegativeInt(params.children, 0),
-                            minPrice: params.minPrice,
-                            maxPrice: params.maxPrice,
-                            minRating: params.minRating,
-                            numBeds: params.numBeds,
-                            bedSize: params.bedSize,
-                            tags: params.tags,
-                            aiPrompt,
-                        }}
-                    />
-                </div>
-            </section>
-
-            <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 sm:px-6">
-                {aiReply && <AiReplyCard reply={aiReply} params={params}/>}
-                {usingMockData && <MockDataNotice/>}
-
-                {shouldSearch && !validationError && (
-                    <div
-                        className="flex flex-col gap-5 border-b border-edge pb-6 sm:flex-row sm:items-end sm:justify-between">
-                        <div>
-                            <p className="text-sm font-semibold text-blue">Search results</p>
-                            <h1 className="mt-1 font-serif text-[36px] leading-[44px] text-ink sm:text-[44px] sm:leading-[52px]">{locationHeading}</h1>
-                            <p className="mt-2 text-sm text-slate">
-                                {searchError ? "Results unavailable" : `${total} ${total === 1 ? "stay" : "stays"} found`}
-                                {activeFilterCount > 0 &&
-                                    ` · ${activeFilterCount} ${aiPrompt ? "AI " : ""}${activeFilterCount === 1 ? "filter" : "filters"} applied`}
-                            </p>
-                        </div>
-
-                        <SortSelect current={params.sort} params={navigationParams}/>
-                    </div>
-                )}
-
-                {validationError ? (
-                    <StatePanel
-                        title="Almost there"
-                        body={validationError}
-                    />
-                ) : !shouldSearch ? (
-                    aiPrompt ? null : (
-                        <StatePanel
-                            title="Add something to your search"
-                            body="Enter a destination, dates, guest preferences, or filters to find stays."
-                        />
-                    )
-                ) : searchError ? (
-                    <StatePanel
-                        title="We couldn't load stays"
-                        body="Try the search again. If this keeps happening, the search service may be temporarily unavailable."
-                    />
-                ) : data.length === 0 ? (
-                    <StatePanel title="No stays found"
-                                body="Try changing the destination, dates, guest count, or filters."/>
-                ) : (
-                    <>
-                        <div className="mt-7 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                            {data.map((stay, index) => (
-                                <SearchResultCard key={String(stay.id ?? index)} stay={stay}/>
-                            ))}
-                        </div>
-                        <Pagination currentPage={currentPage} totalPages={totalPages} params={navigationParams}/>
-                    </>
-                )}
-            </main>
+  return (
+    <div className="flex flex-1 flex-col">
+      <section className="relative isolate z-10 pb-10 pt-8 sm:pb-12 sm:pt-10">
+        <div className="absolute inset-0 -z-10 overflow-hidden [mask-image:linear-gradient(to_bottom,black_30%,transparent)]">
+          <SkyBackground />
         </div>
-    );
+
+        <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 lg:px-10">
+          <div className={barColumn}>
+            <p className="mb-3 text-sm font-semibold text-ink">Find your next stay</p>
+            {/* Keyed by the search, so a new search (e.g. from AI mode) refills the bar */}
+            <SearchExperience
+              key={searchKey(navigationParams)}
+              compact
+              hideFilters
+              initialMode={aiPrompt ? "ai" : "standard"}
+              initialValues={{
+                where: params.where,
+                checkIn: params.checkIn,
+                checkOut: params.checkOut,
+                adults: positiveInt(params.adults, 2),
+                children: nonNegativeInt(params.children, 0),
+                minPrice: params.minPrice,
+                maxPrice: params.maxPrice,
+                minRating: params.minRating,
+                numBeds: params.numBeds,
+                bedSize: params.bedSize,
+                tags: params.tags,
+                aiPrompt,
+              }}
+            />
+          </div>
+        </div>
+      </section>
+
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 pb-16 sm:px-6 lg:px-10">
+        {aiReply && (
+          <div className={barColumn}>
+            <AiReplyCard reply={aiReply} params={params} />
+          </div>
+        )}
+        {usingMockData && <MockDataNotice />}
+
+        {shouldSearch && (
+          <div className="flex flex-col gap-5 border-b border-edge pb-6 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-blue">Search results</p>
+              <h1 className="mt-1 font-serif text-[36px] leading-[44px] text-ink wrap-break-word sm:text-[44px] sm:leading-[52px]">{locationHeading}</h1>
+              <p className="mt-2 text-sm text-slate">
+                {searchError ? "Results unavailable" : `${total} ${total === 1 ? "stay" : "stays"} found`}
+                {activeFilterCount > 0 &&
+                  ` · ${activeFilterCount} ${aiPrompt ? "AI " : ""}${activeFilterCount === 1 ? "filter" : "filters"} applied`}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <FilterSheetButton className="lg:hidden" initial={filterValues} params={navigationParams} total={total} />
+              {data.length > 0 && <SortSelect current={params.sort} params={navigationParams} />}
+            </div>
+          </div>
+        )}
+
+        {shouldSearch && (
+          <div className="mt-7 grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start lg:gap-10">
+            <FilterSidebar
+              className="hidden lg:sticky lg:top-6 lg:block lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:overscroll-contain"
+              initial={filterValues}
+              params={navigationParams}
+            />
+            <div className="min-w-0">
+              {searchError ? (
+                <StatePanel
+                  title="We couldn't load stays"
+                  body="Try the search again. If this keeps happening, the search service may be temporarily unavailable."
+                  action={
+                    <Button href={`/search?${searchKey(navigationParams)}`} variant="secondary">
+                      Try again
+                    </Button>
+                  }
+                />
+              ) : data.length === 0 ? (
+                <StatePanel
+                  title="No stays found"
+                  body="Try changing the destination, dates, guest count, or filters."
+                  action={
+                    activeFilterCount > 0 && (
+                      <Button href={clearFiltersHref(params)} variant="secondary">
+                        Clear filters
+                      </Button>
+                    )
+                  }
+                />
+              ) : (
+                <>
+                  <div key={resultsKey} className="grid gap-5 sm:grid-cols-2 2xl:grid-cols-3">
+                    {data.map((stay, index) => (
+                      <div key={String(stay.id ?? index)} className="card-in grid" style={{ "--i": Math.min(index, 8) } as React.CSSProperties}>
+                        <SearchResultCard stay={stay} eager={index < 3} search={stayLinkSearch} />
+                      </div>
+                    ))}
+                  </div>
+                  <Pagination currentPage={currentPage} totalPages={totalPages} params={navigationParams} />
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }
 
 type SearchParams = {
-    where?: string;
-    checkIn?: string;
-    checkOut?: string;
-    adults?: string;
-    children?: string;
-    minPrice?: string;
-    maxPrice?: string;
-    minRating?: string;
-    numBeds?: string;
-    bedSize?: string;
-    tags: string[];
-    sort?: SortValue;
-    page?: string;
-    aiPrompt?: string;
-    aiReply?: string;
+  where?: string;
+  checkIn?: string;
+  checkOut?: string;
+  adults?: string;
+  children?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  minRating?: string;
+  numBeds?: string;
+  bedSize?: string;
+  tags: string[];
+  sort?: SortValue;
+  page?: string;
+  aiPrompt?: string;
+  aiReply?: string;
+  tz?: string;
 };
 
 function normalizeParams(raw: RawParams): SearchParams {
-    const sort = first(raw.sort);
-    return {
-        where: first(raw.where),
-        checkIn: first(raw.checkIn),
-        checkOut: first(raw.checkOut),
-        adults: first(raw.adults),
-        children: first(raw.children),
-        minPrice: first(raw.minPrice),
-        maxPrice: first(raw.maxPrice),
-        minRating: first(raw.minRating),
-        numBeds: first(raw.numBeds),
-        bedSize: first(raw.bedSize),
-        tags: values(raw.tags),
-        sort: sort === "price-low" || sort === "price-high" ? sort : "recommended",
-        page: first(raw.page),
-        aiPrompt: first(raw.aiPrompt),
-        aiReply: first(raw.aiReply),
-    };
+  const sort = first(raw.sort);
+  return {
+    where: first(raw.where),
+    checkIn: first(raw.checkIn),
+    checkOut: first(raw.checkOut),
+    adults: first(raw.adults),
+    children: first(raw.children),
+    minPrice: first(raw.minPrice),
+    maxPrice: first(raw.maxPrice),
+    minRating: first(raw.minRating),
+    numBeds: first(raw.numBeds),
+    bedSize: first(raw.bedSize),
+    tags: values(raw.tags),
+    sort: sort === "price-low" || sort === "price-high" ? sort : "recommended",
+    page: first(raw.page),
+    aiPrompt: first(raw.aiPrompt),
+    aiReply: first(raw.aiReply),
+    tz: first(raw.tz),
+  };
 }
 
 function toRawParams(params: SearchParams): RawParams {
-    return {
-        where: params.where,
-        checkIn: params.checkIn,
-        checkOut: params.checkOut,
-        adults: params.adults,
-        children: params.children,
-        minPrice: params.minPrice,
-        maxPrice: params.maxPrice,
-        minRating: params.minRating,
-        numBeds: params.numBeds,
-        bedSize: params.bedSize,
-        tags: params.tags.length ? params.tags : undefined,
-        sort: params.sort,
-        page: params.page,
-        aiPrompt: params.aiPrompt,
-        aiReply: params.aiReply,
-    };
+  return {
+    where: params.where,
+    checkIn: params.checkIn,
+    checkOut: params.checkOut,
+    adults: params.adults,
+    children: params.children,
+    minPrice: params.minPrice,
+    maxPrice: params.maxPrice,
+    minRating: params.minRating,
+    numBeds: params.numBeds,
+    bedSize: params.bedSize,
+    tags: params.tags.length ? params.tags : undefined,
+    sort: params.sort,
+    page: params.page,
+    aiPrompt: params.aiPrompt,
+    aiReply: params.aiReply,
+    tz: params.tz,
+  };
 }
 
 // Cara's SearchRequest uses the same names as the link, so this only drops
 // what she doesn't parse (sort "recommended" is her default).
 function toSearchRequest(params: SearchParams): SearchRequest {
-    return {
-        where: params.where,
-        checkIn: params.checkIn,
-        checkOut: params.checkOut,
-        adults: params.adults,
-        children: params.children,
-        minPrice: params.minPrice,
-        maxPrice: params.maxPrice,
-        minRating: params.minRating,
-        numBeds: params.numBeds,
-        bedSize: params.bedSize,
-        tags: params.tags.length ? params.tags : undefined,
-        sort: params.sort,
-    };
+  return {
+    where: params.where,
+    checkIn: params.checkIn,
+    checkOut: params.checkOut,
+    adults: params.adults,
+    children: params.children,
+    minPrice: params.minPrice,
+    maxPrice: params.maxPrice,
+    minRating: params.minRating,
+    numBeds: params.numBeds,
+    bedSize: params.bedSize,
+    tags: params.tags.length ? params.tags : undefined,
+    sort: params.sort,
+    tz: params.tz,
+  };
 }
 
 // Zero or blank values (e.g. an AI answer with minPrice "0") aren't filters
@@ -372,21 +423,44 @@ function searchKey(params: RawParams) {
 }
 
 function buildCriteriaChips(params: SearchParams) {
-    const chips: string[] = [];
-    if (params.where) chips.push(params.where);
-    if (params.checkIn && params.checkOut) chips.push(`${params.checkIn} – ${params.checkOut}`);
-    const guests = positiveInt(params.adults, 0) + nonNegativeInt(params.children, 0);
-    if (guests > 0) chips.push(`${guests} ${guests === 1 ? "guest" : "guests"}`);
-    if (params.minPrice || params.maxPrice) {
-        if (params.minPrice && params.maxPrice) chips.push(`$${params.minPrice}–$${params.maxPrice}/night`);
-        else if (params.maxPrice) chips.push(`Up to $${params.maxPrice}/night`);
-        else chips.push(`From $${params.minPrice}/night`);
-    }
-    if (params.minRating) chips.push(`${params.minRating}+ stars`);
-    if (params.numBeds) chips.push(`${params.numBeds}+ beds`);
-    if (params.bedSize) chips.push(`${params.bedSize} beds`);
-    chips.push(...params.tags);
-    return chips;
+  const chips: string[] = [];
+  if (params.where) chips.push(params.where);
+  if (params.checkIn && params.checkOut) chips.push(`${chipDate(params.checkIn)} - ${chipDate(params.checkOut)}`);
+  const guests = positiveInt(params.adults, 0) + nonNegativeInt(params.children, 0);
+  if (guests > 0) chips.push(`${guests} ${guests === 1 ? "guest" : "guests"}`);
+  if (params.minPrice || params.maxPrice) {
+    if (params.minPrice && params.maxPrice) chips.push(`${chipPrice(params.minPrice)} - ${chipPrice(params.maxPrice)}/night`);
+    else if (params.maxPrice) chips.push(`Up to ${chipPrice(params.maxPrice)}/night`);
+    else chips.push(`From ${chipPrice(params.minPrice)}/night`);
+  }
+  if (params.minRating) chips.push(`${params.minRating}+ stars`);
+  if (params.numBeds) chips.push(`${params.numBeds}+ beds`);
+  if (params.bedSize) chips.push(`${params.bedSize} beds`);
+  chips.push(...params.tags);
+  return chips;
+}
+
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+// Values come straight from the link, so anything that isn't a clean date or number shows as sent
+function chipDate(iso: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? formatShort(iso) : iso;
+}
+
+function chipPrice(value = "") {
+  const amount = Number(value);
+  return value && Number.isFinite(amount) ? usd.format(amount) : value;
+}
+
+function clearFiltersHref(params: SearchParams) {
+  const query = new URLSearchParams();
+  for (const key of ["where", "checkIn", "checkOut", "adults", "children"] as const) {
+    const value = params[key];
+    if (value) query.set(key, value);
+  }
+  if (params.sort && params.sort !== "recommended") query.set("sort", params.sort);
+  const suffix = query.toString();
+  return suffix ? `/search?${suffix}` : "/search";
 }
 
 function MockDataNotice() {
@@ -403,13 +477,14 @@ function MockDataNotice() {
     );
 }
 
-function StatePanel({title, body}: { title: string; body: string }) {
-    return (
-        <section className="mt-8 rounded-2xl border border-edge bg-surface px-6 py-12 text-center">
-            <h2 className="font-serif text-[32px] leading-10 text-ink">{title}</h2>
-            <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate">{body}</p>
-        </section>
-    );
+function StatePanel({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
+  return (
+    <section className="mt-8 rounded-2xl border border-edge bg-surface px-6 py-12 text-center">
+      <h2 className="font-serif text-[32px] leading-10 text-ink">{title}</h2>
+      <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate">{body}</p>
+      {action && <div className="mt-6">{action}</div>}
+    </section>
+  );
 }
 
 function first(value: string | string[] | undefined) {

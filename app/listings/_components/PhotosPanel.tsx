@@ -157,7 +157,7 @@ export function PhotosPanel({ photos, uploads, onStartUploads, onRetryUpload, on
           {uploads.map((upload) => (
             <li key={upload.id}>
               <p className={upload.status === "failed" ? "text-danger" : "text-ink"}>
-                {upload.caption} — {upload.status === "failed" ? "Upload failed. Try again." : "Uploading..."}
+                {upload.caption}: {upload.status === "failed" ? "Upload failed. Try again." : "Uploading…"}
               </p>
               {upload.status === "failed" && (
                 <div className="mt-3 flex flex-wrap gap-3">
@@ -239,11 +239,12 @@ export function PhotosPanel({ photos, uploads, onStartUploads, onRetryUpload, on
             </figcaption>
           </figure>
 
+          {/* One column on phones: two left no room for captions, and a left-column ••• menu opened off screen */}
           {(rest.length > 0 || canAdd) && (
-            <ul className="mt-8 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3">
+            <ul className="mt-8 grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
               {rest.map((photo, i) => (
                 <li key={photo.id} className="group min-w-0">
-                  <ListingCover photo={photo} sizes="(min-width: 640px) 300px, 50vw" zoom className="aspect-[16/10] w-full" />
+                  <ListingCover photo={photo} sizes="(min-width: 640px) 300px, 100vw" zoom className="aspect-[16/10] w-full" />
                   <div className="mt-2 flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-ink">{photo.caption || "Untitled photo"}</p>

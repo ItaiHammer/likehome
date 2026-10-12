@@ -15,6 +15,7 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "ai": "^7.0.127",
+    "motion": "^12.43.0",
     "next": "^16.3.8",
     "ogl": "^1.0.11",
     "react": "19.2.8",

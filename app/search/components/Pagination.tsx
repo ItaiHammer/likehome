@@ -14,6 +14,23 @@ function pageHref(params: RawParams, page: number) {
   return suffix ? `/search?${suffix}` : "/search";
 }
 
+// At either end Previous/Next aren't links, so they drop out of the tab order
+function StepLink({ href, disabled, children }: { href: string; disabled: boolean; children: React.ReactNode }) {
+  const className = "flex h-10 items-center rounded-xl border border-edge px-3.5 text-sm font-semibold transition-colors";
+  if (disabled) {
+    return (
+      <span aria-disabled="true" className={`${className} text-slate/50`}>
+        {children}
+      </span>
+    );
+  }
+  return (
+    <Link href={href} className={`${className} bg-surface text-ink hover:border-blue hover:text-blue`}>
+      {children}
+    </Link>
+  );
+}
+
 export function Pagination({
   currentPage,
   totalPages,
@@ -31,15 +48,9 @@ export function Pagination({
 
   return (
     <nav aria-label="Search result pages" className="mt-10 flex flex-wrap items-center justify-center gap-2">
-      <Link
-        href={pageHref(params, Math.max(1, currentPage - 1))}
-        aria-disabled={currentPage === 1}
-        className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${
-          currentPage === 1 ? "pointer-events-none border-edge text-slate/50" : "border-edge bg-surface text-ink hover:border-blue hover:text-blue"
-        }`}
-      >
+      <StepLink href={pageHref(params, Math.max(1, currentPage - 1))} disabled={currentPage === 1}>
         Previous
-      </Link>
+      </StepLink>
 
       {visible.map((page, index) => {
         const previous = visible[index - 1];
@@ -61,17 +72,9 @@ export function Pagination({
         );
       })}
 
-      <Link
-        href={pageHref(params, Math.min(totalPages, currentPage + 1))}
-        aria-disabled={currentPage === totalPages}
-        className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${
-          currentPage === totalPages
-            ? "pointer-events-none border-edge text-slate/50"
-            : "border-edge bg-surface text-ink hover:border-blue hover:text-blue"
-        }`}
-      >
+      <StepLink href={pageHref(params, Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>
         Next
-      </Link>
+      </StepLink>
     </nav>
   );
 }

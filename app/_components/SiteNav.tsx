@@ -1,16 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { Tag } from "./ui";
 
 // The app header's links, from the Figma "Shared navigation" (Stays · My bookings · My listings).
 // Pages that don't exist yet are shown, but marked "Soon" and not clickable.
 const NAV_ITEMS: { label: string; href?: string }[] = [
-  { label: "Stays", href: "/#stays" },
-  { label: "My bookings" },
-  { label: "My listings", href: "/listings" },
+  { label: "Stays", href: "/search" },
+  { label: "My Bookings", href: "/MyBookings" },
+  { label: "My Listings", href: "/listings" },
 ];
+
+const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue";
+
+function useIsCurrent() {
+  const pathname = usePathname();
+  return (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+}
 
 function ComingSoon({ label, className = "" }: { label: string; className?: string }) {
   return (
@@ -23,12 +31,17 @@ function ComingSoon({ label, className = "" }: { label: string; className?: stri
 
 // Links shown inline from tablet width up
 export function DesktopNav() {
+  const isCurrent = useIsCurrent();
   return (
     <ul className="hidden items-center gap-1 md:flex">
       {NAV_ITEMS.map((item) => (
         <li key={item.label}>
           {item.href ? (
-            <Link href={item.href} className="rounded-control px-3 py-2 text-base font-medium text-slate hover:text-ink">
+            <Link
+              href={item.href}
+              aria-current={isCurrent(item.href) ? "page" : undefined}
+              className={`rounded-control px-3 py-2 text-base font-medium ${focusRing} ${isCurrent(item.href) ? "bg-blue/10 text-blue-dark" : "text-slate hover:text-ink"}`}
+            >
               {item.label}
             </Link>
           ) : (
@@ -46,6 +59,7 @@ export function MobileNav() {
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const isCurrent = useIsCurrent();
 
   useEffect(() => {
     if (!open) return;
@@ -87,7 +101,8 @@ export function MobileNav() {
         aria-controls={panelId}
         aria-label="Menu"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-9 w-9 items-center justify-center rounded-control border border-edge text-slate transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
+        // after: gives the 36px button a 44px tap area
+        className={`relative flex h-9 w-9 items-center justify-center rounded-control border border-edge text-slate transition-colors after:absolute after:-inset-[5px] hover:text-ink ${focusRing}`}
       >
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
           {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
@@ -99,7 +114,12 @@ export function MobileNav() {
             {NAV_ITEMS.map((item) => (
               <li key={item.label}>
                 {item.href ? (
-                  <Link href={item.href} onClick={() => setOpen(false)} className="block py-3 text-base font-medium text-ink hover:text-blue">
+                  <Link
+                    href={item.href}
+                    onClick={() => setOpen(false)}
+                    aria-current={isCurrent(item.href) ? "page" : undefined}
+                    className={`-mx-2 block rounded-control px-2 py-3 text-base ${focusRing} ${isCurrent(item.href) ? "font-semibold text-blue-dark" : "font-medium text-ink hover:text-blue"}`}
+                  >
                     {item.label}
                   </Link>
                 ) : (

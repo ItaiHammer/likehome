@@ -42,7 +42,8 @@ export function ThemeToggle() {
       aria-label="Dark mode"
       aria-pressed={dark}
       title={dark ? "Switch to light mode" : "Switch to dark mode"}
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control border border-edge text-slate transition-colors hover:border-blue/50 hover:text-ink focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue"
+      // after: gives the 36px button a 44px tap area
+      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-control border border-edge text-slate transition-colors after:absolute after:-inset-[5px] hover:border-blue/50 hover:text-ink focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue"
     >
       {/* Moon (shown in light mode) */}
       <svg viewBox="0 0 24 24" className="h-5 w-5 dark:hidden" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>

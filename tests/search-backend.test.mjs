@@ -12,6 +12,11 @@ const {
     search
 } = await import('../app/search/search.ts');
 
+function getDateFromToday(daysFromToday) {
+  const d = new Date()
+  d.setDate(d.getDate() + daysFromToday)
+  return d.toISOString().split('T')[0]
+}
 
 describe('Search Module Integration', () => {
     beforeEach(() => {
@@ -30,8 +35,8 @@ describe('Search Module Integration', () => {
                 name: 'correctly aggregates all valid parameter types into PropertyFilter structure',
                 input: {
                     where: 'Paris, France',
-                    checkIn: '2026-06-15',
-                    checkOut: '2026-06-20',
+                    checkIn: getDateFromToday(0),
+                    checkOut: getDateFromToday(1),
                     numBeds: '2',
                     bedSize: 'Queen',
                     adults: '2',
@@ -44,7 +49,7 @@ describe('Search Module Integration', () => {
                 },
                 expectedParams: {
                     location: { city: 'Paris', country: 'France' },
-                    dates: { checkIn: '2026-06-15', checkOut: '2026-06-20' },
+                    dates: { checkIn: getDateFromToday(0), checkOut: getDateFromToday(1) },
                     beds: { num: 2, size: 'Queen' },
                     guests: { adults: 2, children: 1, total: 3 },
                     price: { min: 100, max: 500 },
@@ -85,8 +90,8 @@ describe('Search Module Integration', () => {
             // Arrange
             const mockSearchRequest = {
                 where: 'Osaka, Osaka Prefecture, Japan',
-                checkIn: '2026-07-01',
-                checkOut: '2026-07-05',
+                checkIn: getDateFromToday(0),
+                checkOut: getDateFromToday(1),
                 adults: '2',
                 children: '2',
                 minPrice: '150',
@@ -111,8 +116,8 @@ describe('Search Module Integration', () => {
                 city: 'Osaka',
                 region: 'Osaka Prefecture',
                 country: 'Japan',
-                check_in: '2026-07-01',
-                check_out: '2026-07-05',
+                check_in: getDateFromToday(0),
+                check_out: getDateFromToday(1),
                 guests: 4, // 2 adults + 2 children total
                 min_price: 150,
                 max_price: 400,
@@ -127,7 +132,7 @@ describe('Search Module Integration', () => {
             assert.deepStrictEqual(result, {
                 params: {
                     location: { city: 'Osaka', region: 'Osaka Prefecture', country: 'Japan' },
-                    dates: { checkIn: '2026-07-01', checkOut: '2026-07-05' },
+                    dates: { checkIn: getDateFromToday(0), checkOut: getDateFromToday(1) },
                     guests: { adults: 2, children: 2, total: 4 },
                     price: { min: 150, max: 400 },
                     rating: { minStars: 4 },
@@ -282,46 +287,35 @@ describe('search dates parameter', () => {
             expected: undefined,
         },
         {
-            name: 'returns formatted checkIn when only checkIn is valid',
-            checkIn: '2026-06-15',
+            name: 'clamps past checkIn dates to today in UTC and adjusts checkOut accordingly',
+            checkIn: '2020-01-01',
+            checkOut: '2020-01-05',
+            // Past dates get clamped to today's UTC date, and checkOut is adjusted relative to today
+            expected: { checkIn: new Date().toISOString().split('T')[0], checkOut: getDateFromToday(1) },
+        },
+        {
+            name: 'auto-calculates checkOut as checkIn + 1 day when only checkIn is provided in the future',
+            checkIn: getDateFromToday(10),
             checkOut: undefined,
-            expected: { checkIn: '2026-06-15' },
+            expected: { checkIn: getDateFromToday(10), checkOut: getDateFromToday(11) }, 
         },
         {
-            name: 'returns formatted checkOut when only checkOut is valid',
+            name: 'auto-calculates checkIn as checkOut - 1 day when only checkOut is provided in the future',
             checkIn: undefined,
-            checkOut: '2026-06-20',
-            expected: { checkOut: '2026-06-20' },
+            checkOut: getDateFromToday(15),
+            expected: { checkIn: getDateFromToday(14), checkOut: getDateFromToday(15) },
         },
         {
-            name: 'returns valid checkOut when checkIn is invalid',
-            checkIn: 'invalid-checkin',
-            checkOut: '2026-06-20',
-            expected: { checkOut: '2026-06-20' },
+            name: 'auto-corrects inverted range where checkOut <= checkIn by bumping checkOut',
+            checkIn: getDateFromToday(5),
+            checkOut: getDateFromToday(3),
+            expected: { checkIn: getDateFromToday(5), checkOut: getDateFromToday(6) },
         },
         {
-            name: 'returns valid checkIn when checkOut is invalid',
-            checkIn: '2026-06-15',
-            checkOut: 'invalid-checkout',
-            expected: { checkIn: '2026-06-15' },
-        },
-        {
-            name: 'returns both dates formatted when checkIn is strictly before checkOut',
-            checkIn: '2026-06-15T00:00:00.000Z',
-            checkOut: '2026-06-20T00:00:00.000Z',
-            expected: { checkIn: '2026-06-15', checkOut: '2026-06-20' },
-        },
-        {
-            name: 'returns undefined when checkIn and checkOut are on the same day (equal times)',
-            checkIn: '2026-06-15',
-            checkOut: '2026-06-15',
-            expected: undefined,
-        },
-        {
-            name: 'returns undefined when checkIn is after checkOut (greater time)',
-            checkIn: '2026-06-25',
-            checkOut: '2026-06-20',
-            expected: undefined,
+            name: 'auto-corrects inverted range where checkOut == checkIn by bumping checkOut',
+            checkIn: getDateFromToday(5),
+            checkOut: getDateFromToday(5),
+            expected: { checkIn: getDateFromToday(5), checkOut: getDateFromToday(6) },
         },
     ];
 
@@ -398,6 +392,18 @@ describe('search beds parameter', () => {
             size: 'Double',
             expected: { num: 3, size: 'Double' },
         },
+        {
+            name: 'returns rounded bed count',
+            num: '3.7',
+            size: undefined,
+            expected: { num: 4 },
+        },
+        {
+            name: 'returns 0 bed count when negative',
+            num: '-3.7',
+            size: undefined,
+            expected: { num: 0 },
+        },
     ];
 
     for (const { name, num, size, expected } of testCases) {
@@ -460,6 +466,18 @@ describe('search guests parameter', () => {
             adults: '2',
             children: '2',
             expected: { adults: 2, children: 2, total: 4 },
+        },
+        {
+            name: 'returns rounded children count',
+            adults: '2',
+            children: '2.3',
+            expected: { adults: 2, children: 2, total: 4 },
+        },
+        {
+            name: 'returns 0 children when negative',
+            adults: '2',
+            children: '-2',
+            expected: { adults: 2, children: 0, total: 2 },
         },
     ];
 
@@ -525,10 +543,22 @@ describe('search price parameter', () => {
             expected: { min: 100, max: 100 },
         },
         {
-            name: 'returns undefined when min price is greater than max price',
+            name: 'returns swapped when min price is greater than max price',
             min: '250',
             max: '100',
-            expected: undefined,
+            expected: { min: 100, max: 250 },
+        },
+        {
+            name: 'returns to 2 decimal places ',
+            min: '111.123',
+            max: '222.456',
+            expected: { min: 111.12, max: 222.46 },
+        },
+        {
+            name: 'bounds to 0 when negative',
+            min: '-250',
+            max: '100',
+            expected: { min: 0, max: 100 },
         },
     ];
 
@@ -562,8 +592,13 @@ describe('search rating parameter', () => {
         },
         {
             name: 'correctly handles floating point/decimal rating strings',
-            min: '4.5',
-            expected: { minStars: 4.5 },
+            min: '4.556',
+            expected: { minStars: 4.6 },
+        },
+        {
+            name: 'bounds to 0 when negative',
+            min: '-4.556',
+            expected: { minStars: 0 },
         },
     ];
 

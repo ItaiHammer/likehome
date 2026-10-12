@@ -8,12 +8,14 @@ import {
   calculateTotalPrice,
   checkCapacity,
   datesOverlap,
+  todayInTimeZone,
   validateReservationInput,
   type RoomForBooking,
 } from '@/utils/reservation-logic'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
 const EXCLUSION_VIOLATION = '23P01'
+const ACCOUNT_OVERLAP_CONSTRAINT = 'reservations_no_account_overlap'
 
 async function getUserId() {
   const supabase = createClient(await cookies())
@@ -35,8 +37,10 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  // 1. Validate input
-  const result = validateReservationInput(body)
+  // 1. Validate input. "Today" is the guest's today, from the time_zone the browser sends
+  //    (e.g. "America/Los_Angeles"); UTC if it's missing.
+  const timeZone = (body as Record<string, unknown> | null)?.time_zone
+  const result = validateReservationInput(body, todayInTimeZone(timeZone))
   if (!result.ok) {
     return Response.json({ error: result.error }, { status: 400 })
   }
@@ -90,6 +94,12 @@ export async function POST(request: Request) {
 
   if (error) {
     if (error.code === EXCLUSION_VIOLATION) {
+      if (error.message?.includes(ACCOUNT_OVERLAP_CONSTRAINT)) {
+        return Response.json(
+          { error: 'You already have a booking at another hotel for overlapping dates.' },
+          { status: 409 }
+        )
+      }
       return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
     }
     console.error('createReservation failed:', error)

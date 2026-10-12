@@ -140,9 +140,11 @@ export function PropertyEditor({ listing, initialTab, initialPreview = false }: 
         ? { kind: "problem", text: "Changes weren't saved" }
         : state.problem === "invalid"
           ? { kind: "problem", text: "Changes need attention" }
-          : unsaved || isNew
+          : unsaved
             ? { kind: "unsaved", text: "Unsaved changes" }
-            : { kind: "saved", text: "All changes saved" };
+            : isNew
+              ? { kind: "unsaved", text: "Not created yet" }
+              : { kind: "saved", text: "All changes saved" };
 
   const notice =
     state.problem === "invalid"
@@ -190,7 +192,7 @@ export function PropertyEditor({ listing, initialTab, initialPreview = false }: 
         <Card className="mt-6 sm:p-8">
           {state.tab === "info" && (
             <>
-              <PanelHeading title={isNew ? "Create your property" : "Hotel information"} />
+              <PanelHeading title="Hotel information" />
               <div className="mt-8">
                 <HotelInfoForm info={state.draft} errors={state.errors} onChange={(field, value) => dispatch({ type: "edit", field, value })} />
               </div>
