@@ -15,7 +15,7 @@ import { SampleNotice } from "./_components/SampleNotice";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
 import { getSampleBookings } from "./sampleBookings";
 
-export const metadata: Metadata = { title: "My bookings — LikeHome" };
+export const metadata: Metadata = { title: "My Bookings — LikeHome" };
 
 const sectionHeading = "font-serif text-[32px] leading-10 text-ink";
 

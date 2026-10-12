@@ -9,8 +9,8 @@ import { Tag } from "./ui";
 // Pages that don't exist yet are shown, but marked "Soon" and not clickable.
 const NAV_ITEMS: { label: string; href?: string }[] = [
   { label: "Stays", href: "/search" },
-  { label: "My bookings", href: "/MyBookings" },
-  { label: "My listings", href: "/listings" },
+  { label: "My Bookings", href: "/MyBookings" },
+  { label: "My Listings", href: "/listings" },
 ];
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue";
