@@ -14,6 +14,7 @@ import type {
 import { bedSizes, sorts, tags } from './types.ts';
 
 import { searchAvailableHotels } from '../../utils/search.ts';
+import { parseDate } from '../../utils/reservation-logic.ts';
 
 // Paging stays out of SearchRequest: it picks which slice of results to show,
 // not which stays match, so the AI and filter parsing never see it.
@@ -124,8 +125,10 @@ function getDatesParams(checkIn?: string, checkOut?: string): DateParams | undef
     const cleanedCheckIn = checkIn ? checkIn.split('T')[0] : undefined;
     const cleanedCheckOut = checkOut ? checkOut.split('T')[0] : undefined;
     
-    const validCheckIn = cleanedCheckIn && !isNaN(new Date(cleanedCheckIn).getTime());
-    const validCheckOut = cleanedCheckOut && !isNaN(new Date(cleanedCheckOut).getTime());
+    // parseDate only accepts real YYYY-MM-DD dates, so 2027-02-30 is invalid
+    // instead of rolling over to March 2
+    const validCheckIn = parseDate(cleanedCheckIn) !== null;
+    const validCheckOut = parseDate(cleanedCheckOut) !== null;
 
     let checkInDate = new Date();
     let checkOutDate = new Date();
@@ -137,10 +140,10 @@ function getDatesParams(checkIn?: string, checkOut?: string): DateParams | undef
 
     // Defaults if one is omitted
     if (validCheckIn) {
-        checkInDate = new Date(cleanedCheckIn);
+        checkInDate = new Date(cleanedCheckIn as string);
     }
     if (validCheckOut) {
-        checkOutDate = new Date(cleanedCheckOut);
+        checkOutDate = new Date(cleanedCheckOut as string);
     }
     if (validCheckIn && !validCheckOut) {
         checkOutDate = new Date(checkInDate);
@@ -235,7 +238,9 @@ function getPriceParams(min?: string, max?: string): PriceParams | undefined {
 }
 
 function getRatingParams(min?: string): RatingParams | undefined {
-    const minStarRating = getPositiveNumberOrUndefined(min, 1);
+    const rating = getPositiveNumberOrUndefined(min, 1);
+    // Ratings are out of 5
+    const minStarRating = rating === undefined ? undefined : Math.min(rating, 5);
 
     if (minStarRating === undefined) {
         return undefined;
@@ -273,8 +278,12 @@ function getTagParams(tagInput?: SearchRequest['tags']): Tag[] | undefined {
 
 // Helpers
 
+// Plain decimal numbers only: rejects hex ("0x10"), exponents ("1e3") and "Infinity",
+// which Number() would otherwise accept
+const PLAIN_NUMBER_RE = /^-?\d+(\.\d+)?$/;
+
 function getPositiveNumberOrUndefined(value?: string, decimalDigits: number = 0): number | undefined {
-    if (!isNaN(Number(value)) && value?.trim() != "") {
+    if (value !== undefined && PLAIN_NUMBER_RE.test(value.trim())) {
         return Math.max(+Number(value).toFixed(decimalDigits), 0);
     }
     return undefined;

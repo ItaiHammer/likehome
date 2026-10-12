@@ -9,7 +9,8 @@ export async function POST(req: Request) {
 
     const textStream = streamText({
         model: google('gemini-3.1-flash-lite'),
-        instructions: instructions,
+        // Built per request so "today" is never stale on a long-running server
+        instructions: getInstructions(),
         messages: await convertToModelMessages(messages),
         temperature: 0,
         output: aiOutputFormat
@@ -23,7 +24,9 @@ export async function POST(req: Request) {
 const helpMessage = 'Provide a description of your planned trip, and I will find the best accommodations for it.'
 const outOfScopeMessage = `Please let me know if you require any assistance for travel accommodations. ${helpMessage}`;
 
-const instructions = 
+// A function, not a const: a module-level const is built once when the server starts,
+// so todayUTC() inside it would stay frozen at that day.
+const getInstructions = () =>
     `You are a professional travel accommodations assistant. 
 
     If the given input does not relate to travel accommodations, then return the following text:
