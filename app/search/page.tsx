@@ -39,6 +39,9 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   // SearchExperience asks Cara's /api/search/ai endpoint, then links here.
   const aiReply = params.aiReply?.trim();
   const navigationParams = toRawParams(params);
+  // New on every server render (a new search, a filter change, Search pressed again, a refresh), so
+  // the results remount and cascade in each time they're shown
+  const resultsKey = crypto.randomUUID();
   // A standard search with nothing filled in lists every hotel (the nav's "Stays" links here)
   const shouldSearch = aiPrompt ? hasStructuredSearchCriteria(params) : true;
 
@@ -177,9 +180,11 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                 />
               ) : (
                 <>
-                  <div className="grid gap-5 sm:grid-cols-2 2xl:grid-cols-3">
+                  <div key={resultsKey} className="grid gap-5 sm:grid-cols-2 2xl:grid-cols-3">
                     {data.map((stay, index) => (
-                      <SearchResultCard key={String(stay.id ?? index)} stay={stay} eager={index < 3} />
+                      <div key={String(stay.id ?? index)} className="card-in grid" style={{ "--i": Math.min(index, 8) } as React.CSSProperties}>
+                        <SearchResultCard stay={stay} eager={index < 3} />
+                      </div>
                     ))}
                   </div>
                   <Pagination currentPage={currentPage} totalPages={totalPages} params={navigationParams} />
