@@ -1,6 +1,6 @@
 import type { OtherStay } from "@/lib/bookings";
 import { getHotelsByIds } from "@/utils/hotels";
-import { todayUTC } from "@/utils/reservation-logic";
+import { guestToday } from "@/utils/guest-today";
 import { getReservationsByAccount } from "@/utils/reservations";
 
 // The guest's upcoming confirmed bookings at other hotels, which the database won't let a new or
@@ -8,7 +8,7 @@ import { getReservationsByAccount } from "@/utils/reservations";
 // refusal with "Room is not available", so the card checks these first to say what's actually wrong.
 // Best effort: on any error the APIs still refuse the overlap.
 export async function getOtherStays(userId: string, hotelId: string, excludeReservationId?: string): Promise<OtherStay[]> {
-  const today = todayUTC();
+  const today = await guestToday();
   const { data, error } = await getReservationsByAccount(userId);
   if (error || !data) return [];
 

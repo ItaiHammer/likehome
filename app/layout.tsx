@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Serif_Display, Inter } from "next/font/google";
 import { SiteFooter, SiteHeader } from "./_components/SiteChrome";
+import { TimeZoneCookie } from "./_components/TimeZoneCookie";
 import { buttonClass } from "./_components/ui";
 import "./globals.css";
 
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <a href="#content" className={`${buttonClass("primary", "sm")} fixed left-4 top-20 z-50 -translate-y-40 focus:translate-y-0 sm:left-6`}>
           Skip to content
         </a>
+        <TimeZoneCookie />
         <SiteHeader />
         {/* Wraps every page, so the skip link works without each page's <main> needing an id */}
         <div id="content" className="flex flex-1 flex-col">

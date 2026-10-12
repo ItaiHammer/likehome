@@ -75,8 +75,8 @@ export function overlapMessage(stay: OtherStay): string {
 
 export const TOO_CLOSE_TO_CHANGE = 'It’s too close to check-in to change this booking online.'
 
-// Mirrors PATCH /api/reservations/[id], which refuses once check-in day has come in UTC. That's
-// still the evening before for US guests, so the wording never names a day.
+// Mirrors PATCH /api/reservations/[id], which refuses once check-in day has come in the guest's
+// time zone (`today` here should come from todayInTimeZone / guestToday).
 // Returns why a booking can't be changed, or null if it can.
 export function changeBlocker(booking: { status: string; checkIn: string; checkOut: string }, today: string): string | null {
   if (booking.status === 'cancelled') return 'This booking was cancelled, so it can’t be changed.'
