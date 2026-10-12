@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
 import { cardErrors } from "@/lib/card";
@@ -98,6 +99,7 @@ export function StayReservation({
   const saveRequest = useRef<AbortController | null>(null);
   const lastStep = useRef(step);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const changeDatesRef = useRef<HTMLButtonElement>(null);
   // The card's height and screen position just before a step change, for the transition
   const fromBox = useRef<{ height: number; top: number } | null>(null);
   // After Reserve, the room list is locked until the guest goes back to their stay
@@ -190,23 +192,31 @@ export function StayReservation({
     setStep(next);
   }
 
+  // Opens the calendar on the payment step and moves focus into it. flushSync renders it first: after
+  // an await (a 409 from checkout) React would otherwise render it only after this returns.
+  function openDatesHere(scroll: boolean) {
+    flushSync(() => {
+      setEditingDates(true);
+      setPopover("dates");
+    });
+    const field = document.getElementById("checkIn");
+    field?.focus({ preventScroll: true });
+    // It sits near the top of a long form, far above the Confirm button
+    if (scroll) field?.scrollIntoView({ block: "center", behavior: isMotionReduced() ? "auto" : "smooth" });
+  }
+
   // A dates problem found on the payment step: fix the dates right there instead of going back
   function showDatesHere(message: string) {
     setErrors(message ? { dates: message } : {});
-    setEditingDates(true);
-    setPopover("dates");
-    // After the calendar renders: it sits near the top of a long form, above the Confirm button
-    window.setTimeout(() => {
-      const field = document.getElementById("checkIn");
-      field?.focus({ preventScroll: true });
-      field?.scrollIntoView({ block: "center", behavior: isMotionReduced() ? "auto" : "smooth" });
-    });
+    openDatesHere(true);
   }
 
-  // Closing the calendar on the payment step folds it back into the summary once the dates work
-  function setDetailsDatesOpen(open: boolean) {
-    setDatesOpen(open);
-    if (!open && nights > 0 && nights <= MAX_NIGHTS) setEditingDates(false);
+  // Done or Escape folds the payment step's calendar back into the summary once the dates work. An
+  // outside click doesn't: removing it mid-click would move the button being clicked (Confirm).
+  function foldDates() {
+    if (!(nights > 0 && nights <= MAX_NIGHTS)) return;
+    flushSync(() => setEditingDates(false));
+    changeDatesRef.current?.focus({ preventScroll: true });
   }
 
   function showStayProblem(problem: StayProblem) {
@@ -540,12 +550,10 @@ export function StayReservation({
                   <span>{nights > 0 ? `${formatShort(checkIn)} - ${formatShort(checkOut)} · ${nights} ${nights === 1 ? "night" : "nights"}` : "Pick your dates"}</span>
                   {!editingDates && (
                     <button
+                      ref={changeDatesRef}
                       type="button"
                       disabled={submitting}
-                      onClick={() => {
-                        setEditingDates(true);
-                        setPopover("dates");
-                      }}
+                      onClick={() => openDatesHere(false)}
                       className="shrink-0 font-semibold text-blue hover:text-blue-dark disabled:cursor-not-allowed disabled:text-slate"
                     >
                       Change dates
@@ -570,7 +578,8 @@ export function StayReservation({
                   }}
                   blockedOffsets={stay.blockedNights}
                   open={popover === "dates"}
-                  onOpenChange={setDetailsDatesOpen}
+                  onOpenChange={setDatesOpen}
+                  onDone={foldDates}
                   error={errors.dates}
                 />
               )}
@@ -630,11 +639,13 @@ export function StayReservation({
                 <Field id="postalCode" name="postalCode" label="Billing postal code" autoComplete="postal-code" error={errors.postalCode} onChange={() => clear("postalCode")} />
               </div>
 
-              <p className="text-sm text-slate">
-                {freeCancel
-                  ? `Free cancellation until ${formatDate(cancelBy)}. After that, the first night is non-refundable.`
-                  : "This booking can’t be cancelled for free. The first night is non-refundable."}
-              </p>
+              {checkIn && (
+                <p className="text-sm text-slate">
+                  {freeCancel
+                    ? `Free cancellation until ${formatDate(cancelBy)}. After that, the first night is non-refundable.`
+                    : "This booking can’t be cancelled for free. The first night is non-refundable."}
+                </p>
+              )}
               {errors.form && (
                 <p role="alert" className="text-sm text-danger">
                   {errors.form}

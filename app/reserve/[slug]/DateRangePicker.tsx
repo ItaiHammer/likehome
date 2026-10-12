@@ -18,6 +18,7 @@ export function DateRangePicker({
   blockedOffsets,
   open,
   onOpenChange,
+  onDone,
   error,
 }: {
   checkIn: string;
@@ -27,6 +28,8 @@ export function DateRangePicker({
   blockedOffsets: number[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** After Done or Escape closes the calendar (not an outside click, which may be mid-click on something else) */
+  onDone?: () => void;
   error?: string;
 }) {
   // Which field the calendar is filling. Each field opens it for itself.
@@ -54,6 +57,7 @@ export function DateRangePicker({
       if (e.key !== "Escape") return;
       if (panelRef.current?.contains(document.activeElement)) (field === "out" ? outRef : inRef).current?.focus({ preventScroll: true });
       onOpenChange(false);
+      onDone?.();
     };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
@@ -61,7 +65,7 @@ export function DateRangePicker({
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, onOpenChange, field]);
+  }, [open, onOpenChange, onDone, field]);
 
   function openField(f: RangeField) {
     if (open && field === f) {
@@ -144,6 +148,7 @@ export function DateRangePicker({
             onDone={() => {
               restoreFocus();
               onOpenChange(false);
+              onDone?.();
             }}
             blockedOffsets={blockedOffsets}
           />
