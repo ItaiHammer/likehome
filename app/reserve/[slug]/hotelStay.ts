@@ -1,7 +1,7 @@
 import { getHotel } from "@/utils/hotels";
 import { getRoomsByHotel } from "@/utils/rooms";
-import type { Offer, Room, Stay } from "../../_data/stays";
-import { propertyAmenities, roomAmenities, travelerTypes } from "../../search/types";
+import { roomAmenityList, stayOffers } from "@/lib/stay-filters";
+import type { Room, Stay } from "../../_data/stays";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -33,14 +33,6 @@ function bedLabel(count: number | null, size: string | null) {
   return `${n} ${size.toLowerCase().replace("xl", "XL")} bed${n === 1 ? "" : "s"}`;
 }
 
-// Search matches a tag on the hotel or on any of its rooms (search_hotels), so the stay lists the
-// same: every filter tag the hotel or a room has, in the filters' order and with their names.
-function hasTag(tag: string, hotelTags: string[], rooms: RoomRow[]): Offer | null {
-  if (hotelTags.includes(tag)) return { label: tag };
-  const withTag = rooms.filter((r) => r.tags?.includes(tag)).length;
-  return withTag === 0 ? null : { label: tag, someRooms: withTag < rooms.length };
-}
-
 /** A database hotel and its rooms, shaped like the sample stays so the same page can show it. */
 export async function getHotelStay(id: string): Promise<Stay | null> {
   // Anything that isn't a hotel id would only make the database query fail
@@ -56,9 +48,7 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
       id: r.id,
       name: r.room_type,
       // The room's own amenities, the same tags search filters on
-      description: [bedLabel(r.num_beds, r.bed_size), ...(r.tags ?? []).filter((t) => (roomAmenities as readonly string[]).includes(t))]
-        .filter(Boolean)
-        .join(" · "),
+      description: [bedLabel(r.num_beds, r.bed_size), ...roomAmenityList(r.tags)].filter(Boolean).join(" · "),
       sleeps: r.capacity ?? 2,
       nightly: Number(r.price_per_night),
     }))
@@ -83,7 +73,5 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
     rooms,
     bookable: true,
   };
-  const offers = [...propertyAmenities, ...roomAmenities].map((t) => hasTag(t, tags, rows)).filter((o): o is Offer => o !== null);
-  const goodFor = travelerTypes.filter((t) => hasTag(t, tags, rows));
-  return { ...stay, offers, goodFor };
+  return { ...stay, ...stayOffers(tags, rows.map((r) => r.tags)) };
 }
