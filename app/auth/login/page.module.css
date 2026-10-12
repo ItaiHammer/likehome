@@ -1,0 +1,206 @@
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  padding: 54px clamp(18px, 10vw, 144px);
+  background: color-mix(in srgb, var(--blue) 58%, var(--surface));
+}
+
+.page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at 25% 20%,
+      rgb(255 255 255 / 0.2),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 80% 75%,
+      color-mix(in srgb, var(--blue-dark) 35%, transparent),
+      transparent 35%
+    );
+  pointer-events: none;
+}
+
+.authCard {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 400px) minmax(0, 344px);
+  gap: 24px;
+  width: min(800px, 100%);
+  min-height: 486px;
+  padding: 16px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 16px 24px;
+}
+
+.title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-dm-serif);
+  font-weight: 400;
+  font-size: 56px;
+  line-height: 64px;
+}
+
+.subtitle {
+  margin: 8px 0 32px;
+  color: var(--slate);
+  font-size: 20px;
+  line-height: 28px;
+}
+
+.providerList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.providerButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: 52px;
+  padding: 12px 16px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: var(--surface);
+  font-family: var(--font-inter);
+  font-size: 16px;
+  font-weight: 700;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.providerButton:hover:not(:disabled) {
+  border-color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 6%, var(--surface));
+  transform: translateY(-1px);
+}
+
+.providerButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.providerButton:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--blue) 30%, transparent);
+  outline-offset: 2px;
+}
+
+.providerButton:disabled {
+  cursor: not-allowed;
+  color: var(--slate);
+  background: var(--disabled);
+  border-color: var(--edge);
+}
+
+.providerButton:disabled .icon {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  flex: 0 0 24px;
+}
+
+.icon img {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--slate);
+  background: var(--disabled);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+.artwork {
+  min-height: 454px;
+  overflow: hidden;
+  border-radius: 24px;
+}
+
+.artwork img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.brandIcon {
+  position: fixed;
+  z-index: 2;
+  bottom: 39px;
+  left: 47px;
+  width: 38px;
+  height: 44px;
+  object-fit: contain;
+}
+
+@media (max-width: 800px) {
+  .page {
+    align-items: start;
+    padding: 28px 18px 80px;
+  }
+
+  .authCard {
+    grid-template-columns: 1fr;
+    width: min(100%, 500px);
+    min-height: auto;
+    padding: 14px;
+    gap: 0;
+  }
+
+  .artwork {
+    order: -1;
+    min-height: 260px;
+    border-radius: 18px;
+  }
+
+  .content {
+    padding: 40px 14px 34px;
+  }
+
+  .title {
+    font-size: 46px;
+    line-height: 54px;
+  }
+
+  .brandIcon {
+    bottom: 20px;
+    left: 24px;
+    width: 34px;
+    height: 34px;
+  }
+}
