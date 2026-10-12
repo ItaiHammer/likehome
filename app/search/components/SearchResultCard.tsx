@@ -56,14 +56,16 @@ function asNumber(value: HotelSearchResult["min_price"]) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function SearchResultCard({ stay, eager = false }: { stay: HotelSearchResult; eager?: boolean }) {
+// `search` is the current search's query string: the stay page opens on a room that matches it, and its
+// Back to stays link returns here
+export function SearchResultCard({ stay, eager = false, search = "" }: { stay: HotelSearchResult; eager?: boolean; search?: string }) {
   const photo = stay.photo_urls?.find(Boolean);
   const price = asNumber(stay.min_price);
   const capacity = asNumber(stay.max_capacity);
   const availableRooms = asNumber(stay.available_rooms);
   const rating = asNumber(stay.rating);
   // The local sample results aren't real hotels, so they have no stay page
-  const href = stay.id && !stay.mock_variant ? `/reserve/${stay.id}` : null;
+  const href = stay.id && !stay.mock_variant ? `/reserve/${stay.id}${search ? `?${search}` : ""}` : null;
 
   const media = photo ? (
     // A plain <img> so photos below the fold can lazy-load: next.config doesn't list image hosts yet.

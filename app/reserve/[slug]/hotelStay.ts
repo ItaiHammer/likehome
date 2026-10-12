@@ -51,6 +51,9 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
       description: [bedLabel(r.num_beds, r.bed_size), ...roomAmenityList(r.tags)].filter(Boolean).join(" · "),
       sleeps: r.capacity ?? 2,
       nightly: Number(r.price_per_night),
+      beds: r.num_beds ?? 1,
+      bedSize: r.bed_size,
+      tags: r.tags ?? [],
     }))
     .sort((a, b) => a.nightly - b.nightly);
 

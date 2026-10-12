@@ -1,8 +1,58 @@
 // No Supabase / Next.js imports here so it can be unit tested with `npm test`.
-// The stay page lists amenities by search_hotels' rule, a tag on the hotel or on any of its rooms, so
-// every stay a filter finds shows that amenity.
-import { propertyAmenities, roomAmenities, travelerTypes } from '../app/search/types.ts'
+// The stay page applies the search filters the way search_hotels does, so a stay found by a filter
+// always shows what matched: a room passes when it fits the guests, price, beds and bed size, and
+// every chosen tag is on the hotel or on that same room.
+import { bedSizes, propertyAmenities, roomAmenities, tags as filterTags, travelerTypes } from '../app/search/types.ts'
 import type { Offer } from '../app/_data/stays.ts'
+
+// The search's own keys, carried from a search result to the stay page and back to the same search
+const SEARCH_KEYS = ['where', 'checkIn', 'checkOut', 'adults', 'children', 'minPrice', 'maxPrice', 'minRating', 'numBeds', 'bedSize', 'tags', 'sort', 'page']
+
+type Params = Record<string, string | string[] | undefined>
+
+export function searchQuery(params: Params): string {
+  const query = new URLSearchParams()
+  for (const key of SEARCH_KEYS) {
+    for (const value of [params[key] ?? []].flat()) if (value) query.append(key, value)
+  }
+  return query.toString()
+}
+
+export type RoomFilters = { guests: number; minPrice?: number; maxPrice?: number; numBeds?: number; bedSize?: string; tags: string[] }
+
+type FilterableRoom = { nightly: number; sleeps: number; soldOut?: boolean; beds?: number; bedSize?: string | null; tags?: string[] }
+
+// Values the search itself would ignore (a typo'd price, an unknown tag) don't narrow the rooms either
+export function readRoomFilters(params: Params, guests: number): RoomFilters {
+  const one = (key: string) => (typeof params[key] === 'string' ? (params[key] as string) : undefined)
+  const amount = (key: string) => {
+    const v = one(key)?.trim()
+    return v && /^\d+(\.\d+)?$/.test(v) ? Number(v) : undefined
+  }
+  const beds = one('numBeds')
+  const bedSize = one('bedSize')
+  return {
+    guests,
+    minPrice: amount('minPrice'),
+    maxPrice: amount('maxPrice'),
+    numBeds: beds && /^[1-9]\d*$/.test(beds) ? Number(beds) : undefined,
+    bedSize: (bedSizes as readonly string[]).includes(bedSize ?? '') ? bedSize : undefined,
+    tags: [params.tags ?? []].flat().filter((t) => (filterTags as readonly string[]).includes(t)),
+  }
+}
+
+/** The cheapest open room that passes the filters, or null when none does */
+export function matchingRoom<R extends FilterableRoom>(rooms: R[], hotelTags: string[], f: RoomFilters): R | null {
+  const passes = (r: R) =>
+    !r.soldOut &&
+    r.sleeps >= f.guests &&
+    (f.minPrice === undefined || r.nightly >= f.minPrice) &&
+    (f.maxPrice === undefined || r.nightly <= f.maxPrice) &&
+    (f.numBeds === undefined || (r.beds ?? 1) >= f.numBeds) &&
+    (f.bedSize === undefined || r.bedSize === f.bedSize) &&
+    f.tags.every((t) => hotelTags.includes(t) || !!r.tags?.includes(t))
+  return [...rooms].sort((a, b) => a.nightly - b.nightly).find(passes) ?? null
+}
 
 /** A room's own amenities, in the filters' order */
 export function roomAmenityList(tags: string[] | null | undefined): string[] {

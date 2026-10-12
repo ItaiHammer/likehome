@@ -58,6 +58,7 @@ export function StayReservation({
   account,
   otherStays = [],
   initial = {},
+  search = "",
 }: {
   stay: Stay;
   /** The signed-in guest, or null when signed out (booking needs an account) */
@@ -65,6 +66,8 @@ export function StayReservation({
   /** The guest's bookings at other hotels, which a new stay can't overlap */
   otherStays?: OtherStay[];
   initial?: StayChoices;
+  /** The search this stay was opened from (its query string), for Back to stays */
+  search?: string;
 }) {
   const router = useRouter();
   const [checkIn, setCheckIn] = useState(initial.checkIn ?? "");
@@ -217,9 +220,15 @@ export function StayReservation({
     document.getElementById("guests")?.focus();
   }
 
-  // Sign-in, then straight back to this stay with the same room, dates and guests picked
+  // Sign-in, then straight back to this stay with the same room, dates and guests picked. The search
+  // rides along too, so Back to stays still returns to it.
   function signInHref() {
-    const back = new URLSearchParams({ room: room.id, adults: String(adults), children: String(children) });
+    const back = new URLSearchParams(search);
+    back.set("room", room.id);
+    back.set("adults", String(adults));
+    back.set("children", String(children));
+    back.delete("checkIn");
+    back.delete("checkOut");
     if (checkIn && checkOut) {
       back.set("checkIn", checkIn);
       back.set("checkOut", checkOut);
@@ -377,7 +386,7 @@ export function StayReservation({
   return (
     <>
       {/* Ink, not blue, even on hover: blue text on the sky strip is too faint to read */}
-      <Link href="/search" className="group inline-flex items-center gap-1 text-base font-semibold text-ink">
+      <Link href={search ? `/search?${search}` : "/search"} className="group inline-flex items-center gap-1 text-base font-semibold text-ink">
         <span aria-hidden className="transition-transform duration-200 group-hover:-translate-x-1">←</span> Back to stays
       </Link>
 

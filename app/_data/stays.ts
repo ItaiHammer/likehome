@@ -10,6 +10,10 @@ export type Room = {
   sleeps: number;
   nightly: number;
   soldOut?: boolean;
+  /** Database rooms only: what the search filters check per room */
+  beds?: number;
+  bedSize?: string | null;
+  tags?: string[];
 };
 
 /** Something a stay has, named like the search filter it matches */

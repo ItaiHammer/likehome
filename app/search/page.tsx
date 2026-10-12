@@ -6,6 +6,7 @@ import { Button } from "../_components/ui";
 import { search } from "./search";
 import type { SearchRequest } from "./types";
 import { Pagination } from "./components/Pagination";
+import { searchQuery } from "@/lib/stay-filters";
 import { SearchResultCard, type HotelSearchResult } from "./components/SearchResultCard";
 import { SortSelect } from "./components/SortSelect";
 import { FilterSheetButton, FilterSidebar, type FilterValues } from "./components/FilterSidebar";
@@ -42,6 +43,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   // SearchExperience asks Cara's /api/search/ai endpoint, then links here.
   const aiReply = params.aiReply?.trim();
   const navigationParams = toRawParams(params);
+  const stayLinkSearch = searchQuery(navigationParams);
   // New on every server render (a new search, a filter change, Search pressed again, a refresh), so
   // the results remount and cascade in each time they're shown
   const resultsKey = crypto.randomUUID();
@@ -191,7 +193,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                   <div key={resultsKey} className="grid gap-5 sm:grid-cols-2 2xl:grid-cols-3">
                     {data.map((stay, index) => (
                       <div key={String(stay.id ?? index)} className="card-in grid" style={{ "--i": Math.min(index, 8) } as React.CSSProperties}>
-                        <SearchResultCard stay={stay} eager={index < 3} />
+                        <SearchResultCard stay={stay} eager={index < 3} search={stayLinkSearch} />
                       </div>
                     ))}
                   </div>
