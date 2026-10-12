@@ -32,3 +32,16 @@ test('rating is capped at 5', async () => {
     assert.deepEqual((await search({ minRating: '10' })).params.rating, { minStars: 5 });
     assert.deepEqual((await search({ minRating: '4.5' })).params.rating, { minStars: 4.5 });
 });
+
+// 6pm Pacific on Oct 10 is already Oct 11 in UTC
+test('same-day check-in at 6pm Pacific stays on the guest\'s today when tz is sent', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-11T01:00:00Z') });
+    const { params } = await search({ checkIn: '2026-10-10', checkOut: '2026-10-12', tz: 'America/Los_Angeles' });
+    assert.deepEqual(params.dates, { checkIn: '2026-10-10', checkOut: '2026-10-12' });
+});
+
+test('without tz it falls back to UTC (check-in moves to Oct 11)', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-11T01:00:00Z') });
+    const { params } = await search({ checkIn: '2026-10-10', checkOut: '2026-10-12' });
+    assert.deepEqual(params.dates, { checkIn: '2026-10-11', checkOut: '2026-10-12' });
+});

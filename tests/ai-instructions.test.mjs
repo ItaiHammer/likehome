@@ -5,6 +5,12 @@ import { readFile } from 'node:fs/promises';
 
 test('AI instructions are not a module-level constant', async () => {
     const source = await readFile(new URL('../app/api/search/ai/route.ts', import.meta.url), 'utf8');
-    assert.match(source, /instructions:\s*getInstructions\(\)/);
+    assert.match(source, /instructions:\s*getInstructions\(todayInTimeZone\(tz\)\)/);
     assert.doesNotMatch(source, /^const instructions\s*=/m);
+});
+
+test('AI "today" comes from the guest time zone, not UTC', async () => {
+    const source = await readFile(new URL('../app/api/search/ai/route.ts', import.meta.url), 'utf8');
+    assert.match(source, /const \{ messages, tz \} = await req\.json\(\)/);
+    assert.doesNotMatch(source, /todayUTC|in UTC/);
 });

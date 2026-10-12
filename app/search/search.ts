@@ -14,7 +14,7 @@ import type {
 import { bedSizes, sorts, tags } from './types.ts';
 
 import { searchAvailableHotels } from '../../utils/search.ts';
-import { parseDate } from '../../utils/reservation-logic.ts';
+import { parseDate, todayInTimeZone } from '../../utils/reservation-logic.ts';
 
 // Paging stays out of SearchRequest: it picks which slice of results to show,
 // not which stays match, so the AI and filter parsing never see it.
@@ -77,7 +77,7 @@ function getSearchParams(searchParams: SearchRequest): PropertyFilter {
     return Object.fromEntries(
         Object.entries({
             location: getLocationParams(searchParams.where),
-            dates: getDatesParams(searchParams.checkIn, searchParams.checkOut),
+            dates: getDatesParams(searchParams.checkIn, searchParams.checkOut, searchParams.tz),
             beds: getBedsParams(searchParams.numBeds, searchParams.bedSize),
             guests: getGuestsParams(searchParams.adults, searchParams.children),
             price: getPriceParams(searchParams.minPrice, searchParams.maxPrice),
@@ -121,7 +121,7 @@ function getLocationParams(location?: string): LocationParams | undefined {
     }
 }
 
-function getDatesParams(checkIn?: string, checkOut?: string): DateParams | undefined {
+function getDatesParams(checkIn?: string, checkOut?: string, tz?: string): DateParams | undefined {
     const cleanedCheckIn = checkIn ? checkIn.split('T')[0] : undefined;
     const cleanedCheckOut = checkOut ? checkOut.split('T')[0] : undefined;
     
@@ -154,11 +154,13 @@ function getDatesParams(checkIn?: string, checkOut?: string): DateParams | undef
         checkInDate.setUTCDate(checkOutDate.getUTCDate() - 1);
     }
 
-    const nowUTC = new Date(new Date().toISOString().split('T')[0]);
+    // "Today" in the guest's calendar (tz comes from the search form), not UTC's:
+    // at 6pm Pacific it's already tomorrow in UTC
+    const today = new Date(todayInTimeZone(tz));
 
     // Enforce checkIn >= today
-    if (checkInDate < nowUTC) {
-        checkInDate = new Date(nowUTC);
+    if (checkInDate < today) {
+        checkInDate = new Date(today);
     }
 
     // Enforce checkOut > checkIn

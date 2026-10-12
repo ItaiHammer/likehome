@@ -5,6 +5,7 @@ import { DefaultChatTransport } from "ai";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState } from "react";
 import { readAiAnswer } from "./aiSearch";
+import { browserTimeZone } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
 import { DatesField } from "./DatesField";
 import { DestinationInput } from "./DestinationInput";
@@ -71,7 +72,10 @@ export function SearchExperience({
   // The AI box rolls through example requests while it's empty
   const [aiText, setAiText] = useState(initialValues.aiPrompt ?? "");
   const [aiFocused, setAiFocused] = useState(false);
-  const [transport] = useState(() => new DefaultChatTransport({ api: "/api/search/ai" }));
+  // tz goes with every AI request so the assistant's "today" is the guest's today
+  const [transport] = useState(
+    () => new DefaultChatTransport({ api: "/api/search/ai", body: () => ({ tz: browserTimeZone() }) }),
+  );
   const { sendMessage, setMessages, status, stop } = useChat({
     transport,
     onFinish: ({ message, isError, isAbort, isDisconnect }) => {
@@ -79,7 +83,12 @@ export function SearchExperience({
       const text = message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
       const answer = readAiAnswer(text, promptRef.current);
       if (!answer) setAiError("Sorry, that didn't come through. Try asking again.");
-      else if (answer.query) router.push(`/search?${answer.query}`);
+      else if (answer.query) {
+        // Same as the standard search bar: send the time zone so date checks use the guest's today
+        const tz = browserTimeZone();
+        if (tz) answer.query.set("tz", tz);
+        router.push(`/search?${answer.query}`);
+      }
       else setAiNote(answer.reply || "Tell us where you're going, when, and who's coming.");
     },
     onError: () => setAiError("AI search isn't available right now. Try the standard search instead."),
