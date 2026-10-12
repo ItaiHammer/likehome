@@ -22,12 +22,14 @@ const barColumn = "xl:mx-[84px]";
 
 
 function SparklesIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-      <path d="M12 3l1.1 3.2L16 7.4l-2.9 1.2L12 12l-1.1-3.4L8 7.4l2.9-1.2L12 3z" strokeLinejoin="round" />
-      <path d="M18.2 12.2l.8 2.1 2 .8-2 .8-.8 2.1-.8-2.1-2-.8 2-.8.8-2.1zM5.4 13.5l.7 1.8 1.7.7-1.7.7-.7 1.8-.7-1.8-1.7-.7 1.7-.7.7-1.8z" strokeLinejoin="round" />
-    </svg>
-  );
+    return (
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+            <path d="M12 3l1.1 3.2L16 7.4l-2.9 1.2L12 12l-1.1-3.4L8 7.4l2.9-1.2L12 3z" strokeLinejoin="round"/>
+            <path
+                d="M18.2 12.2l.8 2.1 2 .8-2 .8-.8 2.1-.8-2.1-2-.8 2-.8.8-2.1zM5.4 13.5l.7 1.8 1.7.7-1.7.7-.7 1.8-.7-1.8-1.7-.7 1.7-.7.7-1.8z"
+                strokeLinejoin="round"/>
+        </svg>
+    );
 }
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<RawParams> }): Promise<Metadata> {
@@ -44,44 +46,45 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const aiReply = params.aiReply?.trim();
   const navigationParams = toRawParams(params);
   const stayLinkSearch = searchQuery(navigationParams);
+  const validationError = getFrontendValidationError(params);
   // New on every server render (a new search, a filter change, Search pressed again, a refresh), so
   // the results remount and cascade in each time they're shown
   const resultsKey = crypto.randomUUID();
   // A standard search with nothing filled in lists every hotel (the nav's "Stays" links here)
   const shouldSearch = aiPrompt ? hasStructuredSearchCriteria(params) : true;
 
-  let data: HotelSearchResult[] = [];
-  let total = 0;
-  let searchError = "";
-  let usingMockData = false;
+    let data: HotelSearchResult[] = [];
+    let total = 0;
+    let searchError = "";
+    let usingMockData = false;
 
-  if (shouldSearch) {
-    try {
-      const { results } = await search(toSearchRequest(params), {
-        page: positiveInt(params.page, 1),
-        pageSize: PAGE_SIZE,
-      });
-      data = Array.isArray(results.data) ? (results.data as HotelSearchResult[]) : [];
-      total = Number(results.total ?? 0);
-      if (results.error) {
-        console.error("Search failed", results.error);
-        searchError = "We couldn't load stays right now. Please try again.";
-      }
-    } catch (error) {
-      console.error("Search failed", error);
-      searchError = "We couldn't load stays right now. Please try again.";
-    }
+    if (shouldSearch && !validationError) {
+        try {
+            const {results} = await search(toSearchRequest(params), {
+                page: positiveInt(params.page, 1),
+                pageSize: PAGE_SIZE,
+            });
+            data = Array.isArray(results.data) ? (results.data as HotelSearchResult[]) : [];
+            total = Number(results.total ?? 0);
+            if (results.error) {
+                console.error("Search failed", results.error);
+                searchError = "We couldn't load stays right now. Please try again.";
+            }
+        } catch (error) {
+            console.error("Search failed", error);
+            searchError = "We couldn't load stays right now. Please try again.";
+        }
 
-    // TODO(INTEGRATION): Remove this local-only fallback once the shared Supabase
-    // project has enough seeded hotel/room data for reliable frontend testing.
-    // It never runs in production and never hides a real search error.
-    if (process.env.NODE_ENV === "development" && !searchError && data.length === 0) {
-      const mock = getMockSearchResults(params);
-      data = mock.data;
-      total = mock.total;
-      usingMockData = true;
+        // TODO(INTEGRATION): Remove this local-only fallback once the shared Supabase
+        // project has enough seeded hotel/room data for reliable frontend testing.
+        // It never runs in production and never hides a real search error.
+        if (process.env.NODE_ENV === "development" && !searchError && data.length === 0) {
+            const mock = getMockSearchResults(params);
+            data = mock.data;
+            total = mock.total;
+            usingMockData = true;
+        }
     }
-  }
 
   const currentPage = positiveInt(params.page, 1);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -292,70 +295,131 @@ function toSearchRequest(params: SearchParams): SearchRequest {
 
 // Zero or blank values (e.g. an AI answer with minPrice "0") aren't filters
 function getActiveFilterCount(params: SearchParams) {
-  return (
-    Number(hasPositiveNumber(params.minPrice) || hasPositiveNumber(params.maxPrice)) +
-    Number(hasPositiveNumber(params.minRating)) +
-    Number(hasPositiveNumber(params.numBeds)) +
-    Number(Boolean(params.bedSize?.trim())) +
-    params.tags.length
-  );
+    return (
+        Number(hasPositiveNumber(params.minPrice) || hasPositiveNumber(params.maxPrice)) +
+        Number(hasPositiveNumber(params.minRating)) +
+        Number(hasPositiveNumber(params.numBeds)) +
+        Number(Boolean(params.bedSize?.trim())) +
+        params.tags.length
+    );
 }
 
 function hasPositiveNumber(value?: string) {
-  if (!value) return false;
-  const number = Number(value);
-  return Number.isFinite(number) && number > 0;
+    if (!value) return false;
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0;
 }
 
 // Anything an AI answer can set
 function hasStructuredSearchCriteria(params: SearchParams) {
-  return Boolean(
-    params.where ||
-      params.checkIn ||
-      params.checkOut ||
-      params.adults ||
-      params.children ||
-      params.minPrice ||
-      params.maxPrice ||
-      params.minRating ||
-      params.numBeds ||
-      params.bedSize ||
-      params.tags.length,
-  );
+    return Boolean(
+        params.where ||
+        params.checkIn ||
+        params.checkOut ||
+        params.adults ||
+        params.children ||
+        params.minPrice ||
+        params.maxPrice ||
+        params.minRating ||
+        params.numBeds ||
+        params.bedSize ||
+        params.tags.length,
+    );
 }
 
-function AiReplyCard({ reply, params }: { reply: string; params: SearchParams }) {
-  const chips = buildCriteriaChips(params);
-  return (
-    <section className="mb-7 rounded-2xl border border-edge bg-surface p-5 shadow-[0_16px_38px_-34px_rgba(7,13,47,0.35)] sm:p-6">
-      <div className="flex gap-3.5">
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue/20 bg-blue text-on-blue">
-          <SparklesIcon />
+// A standard search counts once something differs from the bar's defaults (2 adults, no children)
+function hasSearchCriteria(params: SearchParams) {
+    return Boolean(
+        params.where ||
+        params.checkIn ||
+        params.checkOut ||
+        params.minPrice ||
+        params.maxPrice ||
+        params.minRating ||
+        params.numBeds ||
+        params.bedSize ||
+        params.tags.length ||
+        (params.adults && params.adults !== "2") ||
+        (params.children && params.children !== "0"),
+    );
+}
+
+function getFrontendValidationError(params: SearchParams) {
+    const minPrice = params.minPrice?.trim()
+        ? Number(params.minPrice)
+        : undefined;
+
+    const maxPrice = params.maxPrice?.trim()
+        ? Number(params.maxPrice)
+        : undefined;
+
+    if (
+        minPrice !== undefined &&
+        maxPrice !== undefined &&
+        Number.isFinite(minPrice) &&
+        Number.isFinite(maxPrice) &&
+        minPrice > maxPrice
+    ) {
+        return "Minimum price can't be greater than maximum price.";
+    }
+
+    const hasCheckIn = Boolean(params.checkIn?.trim());
+    const hasCheckOut = Boolean(params.checkOut?.trim());
+
+    if (hasCheckIn !== hasCheckOut) {
+        return "Please select both a check-in and check-out date.";
+    }
+
+    if (params.checkIn && params.checkOut) {
+        const today = new Date().toISOString().slice(0, 10);
+
+        if (params.checkIn < today || params.checkOut < today) {
+            return "Please select dates that are today or later.";
+        }
+
+        if (params.checkIn >= params.checkOut) {
+            return "Check-out must be after check-in.";
+        }
+    }
+
+    return "";
+}
+
+function AiReplyCard({reply, params}: { reply: string; params: SearchParams }) {
+    const chips = buildCriteriaChips(params);
+    return (
+        <section
+            className="mb-7 rounded-2xl border border-edge bg-surface p-5 shadow-[0_16px_38px_-34px_rgba(7,13,47,0.35)] sm:p-6">
+            <div className="flex gap-3.5">
+        <span
+            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue/20 bg-blue text-on-blue">
+          <SparklesIcon/>
         </span>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-blue-dark">LikeHome</p>
-          <p className="mt-1 text-[15px] leading-6 text-ink">{reply}</p>
-          {chips.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {chips.map((chip) => (
-                <span key={chip} className="rounded-full border border-blue/20 bg-blue/10 px-2.5 py-1 text-xs font-medium text-blue-dark">
+                <div className="min-w-0">
+                    <p className="text-sm font-semibold text-blue-dark">LikeHome</p>
+                    <p className="mt-1 text-[15px] leading-6 text-ink">{reply}</p>
+                    {chips.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {chips.map((chip) => (
+                                <span key={chip}
+                                      className="rounded-full border border-blue/20 bg-blue/10 px-2.5 py-1 text-xs font-medium text-blue-dark">
                   {chip}
                 </span>
-              ))}
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
+        </section>
+    );
 }
 
 function searchKey(params: RawParams) {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    for (const item of [value ?? []].flat()) query.append(key, item);
-  }
-  return query.toString();
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+        for (const item of [value ?? []].flat()) query.append(key, item);
+    }
+    return query.toString();
 }
 
 function buildCriteriaChips(params: SearchParams) {
@@ -400,14 +464,17 @@ function clearFiltersHref(params: SearchParams) {
 }
 
 function MockDataNotice() {
-  return (
-    <div className="mb-5 flex items-start gap-3 rounded-xl border border-edge bg-surface/75 px-4 py-3 text-sm text-slate">
-      <span className="mt-0.5 inline-flex shrink-0 rounded-full bg-blue/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] text-blue-dark">
+    return (
+        <div
+            className="mb-5 flex items-start gap-3 rounded-xl border border-edge bg-surface/75 px-4 py-3 text-sm text-slate">
+      <span
+          className="mt-0.5 inline-flex shrink-0 rounded-full bg-blue/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] text-blue-dark">
         Demo data
       </span>
-      <p>Temporary local listings are filling empty database results so you can test cards, filters, sorting, and pagination.</p>
-    </div>
-  );
+            <p>Temporary local listings are filling empty database results so you can test cards, filters, sorting, and
+                pagination.</p>
+        </div>
+    );
 }
 
 function StatePanel({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
@@ -421,21 +488,21 @@ function StatePanel({ title, body, action }: { title: string; body: string; acti
 }
 
 function first(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
+    return Array.isArray(value) ? value[0] : value;
 }
 
 function values(value: string | string[] | undefined) {
-  if (!value) return [];
-  return Array.isArray(value) ? value : [value];
+    if (!value) return [];
+    return Array.isArray(value) ? value : [value];
 }
 
 function positiveInt(value: string | undefined, fallback: number) {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+    const parsed = Number.parseInt(value ?? "", 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function nonNegativeInt(value: string | undefined, fallback: number) {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+    const parsed = Number.parseInt(value ?? "", 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
