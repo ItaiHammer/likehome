@@ -1,5 +1,6 @@
 "use client";
 
+import { SkyBackground } from "@/app/_components/SkyBackground";
 import { signInWithGoogle } from "@/components/sign-in-google-button";
 import styles from "./page.module.css";
 
@@ -13,6 +14,10 @@ const providers = [
 export default function SignInPage() {
   return (
     <main className={styles.page}>
+      <div className={styles.sky}>
+        <SkyBackground />
+      </div>
+
       <section className={styles.authCard}>
         <div className={styles.content}>
           <h1 className={styles.title}>Come on in.</h1>
