@@ -70,7 +70,7 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
         </h1>
         <p className="mt-3 text-lg leading-7 text-ink">
           View or edit your reservation in{" "}
-          <Link href={listHref} className="font-semibold text-blue underline underline-offset-4 hover:text-blue-dark">
+          <Link href={listHref} className="font-semibold text-ink underline decoration-blue underline-offset-4 hover:decoration-2">
             My Bookings
           </Link>
         </p>
