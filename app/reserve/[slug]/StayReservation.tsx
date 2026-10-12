@@ -13,6 +13,7 @@ import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Card, Field, Stars } from "../../_components/ui";
 import { HotelPhoto } from "../../MyBookings/_components/HotelPhoto";
 import { TAX_RATE, type Stay } from "../../_data/stays";
+import { checkoutRequest } from "./checkoutRequest";
 import { DateRangePicker } from "./DateRangePicker";
 import { GuestsField, guestLabel } from "./GuestsField";
 import { PhotoGallery } from "./PhotoGallery";
@@ -36,7 +37,6 @@ type Booking = {
   /** false for the sample stays, which can't be saved */
   saved: boolean;
 };
-type Card = { number: string; expMonth: number; expYear: number; cvc: string; name: string };
 
 /** Room, dates and guests to start the card with, e.g. when coming back from sign-in */
 export type StayChoices = { checkIn?: string; checkOut?: string; adults?: number; children?: number; roomId?: string };
@@ -316,16 +316,24 @@ export function StayReservation({
       return;
     }
 
-    const [expMonth, expYear] = text("expiry").split("/").map(Number);
-    const card = { number: text("cardNumber").replace(/[\s-]/g, ""), expMonth, expYear: 2000 + expYear, cvc: text("cvc"), name: text("cardName") };
+    const payload = checkoutRequest({
+      roomId: room.id,
+      checkIn,
+      checkOut,
+      guests: adults + children,
+      cardNumber: text("cardNumber"),
+      expiry: text("expiry"),
+      cvc: text("cvc"),
+      cardName: text("cardName"),
+    });
     saveRequest.current?.abort();
     const request = new AbortController();
     saveRequest.current = request;
-    void saveBooking(snapshot, card, request.signal);
+    void saveBooking(snapshot, payload, request.signal);
   }
 
   // A mock charge (nothing is billed), then the booking and its payment are saved
-  async function saveBooking(snapshot: Omit<Booking, "confirmation" | "saved">, card: Card, signal: AbortSignal) {
+  async function saveBooking(snapshot: Omit<Booking, "confirmation" | "saved">, payload: ReturnType<typeof checkoutRequest>, signal: AbortSignal) {
     const fail = (message: string, signIn = false) => {
       setSubmitting(false);
       setErrors(signIn ? { form: message, signIn: "yes" } : { form: message });
@@ -334,13 +342,7 @@ export function StayReservation({
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          room_id: room.id,
-          check_in: snapshot.checkIn,
-          check_out: snapshot.checkOut,
-          guests: snapshot.adults + snapshot.children,
-          payment: { card_number: card.number, exp_month: card.expMonth, exp_year: card.expYear, cvc: card.cvc, name_on_card: card.name },
-        }),
+        body: JSON.stringify(payload),
         signal,
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; reservation?: { id?: string; total_price?: number | string } };
