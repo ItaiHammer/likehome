@@ -296,6 +296,22 @@ export function PopularDestinations() {
   const arrowInactive =
     "aria-disabled:cursor-not-allowed aria-disabled:border-disabled aria-disabled:bg-disabled aria-disabled:text-slate aria-disabled:hover:border-disabled";
 
+  // Rendered twice: beside the tabs from sm up, either side of the dots on phones
+  const arrow = (dir: 1 | -1, className = "") => (
+    <button
+      type="button"
+      onClick={() => page(dir)}
+      aria-disabled={dir < 0 ? edges.start : edges.end}
+      aria-label={dir < 0 ? "Previous destinations" : "Next destinations"}
+      aria-controls={`${baseId}-track`}
+      className={`${iconButton} ${arrowInactive} ${className}`}
+    >
+      <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d={dir < 0 ? "M12.5 4.5L7 10l5.5 5.5" : "M7.5 4.5L13 10l-5.5 5.5"} />
+      </svg>
+    </button>
+  );
+
   return (
     <section
       ref={sectionRef}
@@ -331,7 +347,8 @@ export function PopularDestinations() {
                 tabIndex={selected ? 0 : -1}
                 onClick={() => selectTab(t.id)}
                 onKeyDown={(e) => onTabKey(e, i)}
-                className={selected ? `${buttonPrimary} border border-blue` : buttonSecondary}
+                // Phones: the small size keeps all three tabs on one row
+                className={`${selected ? `${buttonPrimary} border border-blue` : buttonSecondary} max-sm:h-9 max-sm:px-4 max-sm:text-sm`}
               >
                 {t.label}
               </button>
@@ -339,31 +356,9 @@ export function PopularDestinations() {
           })}
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => page(-1)}
-            aria-disabled={edges.start}
-            aria-label="Previous destinations"
-            aria-controls={`${baseId}-track`}
-            className={`${iconButton} ${arrowInactive}`}
-          >
-            <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M12.5 4.5L7 10l5.5 5.5" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={() => page(1)}
-            aria-disabled={edges.end}
-            aria-label="Next destinations"
-            aria-controls={`${baseId}-track`}
-            className={`${iconButton} ${arrowInactive}`}
-          >
-            <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M7.5 4.5L13 10l-5.5 5.5" />
-            </svg>
-          </button>
+        <div className="hidden items-center gap-2 sm:flex">
+          {arrow(-1)}
+          {arrow(1)}
         </div>
       </div>
 
@@ -389,7 +384,12 @@ export function PopularDestinations() {
             e.stopPropagation();
           }}
           onWheel={(e) => Math.abs(e.deltaX) > Math.abs(e.deltaY) && restartCountdown()}
-          onFocus={() => setFocusInTrack(true)}
+          onFocus={(e) => {
+            setFocusInTrack(true);
+            // Keyboard only: a mouse press that starts a drag shouldn't pull the track along
+            const tile = e.target as HTMLElement;
+            if (tile.matches(":focus-visible")) tile.closest("li")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: scrollBehavior() });
+          }}
           onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setFocusInTrack(false)}
           className={`relative -mx-4 -mb-16 -mt-6 flex select-none gap-4 overflow-x-auto scroll-px-4 px-4 pb-16 pt-6 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden ${
             dragging ? "cursor-grabbing snap-none" : "cursor-grab snap-x snap-mandatory"
@@ -452,55 +452,61 @@ export function PopularDestinations() {
         </ul>
       </div>
 
-      {/* Bottom row: a small pause/play button beside the position dots.
-          relative z-[1] keeps it clickable above the track's bottom bleed padding. */}
-      <div className="relative z-[1] mt-5 flex items-center justify-center gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            restartCountdown();
-            setAutoplayChoice(!autoplay);
-          }}
-          aria-label={autoplay ? "Pause the carousel" : "Play the carousel"}
-          title={autoplay ? "Pause" : "Play"}
-          className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-edge bg-surface text-ink transition-colors hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
-        >
-          {/* Countdown to the next move */}
-          <svg viewBox="0 0 28 28" className={`absolute -inset-px -rotate-90 transition-opacity ${playing ? "opacity-100" : "opacity-0"}`} aria-hidden>
-            <circle
-              ref={ringRef}
-              cx="14"
-              cy="14"
-              r={RING_R}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeDasharray={RING}
-              strokeDashoffset={RING}
-              className="text-blue"
-            />
-          </svg>
-          <svg viewBox="0 0 20 20" className="h-3 w-3" fill="currentColor" aria-hidden>
-            {autoplay ? <path d="M6 4h3v12H6zM11 4h3v12h-3z" /> : <path d="M6.5 4.2v11.6L15.5 10z" />}
-          </svg>
-        </button>
+      {/* Bottom row: a small pause/play button beside the position dots, with the
+          arrows either side on phones. relative z-[1] keeps it clickable above
+          the track's bottom bleed padding. */}
+      <div className="relative z-[1] mt-5 flex items-center justify-between gap-3 sm:justify-center">
+        {arrow(-1, "sm:hidden")}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              restartCountdown();
+              setAutoplayChoice(!autoplay);
+            }}
+            aria-label={autoplay ? "Pause the carousel" : "Play the carousel"}
+            title={autoplay ? "Pause" : "Play"}
+            // after: an invisible 44px tap area around the 28px button
+            className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-edge bg-surface text-ink transition-colors after:absolute after:-inset-2 hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
+          >
+            {/* Countdown to the next move */}
+            <svg viewBox="0 0 28 28" className={`absolute -inset-px -rotate-90 transition-opacity ${playing ? "opacity-100" : "opacity-0"}`} aria-hidden>
+              <circle
+                ref={ringRef}
+                cx="14"
+                cy="14"
+                r={RING_R}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeDasharray={RING}
+                strokeDashoffset={RING}
+                className="text-blue"
+              />
+            </svg>
+            <svg viewBox="0 0 20 20" className="h-3 w-3" fill="currentColor" aria-hidden>
+              {autoplay ? <path d="M6 4h3v12H6zM11 4h3v12h-3z" /> : <path d="M6.5 4.2v11.6L15.5 10z" />}
+            </svg>
+          </button>
 
-        {/* Position: the tiles currently in view are the long dots. Mouse shortcut
-            only (they don't take focus); keyboard users have the arrows and can
-            tab through the tiles. */}
-        <div className="flex gap-1.5" aria-hidden>
-          {items.map((d, i) => (
-            <button
-              key={d.name}
-              type="button"
-              tabIndex={-1}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => goTo(i)}
-              className={`h-2 rounded-full transition-all duration-300 ${visible.includes(i) ? "w-6 bg-blue" : "w-2 bg-slate hover:bg-ink"}`}
-            />
-          ))}
+          {/* Position: the tiles currently in view are the long dots. Mouse shortcut
+              only (they don't take focus); keyboard users have the arrows and can
+              tab through the tiles. */}
+          <div className="flex gap-1.5" aria-hidden>
+            {items.map((d, i) => (
+              <button
+                key={d.name}
+                type="button"
+                tabIndex={-1}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => goTo(i)}
+                className={`h-2 rounded-full transition-all duration-300 ${visible.includes(i) ? "w-6 bg-blue" : "w-2 bg-slate hover:bg-ink"}`}
+              />
+            ))}
+          </div>
         </div>
+        {arrow(1, "sm:hidden")}
       </div>
       <p className="sr-only" aria-live="polite" aria-atomic="true">
         {status}

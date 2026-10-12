@@ -18,7 +18,9 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}${PAGE_ROUTES.AUTH_ERROR}`)
+  // Pass `next` along so "Try again" on the error page still returns the user there
+  const retry = next === '/' ? '' : `?next=${encodeURIComponent(next)}`
+  return NextResponse.redirect(`${origin}${PAGE_ROUTES.AUTH_ERROR}${retry}`)
 }
 
 function getNext(next: string | null): string {

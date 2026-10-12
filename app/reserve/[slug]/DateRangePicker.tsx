@@ -18,6 +18,7 @@ export function DateRangePicker({
   blockedOffsets,
   open,
   onOpenChange,
+  onDone,
   error,
 }: {
   checkIn: string;
@@ -27,6 +28,8 @@ export function DateRangePicker({
   blockedOffsets: number[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** After Done or Escape closes the calendar (not an outside click, which may be mid-click on something else) */
+  onDone?: () => void;
   error?: string;
 }) {
   // Which field the calendar is filling. Each field opens it for itself.
@@ -54,6 +57,7 @@ export function DateRangePicker({
       if (e.key !== "Escape") return;
       if (panelRef.current?.contains(document.activeElement)) (field === "out" ? outRef : inRef).current?.focus({ preventScroll: true });
       onOpenChange(false);
+      onDone?.();
     };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
@@ -61,7 +65,7 @@ export function DateRangePicker({
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, onOpenChange, field]);
+  }, [open, onOpenChange, onDone, field]);
 
   function openField(f: RangeField) {
     if (open && field === f) {
@@ -113,38 +117,42 @@ export function DateRangePicker({
         </div>
       </div>
       {error && (
-        <p id="dates-error" className="mt-1.5 text-sm text-danger">
+        <p id="dates-error" role="alert" className="mt-1.5 text-sm text-danger">
           {error}
         </p>
       )}
 
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-label="Choose your dates"
-        data-open={open}
-        inert={!open}
-        className="dropdown absolute -left-3 -right-3 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)]"
-      >
-        {/* Notch pointing at the field being filled, so the calendar reads as that field's. */}
-        <span
-          aria-hidden
-          style={{ left: pickingOut ? "calc(75% - 3px)" : "calc(25% - 3px)" }}
-          className="absolute -top-[7px] h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-edge bg-surface transition-[left] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
-        />
-        <RangeCalendar
-          resetKey={session}
-          checkIn={checkIn}
-          checkOut={checkOut}
-          onChange={onChange}
-          field={field}
-          onFieldChange={setField}
-          onDone={() => {
-            restoreFocus();
-            onOpenChange(false);
-          }}
-          blockedOffsets={blockedOffsets}
-        />
+      {/* A hidden panel still makes the page taller, so this zero-height holder clips it once its close animation (0.3s) ends */}
+      <div className={`theme-fade-keep absolute -left-3 -right-3 top-full z-30 h-0 transition-[overflow] transition-discrete duration-0 ${open ? "" : "overflow-clip delay-300"}`}>
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-label="Choose your dates"
+          data-open={open}
+          inert={!open}
+          className="dropdown relative mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)]"
+        >
+          {/* Notch pointing at the field being filled, so the calendar reads as that field's. */}
+          <span
+            aria-hidden
+            style={{ left: pickingOut ? "calc(75% - 3px)" : "calc(25% - 3px)" }}
+            className="absolute -top-[7px] h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-edge bg-surface transition-[left] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
+          />
+          <RangeCalendar
+            resetKey={session}
+            checkIn={checkIn}
+            checkOut={checkOut}
+            onChange={onChange}
+            field={field}
+            onFieldChange={setField}
+            onDone={() => {
+              restoreFocus();
+              onOpenChange(false);
+              onDone?.();
+            }}
+            blockedOffsets={blockedOffsets}
+          />
+        </div>
       </div>
     </div>
   );

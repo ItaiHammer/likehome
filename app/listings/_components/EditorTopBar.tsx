@@ -44,27 +44,37 @@ type SaveBarProps = {
 
 // Frosted like the home page search bar, and sticky, so saving is always in reach on long forms.
 export function SaveBar({ status, saveLabel, isSaving, canDiscard, onSave, onPreview, onDiscard }: SaveBarProps) {
+  const secondary = (
+    <>
+      {canDiscard && (
+        <Button variant="ghost" onClick={onDiscard}>
+          Discard changes
+        </Button>
+      )}
+      <Button variant="secondary" onClick={onPreview}>
+        Preview
+      </Button>
+    </>
+  );
+
   return (
-    <div className="sticky top-3 z-20 mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-(--bar-edge) bg-surface/80 p-3 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md">
-      <p role="status" className={`flex min-w-0 flex-1 basis-48 items-center gap-2 pl-2 text-sm ${STATUS_COLORS[status.kind]}`}>
-        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          {STATUS_ICONS[status.kind]}
-        </svg>
-        <span className={status.kind === "problem" ? "" : "text-slate"}>{status.text}</span>
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        {canDiscard && (
-          <Button variant="ghost" onClick={onDiscard}>
-            Discard changes
+    <>
+      <div className="sticky top-3 z-20 mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-(--bar-edge) bg-surface/80 p-3 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md">
+        <p role="status" className={`flex min-w-0 flex-1 basis-0 items-center gap-2 pl-2 text-sm sm:basis-48 ${STATUS_COLORS[status.kind]}`}>
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            {STATUS_ICONS[status.kind]}
+          </svg>
+          <span className={status.kind === "problem" ? "" : "text-slate"}>{status.text}</span>
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="hidden sm:contents">{secondary}</div>
+          <Button loading={isSaving} onClick={onSave}>
+            {isSaving ? "Saving…" : saveLabel}
           </Button>
-        )}
-        <Button variant="secondary" onClick={onPreview}>
-          Preview
-        </Button>
-        <Button loading={isSaving} onClick={onSave}>
-          {isSaving ? "Saving..." : saveLabel}
-        </Button>
+        </div>
       </div>
-    </div>
+      {/* Phones pin only Save: with all three buttons the bar wrapped to three rows and covered the error summary */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 sm:hidden">{secondary}</div>
+    </>
   );
 }

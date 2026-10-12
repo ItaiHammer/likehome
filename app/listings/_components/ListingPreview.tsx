@@ -1,5 +1,5 @@
 import { Tag } from "@/app/_components/ui";
-import { AMENITY_LABELS, formatLocation, formatPrice, formatRoomTypesSummary } from "@/lib/listing-display";
+import { AMENITY_LABELS, formatLocation, formatPrice, plural } from "@/lib/listing-display";
 import type { ListingDraft } from "@/types/listing";
 import { ListingCover } from "./ListingCover";
 
@@ -47,7 +47,8 @@ export function ListingPreview({ draft, backLink }: { draft: ListingDraft; backL
       )}
 
       <h2 className="mt-12 text-[32px] leading-10 font-bold text-ink">Rooms</h2>
-      <p className="mt-1 text-lg text-slate">{formatRoomTypesSummary(draft.rooms)}</p>
+      {/* Room types only: the room form promises hosts that guests don't see room counts */}
+      <p className="mt-1 text-lg text-slate">{draft.rooms.length > 0 ? plural(draft.rooms.length, "room type") : "No rooms listed yet."}</p>
       <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {draft.rooms.map((room) => (
           <li key={room.id} className="flex flex-col rounded-lg border border-edge bg-surface p-5">

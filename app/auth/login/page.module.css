@@ -5,25 +5,18 @@
   position: relative;
   overflow: hidden;
   padding: 54px clamp(18px, 10vw, 144px);
-  background: color-mix(in srgb, var(--blue) 58%, var(--surface));
+  /* The sky's average color, shown until its canvas draws (or without WebGL); the sky's own
+     dark layer dims it in dark mode */
+  background: #a0c2ec;
 }
 
-.page::before {
-  content: "";
+/* The sky shader stretches with its canvas, so a tall phone page squeezes it into stripes.
+   Keep it wider and let .page crop the sides. */
+.sky {
   position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(
-      circle at 25% 20%,
-      rgb(255 255 255 / 0.2),
-      transparent 28%
-    ),
-    radial-gradient(
-      circle at 80% 75%,
-      color-mix(in srgb, var(--blue-dark) 35%, transparent),
-      transparent 35%
-    );
-  pointer-events: none;
+  inset: 0 auto 0 50%;
+  width: max(100%, 120vh);
+  translate: -50%;
 }
 
 .authCard {

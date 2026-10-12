@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   bedSizes,
   propertyAmenities,
   roomAmenities,
   travelerTypes,
 } from "../search/types";
+import { iconButtonClass } from "./ui";
 
 export type SearchFilterValues = {
   minPrice?: string;
@@ -30,6 +31,16 @@ const AMENITY_TAGS = [
 const TRAVELER_TAGS = travelerTypes;
 type PriceField = "min" | "max";
 
+// Tailwind's sm breakpoint, where the dropdown takes over
+const PHONE_QUERY = "(width < 40rem)";
+const subscribeToPhone = (onChange: () => void) => {
+  const query = matchMedia(PHONE_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+};
+
+const isWholeNumber = (value: string) => /^\d+$/.test(value);
+
 function SlidersIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
@@ -40,7 +51,7 @@ function SlidersIcon() {
 
 function ChevronIcon() {
   return (
-    <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+    <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
       <path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -71,6 +82,50 @@ function FilterChip({
   );
 }
 
+// On phones a bottom sheet, so Apply filters is always on screen
+function FiltersPanel({
+  phone,
+  open,
+  panelRef,
+  sheetRef,
+  onClose,
+  children,
+}: {
+  phone: boolean;
+  open: boolean;
+  panelRef: React.RefObject<HTMLDivElement | null>;
+  sheetRef: React.RefObject<HTMLDialogElement | null>;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  if (phone) {
+    return (
+      <dialog
+        ref={sheetRef}
+        aria-label="Search filters"
+        onClose={onClose}
+        // The content wrapper fills the dialog, so a click landing on the dialog itself is on the backdrop
+        onClick={(event) => event.target === event.currentTarget && onClose()}
+        className="mb-0 mt-auto max-h-[85dvh] w-full max-w-none overflow-y-auto overscroll-contain rounded-t-2xl border-0 border-t border-edge bg-surface p-0 text-ink shadow-[0_-20px_50px_-15px_rgba(10,20,50,0.45)] transition-[translate] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] backdrop:bg-[#070d2f]/50 starting:open:translate-y-full"
+      >
+        <div className="px-4 pt-4">{children}</div>
+      </dialog>
+    );
+  }
+
+  return (
+    <div
+      ref={panelRef}
+      data-open={open}
+      role="dialog"
+      aria-label="Search filters"
+      className="dropdown absolute left-0 top-full z-40 mt-3 max-h-[70vh] w-full overflow-y-auto overscroll-contain rounded-2xl border border-edge bg-surface p-4 pb-0 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] sm:left-auto sm:right-0 sm:w-[min(92vw,42rem)] sm:p-5 sm:pb-0"
+    >
+      {children}
+    </div>
+  );
+}
+
 export function SearchFiltersPicker({
   className = "",
   initialValues = {},
@@ -85,9 +140,22 @@ export function SearchFiltersPicker({
   const [numBeds, setNumBeds] = useState(initialValues.numBeds ?? "");
   const [bedSize, setBedSize] = useState(initialValues.bedSize ?? "");
   const [tags, setTags] = useState<string[]>(initialValues.tags ?? []);
-  const [priceError, setPriceError] = useState<PriceField | null>(null);
   const [rangeError, setRangeError] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDialogElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const minRef = useRef<HTMLInputElement>(null);
+  const maxRef = useRef<HTMLInputElement>(null);
+  const errorId = useId();
+  const isPhone = useSyncExternalStore(subscribeToPhone, () => matchMedia(PHONE_QUERY).matches, () => false);
+
+  const minInvalid = minPrice !== "" && !isWholeNumber(minPrice);
+  const maxInvalid = maxPrice !== "" && !isWholeNumber(maxPrice);
+  const validMin = minInvalid ? "" : minPrice;
+  const validMax = maxInvalid ? "" : maxPrice;
+  const priceError = minInvalid || maxInvalid ? "Please enter a number" : rangeError;
 
   useEffect(() => {
     if (!open) return;
@@ -95,7 +163,9 @@ export function SearchFiltersPicker({
       if (!ref.current?.contains(event.target as Node)) setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
+      setOpen(false);
     };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -105,14 +175,25 @@ export function SearchFiltersPicker({
     };
   }, [open]);
 
+  // showModal() lifts the sheet out of the frosted bar onto the top layer and keeps focus inside it
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    if (open && !sheet.open) {
+      sheet.showModal();
+      closeRef.current?.focus();
+    }
+    if (!open && sheet.open) sheet.close();
+  }, [open, isPhone]);
+
   const activeCount = useMemo(
     () =>
-      Number(Boolean(minPrice || maxPrice)) +
+      Number(Boolean(validMin || validMax)) +
       Number(Boolean(minRating)) +
       Number(Boolean(numBeds)) +
       Number(Boolean(bedSize)) +
       tags.length,
-    [bedSize, maxPrice, minPrice, minRating, numBeds, tags],
+    [bedSize, validMax, validMin, minRating, numBeds, tags],
   );
 
   const toggleTag = (tag: string) => {
@@ -120,25 +201,8 @@ export function SearchFiltersPicker({
   };
 
   const updatePrice = (field: PriceField, rawValue: string) => {
-    const value = rawValue.replace(/[$,\s]/g, "");
-    const setter = field === "min" ? setMinPrice : setMaxPrice;
-
+    (field === "min" ? setMinPrice : setMaxPrice)(rawValue.replace(/[$,\s]/g, ""));
     setRangeError("");
-
-    if (!value) {
-      setter("");
-      if (priceError === field) setPriceError(null);
-      return;
-    }
-
-    if (!/^\d+$/.test(value)) {
-      setter("");
-      setPriceError(field);
-      return;
-    }
-
-    setter(value);
-    setPriceError(null);
   };
 
   const clear = () => {
@@ -148,15 +212,18 @@ export function SearchFiltersPicker({
     setNumBeds("");
     setBedSize("");
     setTags([]);
-    setPriceError(null);
     setRangeError("");
   };
 
   const applyFilters = () => {
-    if (priceError) return;
+    if (minInvalid || maxInvalid) {
+      (minInvalid ? minRef : maxRef).current?.focus();
+      return;
+    }
 
     if (minPrice && maxPrice && Number(minPrice) > Number(maxPrice)) {
       setRangeError("Minimum can't be greater than maximum.");
+      minRef.current?.focus();
       return;
     }
 
@@ -166,8 +233,15 @@ export function SearchFiltersPicker({
   };
 
   return (
-    <div ref={ref} className={`relative ${className}`}>
+    <div
+      ref={ref}
+      onBlur={(event) => {
+        if (event.relatedTarget && !ref.current?.contains(event.relatedTarget)) setOpen(false);
+      }}
+      className={`relative ${className}`}
+    >
       <button
+        ref={triggerRef}
         type="button"
         data-trigger
         aria-haspopup="dialog"
@@ -185,19 +259,18 @@ export function SearchFiltersPicker({
             </span>
           )}
         </span>
-        <span className="min-w-0 flex-1 md:hidden">
-          <span className="block text-xs font-semibold uppercase tracking-[0.08em] text-slate">Filters</span>
-          <span className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-ink">
-            {activeCount > 0 ? `${activeCount} applied` : "Add filters"}
-            <ChevronIcon />
+        <span className="flex min-w-0 flex-1 items-center justify-between gap-2 text-base text-ink md:hidden">
+          <span className="truncate">
+            {activeCount > 0 ? `${activeCount} ${activeCount === 1 ? "filter" : "filters"}` : "Add filters"}
           </span>
+          <ChevronIcon />
         </span>
         <span className="hidden text-xs font-semibold text-ink md:block">Filters</span>
       </button>
 
       {/* Inputs remain mounted while the panel is closed so the parent search form always submits them. */}
-      <input type="hidden" name="minPrice" value={minPrice} />
-      <input type="hidden" name="maxPrice" value={maxPrice} />
+      <input type="hidden" name="minPrice" value={validMin} />
+      <input type="hidden" name="maxPrice" value={validMax} />
       <input type="hidden" name="minRating" value={minRating} />
       <input type="hidden" name="numBeds" value={numBeds} />
       <input type="hidden" name="bedSize" value={bedSize} />
@@ -205,15 +278,19 @@ export function SearchFiltersPicker({
         <input key={tag} type="hidden" name="tags" value={tag} />
       ))}
 
-      <div
-        data-open={open}
-        role="dialog"
-        aria-label="Search filters"
-        className="dropdown absolute left-0 top-full z-40 mt-3 max-h-[70vh] w-full overflow-y-auto overscroll-contain rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] sm:left-auto sm:right-0 sm:w-[min(92vw,42rem)] sm:p-5"
-      >
-        <div className="cascade" style={{ "--i": 1 } as React.CSSProperties}>
-          <p className="text-base font-semibold text-ink">Filters</p>
-          <p className="mt-1 text-sm text-slate">Narrow the results without leaving the search bar.</p>
+      <FiltersPanel phone={isPhone} open={open} panelRef={panelRef} sheetRef={sheetRef} onClose={() => setOpen(false)}>
+        <div className="cascade flex items-start justify-between gap-4" style={{ "--i": 1 } as React.CSSProperties}>
+          <div>
+            <p className="text-base font-semibold text-ink">Filters</p>
+            <p className="mt-1 text-sm text-slate">Narrow the results without leaving the search bar.</p>
+          </div>
+          {isPhone && (
+            <button ref={closeRef} type="button" aria-label="Close filters" onClick={() => setOpen(false)} className={iconButtonClass("sm")}>
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          )}
         </div>
 
         <div className="cascade mt-5 grid gap-5 sm:grid-cols-2" style={{ "--i": 2 } as React.CSSProperties}>
@@ -222,13 +299,14 @@ export function SearchFiltersPicker({
             <div className="mt-2 grid grid-cols-2 gap-2">
               <label
                 className={`rounded-xl border bg-paper/40 px-3 py-2.5 focus-within:ring-1 ${
-                  priceError === "min" ? "border-danger focus-within:border-danger focus-within:ring-danger" : "border-edge focus-within:border-blue focus-within:ring-blue"
+                  minInvalid || rangeError ? "border-danger focus-within:border-danger focus-within:ring-danger" : "border-edge focus-within:border-blue focus-within:ring-blue"
                 }`}
               >
                 <span className="block text-xs font-medium text-slate">Minimum</span>
                 <span className="mt-1 flex items-center gap-1 text-sm text-ink">
                   <span aria-hidden>$</span>
                   <input
+                      ref={minRef}
                       inputMode="numeric"
                       type="text"
                       value={minPrice}
@@ -240,25 +318,23 @@ export function SearchFiltersPicker({
                           applyFilters();
                         }
                       }}
-                      placeholder={priceError === "min" ? "Please enter a number" : "0"}
-                      aria-invalid={priceError === "min"}
-                      className={`w-full min-w-0 bg-transparent outline-none ${
-                          priceError === "min"
-                              ? "placeholder:text-danger"
-                              : "placeholder:text-slate"
-                      }`}
+                      placeholder="0"
+                      aria-invalid={minInvalid || Boolean(rangeError)}
+                      aria-describedby={minInvalid || rangeError ? errorId : undefined}
+                      className="w-full min-w-0 bg-transparent outline-none placeholder:text-slate"
                   />
                 </span>
               </label>
               <label
                 className={`rounded-xl border bg-paper/40 px-3 py-2.5 focus-within:ring-1 ${
-                  priceError === "max" ? "border-danger focus-within:border-danger focus-within:ring-danger" : "border-edge focus-within:border-blue focus-within:ring-blue"
+                  maxInvalid ? "border-danger focus-within:border-danger focus-within:ring-danger" : "border-edge focus-within:border-blue focus-within:ring-blue"
                 }`}
               >
                 <span className="block text-xs font-medium text-slate">Maximum</span>
                 <span className="mt-1 flex items-center gap-1 text-sm text-ink">
                   <span aria-hidden>$</span>
                   <input
+                      ref={maxRef}
                       inputMode="numeric"
                       type="text"
                       value={maxPrice}
@@ -270,18 +346,19 @@ export function SearchFiltersPicker({
                           applyFilters();
                         }
                       }}
-                      placeholder={priceError === "max" ? "Please enter a number" : "Any"}
-                      aria-invalid={priceError === "max"}
-                      className={`w-full min-w-0 bg-transparent outline-none ${
-                          priceError === "max"
-                              ? "placeholder:text-danger"
-                              : "placeholder:text-slate"
-                      }`}
+                      placeholder="Any"
+                      aria-invalid={maxInvalid}
+                      aria-describedby={maxInvalid ? errorId : undefined}
+                      className="w-full min-w-0 bg-transparent outline-none placeholder:text-slate"
                   />
                 </span>
               </label>
             </div>
-            {rangeError && <p className="mt-2 text-xs font-medium text-danger">{rangeError}</p>}
+            {priceError && (
+              <p id={errorId} role="alert" className="mt-2 text-xs font-medium text-danger">
+                {priceError}
+              </p>
+            )}
           </fieldset>
 
           <fieldset>
@@ -360,7 +437,10 @@ export function SearchFiltersPicker({
           </div>
         </section>
 
-        <div className="cascade mt-5 flex items-center justify-between gap-4 border-t border-edge pt-4" style={{ "--i": 5 } as React.CSSProperties}>
+        <div
+          className="cascade sticky bottom-0 -mx-4 mt-5 flex items-center justify-between gap-4 border-t border-edge bg-surface px-4 py-4 sm:-mx-5 sm:px-5 sm:pb-5"
+          style={{ "--i": 5 } as React.CSSProperties}
+        >
           <div>
             {activeCount > 0 && (
               <button type="button" onClick={clear} className="text-sm font-semibold text-blue hover:text-blue-dark">
@@ -376,7 +456,7 @@ export function SearchFiltersPicker({
             Apply filters
           </button>
         </div>
-      </div>
+      </FiltersPanel>
     </div>
   );
 }

@@ -188,6 +188,32 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
   transition-duration: var(--theme-fade) !important;
 }
 
+/* The reservation card's steps (your stay → details and payment → done) fade and rise in while the
+   card resizes to fit them. Backwards fill only, so nothing lingers (a held transform would trap the
+   date and guest dropdowns in its own layer). */
+.step-in {
+  animation: step-in 0.7s cubic-bezier(0.33, 1, 0.68, 1) backwards;
+}
+@keyframes step-in {
+  from { opacity: 0; transform: translateY(12px); }
+}
+[data-motion="reduce"] .step-in {
+  animation: none;
+}
+
+/* Search results rise in one after another. Backwards fill only, so each card's own hover lift
+   still works once it has landed. */
+.card-in {
+  animation: card-in 0.7s cubic-bezier(0.33, 1, 0.68, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(12px); }
+}
+[data-motion="reduce"] .card-in {
+  animation: none;
+}
+
 /* Popular destination tiles rise in one after another (on load and on each tab switch) */
 .tile-in {
   animation: tile-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -200,6 +226,14 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
    still hold each tile hidden through its stagger delay) */
 [data-motion="reduce"] .tile-in {
   animation: none;
+}
+
+/* Blur Text: the server renders the words hidden, so with reduced motion this shows them from first
+   paint until hydration, when BlurText switches to plain words (it can't beat motion's Web Animations) */
+[data-motion="reduce"] .blur-text > [aria-hidden] {
+  opacity: 1 !important;
+  filter: none !important;
+  transform: none !important;
 }
 
 /*
@@ -234,47 +268,6 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
 }
 @keyframes ph-out {
   to { transform: translateY(-100%); opacity: 0; }
-}
-
-/* AI mode switch: the only search control with an animated multicolor edge. */
-/*
- * The fill is its own registered color so hover can fade it. (Swapping the
- * whole background on hover dropped the gradient border at once and faded the
- * fill in from transparent, which flashed.)
- */
-@property --ai-fill { syntax: "<color>"; inherits: false; initial-value: #ffffff; }
-.ai-toggle {
-  --ai-fill: var(--surface);
-  border: 2px solid transparent;
-  background:
-          linear-gradient(var(--ai-fill), var(--ai-fill)) padding-box,
-          linear-gradient(120deg, #4473b5, #8576d1, #55aeb5, #e0a05f, #4473b5) border-box;
-  background-size: 100% 100%, 260% 260%;
-  background-position: 0 0, 0% 50%;
-  animation: ai-border-shift 2.8s ease-in-out infinite;
-  transition:
-          --ai-fill 0.2s ease,
-          color 0.2s ease,
-          transform 0.2s ease;
-}
-
-.ai-toggle:hover {
-  --ai-fill: color-mix(in srgb, var(--blue) 10%, var(--surface));
-  color: var(--blue);
-  animation-play-state: paused;
-  transform: translateY(-2px);
-}
-
-@keyframes ai-border-shift {
-  0% {
-    background-position: 0 0, 0% 50%;
-  }
-  50% {
-    background-position: 0 0, 100% 50%;
-  }
-  100% {
-    background-position: 0 0, 0% 50%;
-  }
 }
 
 .standard-return-button {

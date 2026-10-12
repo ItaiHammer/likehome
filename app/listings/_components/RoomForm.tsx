@@ -52,9 +52,9 @@ export function RoomForm({ editor, onChange, onInvalid, onApply, onCancel, onRem
       >
         <FormSection title="Room details" description="Describe this room type and its availability.">
           <div className="grid gap-6">
-            <Field label="Room type" maxLength={60} placeholder="Coastal king" {...control("roomType")} />
+            <Field label="Room type" maxLength={60} hint="For example, Garden double." {...control("roomType")} />
             <div className="grid gap-6 sm:grid-cols-2">
-              <Field label="Bed configuration" maxLength={60} placeholder="1 king bed" {...control("bedConfiguration")} />
+              <Field label="Bed configuration" maxLength={60} hint="For example, 2 queen beds." {...control("bedConfiguration")} />
               <Field label="Rooms of this type" hint="How many you can rent out at once. Guests don't see this." inputMode="numeric" {...control("roomCount")} />
               {/* Field's markup with a $ inside the box; it accepts "189", "$189" or "1,189.50" */}
               <div>
@@ -70,7 +70,6 @@ export function RoomForm({ editor, onChange, onInvalid, onApply, onCancel, onRem
                     value={form.nightlyRate}
                     onChange={(e) => onChange("nightlyRate", e.target.value)}
                     inputMode="decimal"
-                    placeholder="189"
                     aria-invalid={!!errors.nightlyRate}
                     aria-describedby={errors.nightlyRate ? `${inputId("nightlyRate")}-error` : undefined}
                     className={`${inputClass(!!errors.nightlyRate)} pl-8!`}
@@ -82,14 +81,17 @@ export function RoomForm({ editor, onChange, onInvalid, onApply, onCancel, onRem
                   </p>
                 )}
               </div>
-              <Stepper
-                label="Maximum guests"
-                hint="Up to 20"
-                value={Number(form.maxGuests) || 1}
-                min={1}
-                max={20}
-                onChange={(value) => onChange("maxGuests", String(value))}
-              />
+              {/* Full row: in a half column the label wraps and drops below "Nightly rate" */}
+              <div className="sm:col-span-2">
+                <Stepper
+                  label="Maximum guests"
+                  hint="Up to 20"
+                  value={Number(form.maxGuests) || 1}
+                  min={1}
+                  max={20}
+                  onChange={(value) => onChange("maxGuests", String(value))}
+                />
+              </div>
             </div>
             <TextArea
               label="Room description"

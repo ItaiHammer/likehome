@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { browserTimeZone, formatShort, nightsBetween } from "./dates";
+import { browserTimeZone, formatRange, formatShort, nightsBetween } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
 import { RangeCalendar, type RangeField } from "./RangeCalendar";
 
@@ -69,9 +69,9 @@ export function DatesField({
   const nights = nightsBetween(checkIn, checkOut);
   const label =
     checkIn && checkOut
-      ? `${formatShort(checkIn)} – ${formatShort(checkOut)} · ${nights} ${nights === 1 ? "night" : "nights"}`
+      ? `${formatRange(checkIn, checkOut)} · ${nights} ${nights === 1 ? "night" : "nights"}`
       : checkIn
-        ? `${formatShort(checkIn)} – Add check-out`
+        ? `${formatShort(checkIn)} - Add check-out`
         : "";
 
   return (
@@ -93,9 +93,7 @@ export function DatesField({
       >
         {checkIn && checkOut ? (
           <span className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate text-base">
-              {formatShort(checkIn)} – {formatShort(checkOut)}
-            </span>
+            <span className="truncate text-base">{formatRange(checkIn, checkOut)}</span>
             <span className="mt-1 text-xs font-medium text-slate">
               {nights} {nights === 1 ? "night" : "nights"}
             </span>
@@ -115,7 +113,7 @@ export function DatesField({
         aria-label="Choose your dates"
         data-open={open}
         inert={!open}
-        className="dropdown absolute left-0 right-0 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:right-auto md:w-[23rem]"
+        className="dropdown absolute left-0 right-0 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:left-1/2 md:right-auto md:w-[23rem] md:-translate-x-1/2"
       >
         <RangeCalendar
           resetKey={session}

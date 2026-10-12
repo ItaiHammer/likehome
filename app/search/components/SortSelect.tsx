@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type RawParams = Record<string, string | string[] | undefined>;
 
@@ -34,8 +34,9 @@ function buildHref(params: RawParams, sort: SortValue) {
 }
 
 export function SortSelect({ current = "recommended", params }: { current?: string; params: RawParams }) {
-  const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const selected = OPTIONS.find((option) => option.value === current) ?? OPTIONS[0];
 
@@ -45,7 +46,9 @@ export function SortSelect({ current = "recommended", params }: { current?: stri
       if (!ref.current?.contains(event.target as Node)) setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      if (menuRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
+      setOpen(false);
     };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -56,10 +59,16 @@ export function SortSelect({ current = "recommended", params }: { current?: stri
   }, [open]);
 
   return (
-    <div ref={ref} className="relative">
+    <div
+      ref={ref}
+      onBlur={(event) => {
+        if (event.relatedTarget && !ref.current?.contains(event.relatedTarget)) setOpen(false);
+      }}
+      className="relative"
+    >
       <button
+        ref={triggerRef}
         type="button"
-        aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((currentOpen) => !currentOpen)}
         className="inline-flex min-w-[12rem] items-center justify-between gap-3 rounded-xl border border-edge bg-surface px-3.5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-blue/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
@@ -72,30 +81,25 @@ export function SortSelect({ current = "recommended", params }: { current?: stri
       </button>
 
       <div
+        ref={menuRef}
         data-open={open}
-        className="dropdown absolute right-0 top-full z-30 mt-2 w-56 rounded-2xl border border-edge bg-surface p-2 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)]"
+        className="dropdown absolute left-0 top-full z-30 mt-2 w-56 rounded-2xl border border-edge bg-surface p-2 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] sm:left-auto sm:right-0"
       >
-        <div role="listbox" aria-label="Sort search results">
-          {OPTIONS.map((option, index) => (
-            <button
-              key={option.value}
-              type="button"
-              role="option"
-              aria-selected={selected.value === option.value}
-              style={{ "--i": index + 1 } as React.CSSProperties}
-              onClick={() => {
-                setOpen(false);
-                router.push(buildHref(params, option.value));
-              }}
-              className={`cascade flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
-                selected.value === option.value ? "bg-blue/10 font-semibold text-blue-dark" : "text-ink hover:bg-blue/5"
-              }`}
-            >
-              {option.label}
-              {selected.value === option.value && <span aria-hidden>✓</span>}
-            </button>
-          ))}
-        </div>
+        {OPTIONS.map((option, index) => (
+          <Link
+            key={option.value}
+            href={buildHref(params, option.value)}
+            aria-current={selected.value === option.value ? "true" : undefined}
+            style={{ "--i": index + 1 } as React.CSSProperties}
+            onClick={() => setOpen(false)}
+            className={`cascade flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
+              selected.value === option.value ? "bg-blue/10 font-semibold text-blue-dark" : "text-ink hover:bg-blue/5"
+            }`}
+          >
+            {option.label}
+            {selected.value === option.value && <span aria-hidden>✓</span>}
+          </Link>
+        ))}
       </div>
     </div>
   );

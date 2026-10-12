@@ -164,7 +164,7 @@ export function WindowScene({ variant, id }: { variant: SceneVariant; id: string
         <ellipse cx="234" cy="168" rx="9" ry="3.5" transform="rotate(35 234 168)" />
       </g>
       {/* Night: the room around the window dims */}
-      <path d={ROOM} fillRule="evenodd" fill="#1c2150" fillOpacity="0.42" className="ws-night" />
+      <path d={ROOM} fillRule="evenodd" fill="#1c2150" fillOpacity="0.68" className="ws-night" />
     </svg>
   );
 }

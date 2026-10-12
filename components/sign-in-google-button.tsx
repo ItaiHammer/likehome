@@ -24,5 +24,8 @@ function getRedirectUrl(): string {
     const protocol = (url?.includes("localhost")) ? 'http' : 'https';
     
     const redirectUrl = `${protocol}://${url}${API_ROUTES.AUTH_CALLBACK}`
-    return redirectUrl;
+
+    // /auth/login?next=/reserve/... (e.g. "Sign in to reserve") → the callback sends people back there
+    const next = new URLSearchParams(window.location.search).get("next");
+    return next?.startsWith("/") ? `${redirectUrl}?next=${encodeURIComponent(next)}` : redirectUrl;
 }
