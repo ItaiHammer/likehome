@@ -10,7 +10,8 @@ import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS, todayUTC } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
-import { buttonPrimary, buttonSecondary, Field, Stars } from "../../_components/ui";
+import { buttonPrimary, buttonSecondary, Card, Field, Stars } from "../../_components/ui";
+import { HotelPhoto } from "../../MyBookings/_components/HotelPhoto";
 import { TAX_RATE, type Stay } from "../../_data/stays";
 import { DateRangePicker } from "./DateRangePicker";
 import { GuestsField, guestLabel } from "./GuestsField";
@@ -122,7 +123,8 @@ export function StayReservation({
   const setGuestsOpen = useCallback((open: boolean) => setPopover((p) => (open ? "guests" : p === "guests" ? null : p)), []);
 
   // A step change resizes the card smoothly (the new step fades in through .step-in), keeps the
-  // card where it was on screen, and moves focus to the step's heading
+  // card where it was on screen, and moves focus to the step's heading. The checkout replaces the
+  // whole page, so it starts at the top instead.
   useLayoutEffect(() => {
     if (lastStep.current === step) return;
     const prev = lastStep.current;
@@ -144,6 +146,7 @@ export function StayReservation({
         });
       }
     }
+    if (step === "details") window.scrollTo({ top: 0, behavior: "instant" });
     const top = card?.getBoundingClientRect().top ?? 0;
     if (card && (top < 0 || top > window.innerHeight - 160)) card.scrollIntoView({ block: "start", behavior: reduced ? "auto" : "smooth" });
     headingRef.current?.focus({ preventScroll: true });
@@ -389,6 +392,216 @@ export function StayReservation({
     goTo("stay");
   }
 
+  // Omar's checkout design: the whole page becomes the checkout, details and payment beside the summary
+  if (step === "details") {
+    const stayDates = nights > 0 ? `${formatShort(checkIn)} - ${formatShort(checkOut)}` : "";
+    return (
+      <form ref={formRef} noValidate onSubmit={handleSubmit} className={moved ? "step-in" : ""}>
+        {/* Ink, like Back to stays: blue text on the sky strip is too faint to read */}
+        <button
+          type="button"
+          onClick={backToStay}
+          // Once a real booking is sent the server saves it either way, so going back would hide it
+          disabled={submitting && stay.bookable}
+          className="group inline-flex items-center gap-1 text-base font-semibold text-ink disabled:cursor-not-allowed disabled:text-slate"
+        >
+          <span aria-hidden className="transition-transform duration-200 group-hover:-translate-x-1 group-disabled:translate-x-0">
+            ←
+          </span>{" "}
+          Back to your stay
+        </button>
+
+        <div className="mt-4">
+          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-ink">Secure checkout</p>
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="mt-2 text-balance break-words font-serif text-[40px] leading-[48px] text-ink outline-none sm:text-[56px] sm:leading-[64px]"
+          >
+            Complete your booking
+          </h1>
+          <p className="mt-1 text-base text-slate">
+            {[`${room.name} at ${stay.name}`, stayDates, guestLabel(adults, children)].filter(Boolean).join(" · ")}
+          </p>
+        </div>
+
+        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
+          <div className="flex min-w-0 flex-col gap-6">
+            <Card as="section">
+              <h2 className="text-[32px] font-bold leading-10 text-ink">1. Your details</h2>
+              {account?.email && (
+                <p className="mt-1 text-sm text-slate">
+                  Signed in as <span className="font-semibold text-ink">{account.email}</span>
+                </p>
+              )}
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <Field id="firstName" name="firstName" label="First name" autoComplete="given-name" defaultValue={contact.firstName} error={errors.firstName} onChange={() => clear("firstName")} />
+                <Field id="lastName" name="lastName" label="Last name" autoComplete="family-name" defaultValue={contact.lastName} error={errors.lastName} onChange={() => clear("lastName")} />
+                <Field id="email" name="email" label="Email address" type="email" autoComplete="email" defaultValue={contact.email || account?.email} error={errors.email} onChange={() => clear("email")} />
+                <Field id="phone" name="phone" label="Phone (optional)" type="tel" autoComplete="tel" defaultValue={contact.phone} />
+              </div>
+            </Card>
+
+            <Card as="section">
+              <h2 className="text-[32px] font-bold leading-10 text-ink">2. Payment details</h2>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <Field
+                  id="cardNumber"
+                  name="cardNumber"
+                  label="Card number"
+                  inputMode="numeric"
+                  autoComplete="cc-number"
+                  placeholder="1234 5678 9012 3456"
+                  error={errors.cardNumber}
+                  onChange={(e) => {
+                    e.target.value = formatCard(e.target.value);
+                    clear("cardNumber");
+                  }}
+                  className="sm:col-span-2"
+                />
+                <Field
+                  id="expiry"
+                  name="expiry"
+                  label="Expiry date"
+                  inputMode="numeric"
+                  autoComplete="cc-exp"
+                  placeholder="MM/YY"
+                  error={errors.expiry}
+                  onChange={(e) => {
+                    e.target.value = formatExpiry(e.target.value);
+                    clear("expiry");
+                  }}
+                />
+                <Field
+                  id="cvc"
+                  name="cvc"
+                  label="Security code"
+                  inputMode="numeric"
+                  autoComplete="cc-csc"
+                  placeholder="CVC"
+                  maxLength={4}
+                  error={errors.cvc}
+                  onChange={(e) => {
+                    e.target.value = e.target.value.replace(/\D/g, "");
+                    clear("cvc");
+                  }}
+                />
+                <Field id="cardName" name="cardName" label="Name on card" autoComplete="cc-name" error={errors.cardName} onChange={() => clear("cardName")} />
+                <Field id="postalCode" name="postalCode" label="Billing postal code" autoComplete="postal-code" error={errors.postalCode} onChange={() => clear("postalCode")} />
+              </div>
+            </Card>
+          </div>
+
+          <Card as="section">
+            <h2 className="text-xl font-semibold text-ink">Booking summary</h2>
+            <HotelPhoto url={stay.photos?.[0] ?? null} priority className="mt-5 aspect-[16/9] w-full" />
+            <h3 className="mt-5 break-words text-lg font-semibold text-ink">{stay.name}</h3>
+            <p className="mt-1 text-sm text-slate">{stay.location}</p>
+            <p className="mt-3 text-sm text-slate">
+              {room.name}
+              {nights > 0 && ` · ${nights} ${nights === 1 ? "night" : "nights"}`}
+            </p>
+            <p className="text-sm text-slate">{guestLabel(adults, children)} · 1 room</p>
+
+            {editingDates ? (
+              <div className="mt-4">
+                <DateRangePicker
+                  checkIn={checkIn}
+                  checkOut={checkOut}
+                  onChange={(a, b) => {
+                    setCheckIn(a);
+                    setCheckOut(b);
+                    clear("dates");
+                  }}
+                  blockedOffsets={stay.blockedNights}
+                  open={popover === "dates"}
+                  onOpenChange={setDatesOpen}
+                  onDone={foldDates}
+                  error={errors.dates}
+                />
+              </div>
+            ) : (
+              <div className="mt-4 rounded-lg bg-paper p-3 text-sm">
+                <dl className="grid grid-cols-2 gap-2">
+                  <div>
+                    <dt className="text-xs font-semibold uppercase text-slate">Check-in</dt>
+                    <dd className="font-semibold text-ink">{checkIn ? formatShort(checkIn) : "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase text-slate">Check-out</dt>
+                    <dd className="font-semibold text-ink">{checkOut ? formatShort(checkOut) : "—"}</dd>
+                  </div>
+                </dl>
+                <button
+                  ref={changeDatesRef}
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => openDatesHere(false)}
+                  className="mt-2 font-semibold text-blue hover:text-blue-dark disabled:cursor-not-allowed disabled:text-slate"
+                >
+                  Change dates
+                </button>
+              </div>
+            )}
+
+            {nights > 0 ? (
+              <dl className="mt-5 space-y-3 border-t border-edge pt-5 text-sm">
+                <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
+                {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
+                {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
+                <div className="flex justify-between border-t border-edge pt-3 text-lg font-bold text-ink">
+                  <dt>Total</dt>
+                  <dd>{money(total)}</dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="mt-5 border-t border-edge pt-5 text-sm text-slate">Add your dates to see the total for your stay.</p>
+            )}
+
+            {checkIn && (
+              <Card tone="tint" padding="none" className="mt-5 p-4 text-sm">
+                <p className="font-semibold text-ink">{freeCancel ? `Free cancellation until ${formatDate(cancelBy)}` : "No free cancellation"}</p>
+                <p className="mt-1 text-slate">
+                  {freeCancel ? "After that, the first night is non-refundable." : "This booking can’t be cancelled for free. The first night is non-refundable."}
+                </p>
+              </Card>
+            )}
+
+            {errors.form && (
+              <p role="alert" className="mt-5 text-sm text-danger">
+                {errors.form}
+                {errors.signIn && (
+                  <>
+                    {" "}
+                    <Link href={signInHref()} className="font-semibold underline">
+                      Sign in
+                    </Link>
+                  </>
+                )}
+              </p>
+            )}
+            <button type="submit" disabled={submitting} className={`${buttonPrimary} mt-5 w-full`}>
+              {submitting ? (
+                <>
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 animate-spin" fill="none" aria-hidden>
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3" />
+                    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                  Confirming…
+                </>
+              ) : nights > 0 ? (
+                `Confirm and pay ${money(total)}`
+              ) : (
+                "Confirm and pay"
+              )}
+            </button>
+            <p className="mt-3 text-center text-sm text-slate">By confirming, you agree to the house rules and cancellation policy.</p>
+          </Card>
+        </div>
+      </form>
+    );
+  }
+
   return (
     <>
       {/* Ink, not blue, even on hover: blue text on the sky strip is too faint to read */}
@@ -420,7 +633,7 @@ export function StayReservation({
           </legend>
           {roomsLocked && (
             <p id="rooms-locked" className="mt-2 text-sm text-slate">
-              {step !== "done" ? "To change rooms, go back to your stay." : booking?.saved ? "Your room is booked." : "Sample stay, so nothing was booked."}
+              {booking?.saved ? "Your room is booked." : "Sample stay, so nothing was booked."}
             </p>
           )}
           <RoomOptions
@@ -519,161 +732,6 @@ export function StayReservation({
               </button>
               <p className="text-center text-sm text-slate">You won’t be charged yet.</p>
             </div>
-          )}
-
-          {step === "details" && (
-            <form ref={formRef} noValidate onSubmit={handleSubmit} className={`space-y-5 ${moved ? "step-in" : ""}`}>
-              <button
-                type="button"
-                onClick={backToStay}
-                // Once a real booking is sent the server saves it either way, so going back would hide it
-                disabled={submitting && stay.bookable}
-                className="inline-flex h-11 items-center gap-1.5 text-base font-semibold text-blue hover:text-blue-dark disabled:cursor-not-allowed disabled:text-slate"
-              >
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M15 6l-6 6 6 6" />
-                </svg>
-                Back to your stay
-              </button>
-              <h2 ref={headingRef} tabIndex={-1} className="text-[32px] font-bold leading-10 text-ink outline-none">
-                Your details
-              </h2>
-              {account?.email && (
-                <p className="text-sm text-slate">
-                  Signed in as <span className="font-semibold text-ink">{account.email}</span>
-                </p>
-              )}
-
-              <div className="rounded-control border border-edge bg-paper p-4 text-sm text-slate">
-                <p className="text-base font-semibold leading-5 text-ink">{room.name}</p>
-                <p className="mt-1 flex items-baseline justify-between gap-3">
-                  <span>{nights > 0 ? `${formatShort(checkIn)} - ${formatShort(checkOut)} · ${nights} ${nights === 1 ? "night" : "nights"}` : "Pick your dates"}</span>
-                  {!editingDates && (
-                    <button
-                      ref={changeDatesRef}
-                      type="button"
-                      disabled={submitting}
-                      onClick={() => openDatesHere(false)}
-                      className="shrink-0 font-semibold text-blue hover:text-blue-dark disabled:cursor-not-allowed disabled:text-slate"
-                    >
-                      Change dates
-                    </button>
-                  )}
-                </p>
-                <p>{guestLabel(adults, children)}</p>
-                <p className="mt-2 flex justify-between text-base font-bold text-ink">
-                  <span>Total</span>
-                  <span>{nights > 0 ? money(total) : "—"}</span>
-                </p>
-              </div>
-
-              {editingDates && (
-                <DateRangePicker
-                  checkIn={checkIn}
-                  checkOut={checkOut}
-                  onChange={(a, b) => {
-                    setCheckIn(a);
-                    setCheckOut(b);
-                    clear("dates");
-                  }}
-                  blockedOffsets={stay.blockedNights}
-                  open={popover === "dates"}
-                  onOpenChange={setDatesOpen}
-                  onDone={foldDates}
-                  error={errors.dates}
-                />
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field id="firstName" name="firstName" label="First name" autoComplete="given-name" defaultValue={contact.firstName} error={errors.firstName} onChange={() => clear("firstName")} />
-                <Field id="lastName" name="lastName" label="Last name" autoComplete="family-name" defaultValue={contact.lastName} error={errors.lastName} onChange={() => clear("lastName")} />
-              </div>
-              <Field id="email" name="email" label="Email address" type="email" autoComplete="email" defaultValue={contact.email || account?.email} error={errors.email} onChange={() => clear("email")} />
-              <Field id="phone" name="phone" label="Phone (optional)" type="tel" autoComplete="tel" defaultValue={contact.phone} />
-
-              <div className="space-y-5 border-t border-edge pt-5">
-                <h3 className="text-base font-semibold leading-5 text-ink">Payment</h3>
-                <Field
-                  id="cardNumber"
-                  name="cardNumber"
-                  label="Card number"
-                  inputMode="numeric"
-                  autoComplete="cc-number"
-                  placeholder="1234 5678 9012 3456"
-                  error={errors.cardNumber}
-                  onChange={(e) => {
-                    e.target.value = formatCard(e.target.value);
-                    clear("cardNumber");
-                  }}
-                />
-                <div className="grid grid-cols-2 gap-3">
-                  <Field
-                    id="expiry"
-                    name="expiry"
-                    label="Expiry date"
-                    inputMode="numeric"
-                    autoComplete="cc-exp"
-                    placeholder="MM/YY"
-                    error={errors.expiry}
-                    onChange={(e) => {
-                      e.target.value = formatExpiry(e.target.value);
-                      clear("expiry");
-                    }}
-                  />
-                  <Field
-                    id="cvc"
-                    name="cvc"
-                    label="Security code"
-                    inputMode="numeric"
-                    autoComplete="cc-csc"
-                    placeholder="CVC"
-                    maxLength={4}
-                    error={errors.cvc}
-                    onChange={(e) => {
-                      e.target.value = e.target.value.replace(/\D/g, "");
-                      clear("cvc");
-                    }}
-                  />
-                </div>
-                <Field id="cardName" name="cardName" label="Name on card" autoComplete="cc-name" error={errors.cardName} onChange={() => clear("cardName")} />
-                <Field id="postalCode" name="postalCode" label="Billing postal code" autoComplete="postal-code" error={errors.postalCode} onChange={() => clear("postalCode")} />
-              </div>
-
-              {checkIn && (
-                <p className="text-sm text-slate">
-                  {freeCancel
-                    ? `Free cancellation until ${formatDate(cancelBy)}. After that, the first night is non-refundable.`
-                    : "This booking can’t be cancelled for free. The first night is non-refundable."}
-                </p>
-              )}
-              {errors.form && (
-                <p role="alert" className="text-sm text-danger">
-                  {errors.form}
-                  {errors.signIn && (
-                    <>
-                      {" "}
-                      <Link href={signInHref()} className="font-semibold underline">
-                        Sign in
-                      </Link>
-                    </>
-                  )}
-                </p>
-              )}
-              <button type="submit" disabled={submitting} className={`${buttonPrimary} w-full`}>
-                {submitting ? (
-                  <>
-                    <svg viewBox="0 0 24 24" className="h-5 w-5 animate-spin" fill="none" aria-hidden>
-                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3" />
-                      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-                    </svg>
-                    Confirming…
-                  </>
-                ) : (
-                  nights > 0 ? `Confirm and pay ${money(total)}` : "Confirm and pay"
-                )}
-              </button>
-              <p className="text-center text-sm text-slate">By confirming, you agree to the house rules and cancellation policy.</p>
-            </form>
           )}
 
           {step === "done" && booking && (

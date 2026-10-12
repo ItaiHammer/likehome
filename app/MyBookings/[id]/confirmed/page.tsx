@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Button } from "@/app/_components/ui";
+import { Button, Card } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { bookingCode, formatStayDates, money } from "@/lib/bookings";
 import { countNights, todayUTC } from "@/utils/reservation-logic";
@@ -30,7 +30,7 @@ async function loadConfirmation(id: string, today: string) {
   return { booking: toBooking(r, stay, today), roomName: stay?.rooms.find((room) => room.id === r.room_id)?.name ?? null, last4, paid };
 }
 
-// Mykaela's rewards Figma confirmation (US 7.2.1), without the rewards card until points can be earned
+// Omar's confirmation design (#70), filled from the saved booking; no rewards card until points can be earned
 export default async function BookingConfirmedPage(props: PageProps<"/MyBookings/[id]/confirmed">) {
   const { id } = await props.params;
   const today = todayUTC();
@@ -57,67 +57,80 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-14">
       {showSample && <SampleNotice>A sample booking, shown only on your local dev server.</SampleNotice>}
 
-      {/* Ink, not blue or slate: lighter text on the sky strip is too faint to read */}
-      <div className="text-center">
-        <p className="inline-flex items-center gap-1.5 text-sm font-semibold uppercase tracking-[0.08em] text-ink">
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <Card padding="none" className="p-6 text-center sm:p-8">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue/10 text-blue-dark">
+          <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M5 12.5l4.5 4.5L19 7.5" />
           </svg>
-          Booking confirmed
-        </p>
-        <h1 className="mt-3 text-balance break-words font-serif text-[40px] leading-[48px] text-ink sm:text-[56px] sm:leading-[64px]">
+        </div>
+        <p className="mt-4 text-sm font-semibold uppercase tracking-[0.08em] text-blue-dark">Booking confirmed</p>
+        <h1 className="mt-2 text-balance break-words font-serif text-[32px] leading-10 text-ink sm:text-[40px] sm:leading-[48px]">
           You’re going to {booking.hotelName}!
         </h1>
-        <p className="mt-3 text-lg leading-7 text-ink">
-          View or edit your reservation in{" "}
-          <Link href={listHref} className="font-semibold text-ink underline decoration-blue underline-offset-4 hover:decoration-2">
-            My Bookings
-          </Link>
-        </p>
-        <p className="mt-2 text-base text-ink">
-          Confirmation <span className="font-semibold">{bookingCode(booking.id)}</span>
-        </p>
-      </div>
+        <p className="mt-2 text-base text-slate">Your booking is saved. You can view or change it any time in My Bookings.</p>
+        <div className="mt-6 inline-flex flex-wrap items-center justify-center gap-x-2 rounded-lg border border-edge bg-paper px-4 py-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate">Confirmation code</span>
+          <span className="font-mono text-lg font-bold text-blue-dark">{bookingCode(booking.id)}</span>
+        </div>
+      </Card>
 
-      <section aria-label="Your booking" className="mt-10 flex flex-col gap-5 rounded-2xl border border-edge bg-surface p-5 sm:flex-row sm:p-6">
-        <HotelPhoto url={booking.photoUrl} priority className="aspect-[3/2] w-full sm:aspect-square sm:w-40" />
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <div>
-            <div className="flex items-start justify-between gap-4">
-              <h2 className="min-w-0 break-words text-xl font-semibold text-ink">{booking.hotelName}</h2>
-              <Link href={bookingHref} className="group inline-flex shrink-0 items-center gap-1 text-base font-semibold text-blue hover:text-blue-dark">
-                View booking
-                <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-1">
-                  →
-                </span>
-              </Link>
-            </div>
-            {booking.location && <p className="mt-0.5 text-slate">{booking.location}</p>}
-            <p className="mt-3 text-slate">{[roomName, formatStayDates(booking.checkIn, booking.checkOut)].filter(Boolean).join(" · ")}</p>
-            <p className="text-slate">
-              {nights} {nights === 1 ? "night" : "nights"} · {booking.guests} {booking.guests === 1 ? "guest" : "guests"}
-            </p>
+      <Card as="section" className="mt-6">
+        <div className="flex items-start justify-between gap-4">
+          <h2 className="text-xl font-bold text-ink">Reservation details</h2>
+          <Link href={bookingHref} className="group inline-flex shrink-0 items-center gap-1 text-base font-semibold text-blue hover:text-blue-dark">
+            View booking
+            <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-1">
+              →
+            </span>
+          </Link>
+        </div>
+
+        <div className="mt-4 grid gap-6 sm:grid-cols-[12rem_1fr]">
+          <HotelPhoto url={booking.photoUrl} priority className="aspect-[4/3] w-full" />
+          <div className="min-w-0">
+            <h3 className="break-words text-lg font-semibold text-ink">{booking.hotelName}</h3>
+            {booking.location && <p className="text-sm text-slate">{booking.location}</p>}
+            <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-edge pt-4 text-sm">
+              {roomName && <Detail label="Room type" value={roomName} />}
+              <Detail label="Dates" value={formatStayDates(booking.checkIn, booking.checkOut)} />
+              <Detail label="Nights" value={`${nights} ${nights === 1 ? "night" : "nights"}`} />
+              <Detail label="Guests" value={`${booking.guests} ${booking.guests === 1 ? "guest" : "guests"}`} />
+            </dl>
           </div>
-          <dl className="mt-auto border-t border-edge pt-4">
-            <div className="flex items-baseline justify-between gap-4 text-base font-bold text-ink">
-              <dt>{paid !== null ? "Total paid" : "Total"}</dt>
-              <dd>{money(paid ?? booking.total)}</dd>
-            </div>
+        </div>
+
+        <div className="mt-6 border-t border-edge pt-6">
+          <h3 className="text-base font-semibold text-ink">Payment summary</h3>
+          <dl className="mt-3 space-y-2 text-sm">
             {last4 && (
-              <div className="mt-1 flex justify-between gap-4 text-sm text-slate">
+              <div className="flex justify-between gap-4 text-slate">
                 <dt>Paid with</dt>
                 <dd>Card ending {last4}</dd>
               </div>
             )}
+            <div className="flex items-baseline justify-between gap-4 border-t border-edge pt-2 text-base font-bold text-ink">
+              <dt>{paid !== null ? "Total paid" : "Total"}</dt>
+              <dd>{money(paid ?? booking.total)}</dd>
+            </div>
           </dl>
         </div>
-      </section>
+      </Card>
 
-      <div className="mt-8 flex justify-center">
+      <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+        <Button href={listHref}>Go to My Bookings</Button>
         <Button href="/search" variant="secondary">
           Explore more stays
         </Button>
       </div>
     </main>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs font-semibold uppercase text-slate">{label}</dt>
+      <dd className="mt-0.5 break-words font-medium text-ink">{value}</dd>
+    </div>
   );
 }
