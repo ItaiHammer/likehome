@@ -39,6 +39,10 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
   if (!UUID.test(id)) return null;
 
   const [hotelResult, roomsResult] = await Promise.all([getHotel(id), getRoomsByHotel(id)]);
+  // Only a missing hotel (.single() found no row: PGRST116) is "not found". Any other failure throws, so
+  // the pages show their Try again screen instead of calling the hotel unlisted.
+  if (roomsResult.error) throw new Error(roomsResult.error.message);
+  if (hotelResult.error && hotelResult.error.code !== "PGRST116") throw new Error(hotelResult.error.message);
   const hotel = hotelResult.data as HotelRow | null;
   const rows = (roomsResult.data ?? []) as RoomRow[];
   if (!hotel || rows.length === 0) return null;
