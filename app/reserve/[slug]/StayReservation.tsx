@@ -343,13 +343,21 @@ export function StayReservation({
       if (!res.ok || !body.reservation) return fail(body.error ?? "We couldn’t save your booking. Try again.");
 
       const { id, total_price } = body.reservation;
+      // Refresh first: it clears Next's back/forward cache (so Back to My bookings shows the new
+      // booking) even though the navigation right after it takes over
+      router.refresh();
+      if (id) {
+        // The button keeps saying "Confirming…" until the confirmation page loads
+        router.push(`${PAGE_ROUTES.MY_BOOKINGS}/${id}/confirmed`);
+        return;
+      }
       const savedTotal = Number(total_price);
       setBooking({
         ...snapshot,
         saved: true,
         // The saved total, in case the server priced it differently from the card
         total: Number.isFinite(savedTotal) && total_price !== null ? savedTotal : snapshot.total,
-        confirmation: id ? `LH-${id.slice(0, 8).toUpperCase()}` : "LH-SAVED",
+        confirmation: "LH-SAVED",
       });
       setSubmitting(false);
       goTo("done");
