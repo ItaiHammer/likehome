@@ -1,5 +1,4 @@
 import type { SceneVariant } from "../_components/WindowScene";
-import type { FactGroup } from "./facts";
 
 // Placeholder listings until the backend exists. The names borrow real hotel
 // brands so the template reads like a real booking site; prices, ratings and
@@ -12,6 +11,9 @@ export type Room = {
   nightly: number;
   soldOut?: boolean;
 };
+
+/** Something a stay has, named like the search filter it matches */
+export type Offer = { label: string; /** Only some of its rooms have it */ someRooms?: boolean };
 
 export type Stay = {
   slug: string;
@@ -27,8 +29,10 @@ export type Stay = {
   variant?: SceneVariant;
   /** Photo URLs; the gallery shows numbered placeholders without them */
   photos?: string[];
-  /** "Good to know" facts; the placeholder facts in facts.ts without them */
-  facts?: FactGroup[];
+  /** What it offers, from its database tags; the sample stays show their tags instead */
+  offers?: Offer[];
+  /** The "Good for" filters it matches (Families, Pets…) */
+  goodFor?: string[];
   /** A real hotel whose rooms can be booked through /api/reservations (the sample stays can't) */
   bookable?: boolean;
   /** Tax added to the room and cleaning fee; TAX_RATE when not set */

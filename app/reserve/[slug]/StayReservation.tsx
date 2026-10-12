@@ -10,13 +10,12 @@ import { MAX_NIGHTS, todayUTC } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Field, Stars } from "../../_components/ui";
-import { getFacts } from "../../_data/facts";
 import { TAX_RATE, type Stay } from "../../_data/stays";
 import { DateRangePicker } from "./DateRangePicker";
-import { FactTags } from "./FactTags";
 import { GuestsField, guestLabel } from "./GuestsField";
 import { PhotoGallery } from "./PhotoGallery";
 import { RoomOptions } from "./RoomOptions";
+import { StayOffers } from "./StayOffers";
 
 type Step = "stay" | "details" | "done";
 type Errors = Partial<Record<string, string>>;
@@ -68,7 +67,6 @@ export function StayReservation({
   initial?: StayChoices;
 }) {
   const router = useRouter();
-  const facts = stay.facts ?? getFacts(stay);
   const [checkIn, setCheckIn] = useState(initial.checkIn ?? "");
   const [checkOut, setCheckOut] = useState(initial.checkOut ?? "");
   const [adults, setAdults] = useState(initial.adults ?? 2);
@@ -398,7 +396,7 @@ export function StayReservation({
 
       <PhotoGallery stayName={stay.name} photos={stay.photos} />
 
-      <FactTags groups={facts} stayName={stay.name} location={stay.location} />
+      <StayOffers offers={stay.offers ?? stay.tags.map((label) => ({ label }))} goodFor={stay.goodFor ?? []} />
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_514px] lg:items-start">
         <fieldset id="rooms" disabled={roomsLocked} aria-describedby={roomsLocked ? "rooms-locked" : undefined} className="min-w-0 scroll-mt-6">
