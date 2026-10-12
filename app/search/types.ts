@@ -59,8 +59,8 @@ export type LocationParams = {
 }
 
 export type DateParams = {
-    checkIn?: string;
-    checkOut?: string;
+    checkIn: string;
+    checkOut: string;
 }
 
 export type BedParams = {

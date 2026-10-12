@@ -2,13 +2,16 @@ import { streamText, Output, convertToModelMessages, createUIMessageStreamRespon
 import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import { bedSizes, sorts, tags } from '../../../search/types';
+import { todayInTimeZone } from '@/utils/reservation-logic';
 
 export async function POST(req: Request) {
-    const { messages } = await req.json();
+    // tz: the guest's IANA time zone, sent by the search bar, so "today" is their today
+    const { messages, tz } = await req.json();
 
     const textStream = streamText({
         model: google('gemini-3.1-flash-lite'),
-        instructions: instructions,
+        // Built per request so "today" is never stale on a long-running server
+        instructions: getInstructions(todayInTimeZone(tz)),
         messages: await convertToModelMessages(messages),
         temperature: 0,
         output: aiOutputFormat
@@ -22,7 +25,9 @@ export async function POST(req: Request) {
 const helpMessage = 'Provide a description of your planned trip, and I will find the best accommodations for it.'
 const outOfScopeMessage = `Please let me know if you require any assistance for travel accommodations. ${helpMessage}`;
 
-const instructions = 
+// A function, not a const: a module-level const is built once when the server starts,
+// so the date inside it would stay frozen at that day.
+const getInstructions = (today: string) =>
     `You are a professional travel accommodations assistant. 
 
     If the given input does not relate to travel accommodations, then return the following text:
@@ -48,9 +53,20 @@ const instructions =
             - If no valid city can be determined, output nothing (leave blank).
             - Spell out all names fully. NO abbreviations (e.g., use "California", not "CA"; use "United States of America", not "US" or "USA").
 
+        'checkIn' and 'checkOut':
+            - Must be on or after today's date (${today}).
+            - Include both xor none. Never include one but not the other.
+            - If checkIn and checkOut are both undefined, omit these fields from output.
+            - Otherwise, handle the following cases IN ORDER:
+            1. If checkIn is defined but checkOut is omitted, set checkOut to checkIn + 1 day.
+            2. If checkOut is defined but checkIn is omitted, set checkIn to checkOut - 1 day.
+            3. If checkIn is before today's date, set checkIn to today's date.
+            4. If checkIn is on or after checkOut, set checkOut to checkIn + 1 day.
+
         'minPrice' and 'maxPrice:
             - Units are price per night.
             - Accurately calculate the equivalent price per night if given input provides in another unit.
+            - minPrice must be less than or equal to maxPrice. Swap minPrice and maxPrice to make this true if needed.
             - Include none, both, xor one or the other field.
             - Including 'minPrice' does not mean 'maxPrice' must be specified and vice versa.
 

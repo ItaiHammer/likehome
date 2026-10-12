@@ -14,6 +14,7 @@ import type {
 import { bedSizes, sorts, tags } from './types.ts';
 
 import { searchAvailableHotels } from '../../utils/search.ts';
+import { parseDate, todayInTimeZone } from '../../utils/reservation-logic.ts';
 
 // Paging stays out of SearchRequest: it picks which slice of results to show,
 // not which stays match, so the AI and filter parsing never see it.
@@ -76,7 +77,7 @@ function getSearchParams(searchParams: SearchRequest): PropertyFilter {
     return Object.fromEntries(
         Object.entries({
             location: getLocationParams(searchParams.where),
-            dates: getDatesParams(searchParams.checkIn, searchParams.checkOut),
+            dates: getDatesParams(searchParams.checkIn, searchParams.checkOut, searchParams.tz),
             beds: getBedsParams(searchParams.numBeds, searchParams.bedSize),
             guests: getGuestsParams(searchParams.adults, searchParams.children),
             price: getPriceParams(searchParams.minPrice, searchParams.maxPrice),
@@ -120,30 +121,62 @@ function getLocationParams(location?: string): LocationParams | undefined {
     }
 }
 
-function getDatesParams(checkIn?: string, checkOut?: string): DateParams | undefined {
-    const { ymd: checkInYmd, time: checkInTime } = getDate(checkIn);
-    const { ymd: checkOutYmd, time: checkOutTime } = getDate(checkOut);
+function getDatesParams(checkIn?: string, checkOut?: string, tz?: string): DateParams | undefined {
+    const cleanedCheckIn = checkIn ? checkIn.split('T')[0] : undefined;
+    const cleanedCheckOut = checkOut ? checkOut.split('T')[0] : undefined;
+    
+    // parseDate only accepts real YYYY-MM-DD dates, so 2027-02-30 is invalid
+    // instead of rolling over to March 2
+    const validCheckIn = parseDate(cleanedCheckIn) !== null;
+    const validCheckOut = parseDate(cleanedCheckOut) !== null;
 
-    if (checkInYmd === undefined && checkOutYmd === undefined) {
+    let checkInDate = new Date();
+    let checkOutDate = new Date();
+
+    // Both invalid, omit
+    if (!validCheckIn && !validCheckOut) {
         return undefined;
     }
 
-    // Check valid range
-    if (checkInTime !== undefined && checkOutTime !== undefined &&
-        checkInTime >= checkOutTime) {
-        return undefined;
+    // Defaults if one is omitted
+    if (validCheckIn) {
+        checkInDate = new Date(cleanedCheckIn as string);
+    }
+    if (validCheckOut) {
+        checkOutDate = new Date(cleanedCheckOut as string);
+    }
+    if (validCheckIn && !validCheckOut) {
+        checkOutDate = new Date(checkInDate);
+        checkOutDate.setUTCDate(checkInDate.getUTCDate() + 1);
+    }
+    if (!validCheckIn && validCheckOut) {
+        checkInDate = new Date(checkOutDate);
+        checkInDate.setUTCDate(checkOutDate.getUTCDate() - 1);
     }
 
-    return Object.fromEntries(
-        Object.entries({
-            checkIn: checkInYmd,
-            checkOut: checkOutYmd
-        }).filter(([_, value]) => value !== undefined)
-    );
+    // "Today" in the guest's calendar (tz comes from the search form), not UTC's:
+    // at 6pm Pacific it's already tomorrow in UTC
+    const today = new Date(todayInTimeZone(tz));
+
+    // Enforce checkIn >= today
+    if (checkInDate < today) {
+        checkInDate = new Date(today);
+    }
+
+    // Enforce checkOut > checkIn
+    if (checkOutDate <= checkInDate) {
+        checkOutDate = new Date(checkInDate);
+        checkOutDate.setUTCDate(checkInDate.getUTCDate() + 1);
+    }
+
+    return {
+        checkIn: checkInDate.toISOString().split('T')[0],
+        checkOut: checkOutDate.toISOString().split('T')[0]
+    };
 }
 
 function getBedsParams(num?: string, size?: string): BedParams | undefined {
-    const numBeds = getNumberOrUndefined(num);
+    const numBeds = getPositiveNumberOrUndefined(num);
     const bedSize = getAsTypeOrUndefined(size, bedSizes);
     
     if (numBeds === undefined && bedSize === undefined) {
@@ -159,8 +192,8 @@ function getBedsParams(num?: string, size?: string): BedParams | undefined {
 }
 
 function getGuestsParams(adults?: string, children?: string): GuestParams | undefined {
-    let adultGuests = getNumberOrUndefined(adults);
-    const childGuests = getNumberOrUndefined(children);
+    let adultGuests = getPositiveNumberOrUndefined(adults);
+    const childGuests = getPositiveNumberOrUndefined(children);
     let total = 0;
 
     if (adultGuests === undefined && childGuests === undefined) {
@@ -185,17 +218,17 @@ function getGuestsParams(adults?: string, children?: string): GuestParams | unde
 }
 
 function getPriceParams(min?: string, max?: string): PriceParams | undefined {
-    const minPrice = getNumberOrUndefined(min);
-    const maxPrice = getNumberOrUndefined(max);
+    let minPrice = getPositiveNumberOrUndefined(min, 2);
+    let maxPrice = getPositiveNumberOrUndefined(max, 2);
     
     if (minPrice === undefined && maxPrice === undefined) {
         return undefined;
     }
 
-    // Check valid range, allow 1 value in range
+    // Enforce valid range, allow 1 value in range
     if (minPrice !== undefined && maxPrice !== undefined &&
         minPrice > maxPrice) {
-        return undefined;
+        [minPrice, maxPrice] = [maxPrice, minPrice]         
     }
     
     return Object.fromEntries(
@@ -207,7 +240,9 @@ function getPriceParams(min?: string, max?: string): PriceParams | undefined {
 }
 
 function getRatingParams(min?: string): RatingParams | undefined {
-    const minStarRating = getNumberOrUndefined(min);
+    const rating = getPositiveNumberOrUndefined(min, 1);
+    // Ratings are out of 5
+    const minStarRating = rating === undefined ? undefined : Math.min(rating, 5);
 
     if (minStarRating === undefined) {
         return undefined;
@@ -245,25 +280,13 @@ function getTagParams(tagInput?: SearchRequest['tags']): Tag[] | undefined {
 
 // Helpers
 
-function getDate(dateStr?: string): { ymd?: string, time?: number} {
-    if (dateStr === undefined) {
-        return {};
-    }
+// Plain decimal numbers only: rejects hex ("0x10"), exponents ("1e3") and "Infinity",
+// which Number() would otherwise accept
+const PLAIN_NUMBER_RE = /^-?\d+(\.\d+)?$/;
 
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) {
-        return {};
-    }
-
-    return {
-        ymd: date.toISOString().split('T')[0],
-        time: date.getTime()
-    };
-}
-
-function getNumberOrUndefined(value?: string): number | undefined {
-    if (!isNaN(Number(value)) && value?.trim() != "") {
-        return Number(value);
+function getPositiveNumberOrUndefined(value?: string, decimalDigits: number = 0): number | undefined {
+    if (value !== undefined && PLAIN_NUMBER_RE.test(value.trim())) {
+        return Math.max(+Number(value).toFixed(decimalDigits), 0);
     }
     return undefined;
 }
