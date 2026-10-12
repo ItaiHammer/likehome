@@ -221,18 +221,14 @@ export function StayReservation({
   }
 
   // Sign-in, then straight back to this stay with the same room, dates and guests picked. The search
-  // rides along too, so Back to stays still returns to it.
+  // rides along as `from`, so Back to stays still returns to it.
   function signInHref() {
-    const back = new URLSearchParams(search);
-    back.set("room", room.id);
-    back.set("adults", String(adults));
-    back.set("children", String(children));
-    back.delete("checkIn");
-    back.delete("checkOut");
+    const back = new URLSearchParams({ room: room.id, adults: String(adults), children: String(children) });
     if (checkIn && checkOut) {
       back.set("checkIn", checkIn);
       back.set("checkOut", checkOut);
     }
+    if (search) back.set("from", search);
     return `/auth/login?next=${encodeURIComponent(`/reserve/${stay.slug}?${back}`)}`;
   }
 

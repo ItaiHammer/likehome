@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { getOtherStays } from "@/lib/other-stays";
-import { matchingRoom, readRoomFilters, searchQuery } from "@/lib/stay-filters";
+import { matchingRoom, originalSearch, readRoomFilters } from "@/lib/stay-filters";
 import { countNights, MAX_NIGHTS, parseDate, todayUTC } from "@/utils/reservation-logic";
 import { createClient } from "@/utils/supabase/server";
 import { addDays } from "../../_components/dates";
@@ -83,7 +83,7 @@ export default async function ReservePage(props: PageProps<"/reserve/[slug]">) {
           account={account}
           otherStays={otherStays}
           initial={readChoices(params, stay)}
-          search={searchQuery(params)}
+          search={originalSearch(params)}
         />
       </main>
     </div>

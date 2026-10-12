@@ -18,6 +18,14 @@ export function searchQuery(params: Params): string {
   return query.toString()
 }
 
+// The search a stay was opened from. Through sign-in it rides along as `from`, since the card's own
+// guests and dates replace the top-level keys.
+export function originalSearch(params: Params): string {
+  if (typeof params.from !== 'string') return searchQuery(params)
+  const from = new URLSearchParams(params.from)
+  return searchQuery(Object.fromEntries([...new Set(from.keys())].map((key) => [key, from.getAll(key)])))
+}
+
 export type RoomFilters = { guests: number; minPrice?: number; maxPrice?: number; numBeds?: number; bedSize?: string; tags: string[] }
 
 type FilterableRoom = { nightly: number; sleeps: number; soldOut?: boolean; beds?: number; bedSize?: string | null; tags?: string[] }
@@ -31,10 +39,13 @@ export function readRoomFilters(params: Params, guests: number): RoomFilters {
   }
   const beds = one('numBeds')
   const bedSize = one('bedSize')
+  // Like the search, a reversed range (min above max) means no price filter at all
+  const [minPrice, maxPrice] = [amount('minPrice'), amount('maxPrice')]
+  const reversed = minPrice !== undefined && maxPrice !== undefined && minPrice > maxPrice
   return {
     guests,
-    minPrice: amount('minPrice'),
-    maxPrice: amount('maxPrice'),
+    minPrice: reversed ? undefined : minPrice,
+    maxPrice: reversed ? undefined : maxPrice,
     numBeds: beds && /^[1-9]\d*$/.test(beds) ? Number(beds) : undefined,
     bedSize: (bedSizes as readonly string[]).includes(bedSize ?? '') ? bedSize : undefined,
     tags: [params.tags ?? []].flat().filter((t) => (filterTags as readonly string[]).includes(t)),

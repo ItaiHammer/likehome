@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { matchingRoom, readRoomFilters, roomAmenityList, searchQuery, stayOffers } from '../lib/stay-filters.ts'
+import { matchingRoom, originalSearch, readRoomFilters, roomAmenityList, searchQuery, stayOffers } from '../lib/stay-filters.ts'
 import { propertyAmenities, roomAmenities, tags as filterTags, travelerTypes } from '../app/search/types.ts'
 
 // What the stay page lists for a tag, in either the amenities row or "Good for"
@@ -64,6 +64,10 @@ test('filter values the search ignores don’t narrow the rooms', () => {
     bedSize: 'Twin XL',
     tags: ['Pool'],
   })
+  // The search drops a reversed range entirely, so it doesn't narrow the rooms here either
+  const reversed = readRoomFilters({ minPrice: '300', maxPrice: '100' }, 2)
+  assert.equal(reversed.minPrice, undefined)
+  assert.equal(reversed.maxPrice, undefined)
 })
 
 test('a result links to its stay with the search, and only the search', () => {
@@ -72,4 +76,14 @@ test('a result links to its stay with the search, and only the search', () => {
     'where=Honolulu&adults=2&tags=Kitchen&tags=Pool&page=2',
   )
   assert.equal(searchQuery({}), '')
+})
+
+test('Back to stays keeps the original search through sign-in', () => {
+  const search = 'where=Honolulu&adults=2&tags=Kitchen&tags=Pool&page=2'
+  // Coming back from sign-in: the card's own guests and dates sit on top, the search in `from`
+  assert.equal(originalSearch({ room: 'r1', adults: '4', checkIn: '2026-11-01', checkOut: '2026-11-05', from: search }), search)
+  // Straight from a result, the stay link's own keys are the search
+  assert.equal(originalSearch({ where: 'Honolulu', adults: '2' }), 'where=Honolulu&adults=2')
+  // Only search keys survive, so `from` can't put anything else into the link
+  assert.equal(originalSearch({ from: 'next=https://evil.example&where=Paris' }), 'where=Paris')
 })
