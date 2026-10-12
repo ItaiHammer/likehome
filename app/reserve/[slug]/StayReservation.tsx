@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { PAGE_ROUTES } from "@/constants/routes";
 import { money } from "@/lib/bookings";
+import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS, todayUTC } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
@@ -33,6 +35,7 @@ type Booking = {
   /** false for the sample stays, which can't be saved */
   saved: boolean;
 };
+type Card = { number: string; expMonth: number; expYear: number; cvc: string; name: string };
 
 /** Room, dates and guests to start the card with, e.g. when coming back from sign-in */
 export type StayChoices = { checkIn?: string; checkOut?: string; adults?: number; children?: number; roomId?: string };
@@ -201,9 +204,7 @@ export function StayReservation({
     if (!text("firstName")) next.firstName = "Enter your first name.";
     if (!text("lastName")) next.lastName = "Enter your last name.";
     if (!/^\S+@\S+\.\S+$/.test(text("email"))) next.email = "Enter a valid email address.";
-    if (!/^\d{13,19}$/.test(text("cardNumber").replace(/\s/g, ""))) next.cardNumber = "Enter a valid card number.";
-    if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(text("expiry"))) next.expiry = "Use the format MM/YY.";
-    if (!/^\d{3,4}$/.test(text("cvc"))) next.cvc = "Enter the 3 or 4 digit code.";
+    Object.assign(next, cardErrors(text("cardNumber"), text("expiry"), text("cvc")));
     if (!text("cardName")) next.cardName = "Enter the name on your card.";
     if (!text("postalCode")) next.postalCode = "Enter your billing postal code.";
 
@@ -237,26 +238,42 @@ export function StayReservation({
       return;
     }
 
+    const [expMonth, expYear] = text("expiry").split("/").map(Number);
+    const card = { number: text("cardNumber").replace(/[\s-]/g, ""), expMonth, expYear: 2000 + expYear, cvc: text("cvc"), name: text("cardName") };
     saveRequest.current?.abort();
     const request = new AbortController();
     saveRequest.current = request;
-    void saveBooking(snapshot, request.signal);
+    void saveBooking(snapshot, card, request.signal);
   }
 
-  async function saveBooking(snapshot: Omit<Booking, "confirmation" | "saved">, signal: AbortSignal) {
+  // A mock charge (nothing is billed), then the booking and its payment are saved
+  async function saveBooking(snapshot: Omit<Booking, "confirmation" | "saved">, card: Card, signal: AbortSignal) {
     const fail = (message: string, signIn = false) => {
       setSubmitting(false);
       setErrors(signIn ? { form: message, signIn: "yes" } : { form: message });
     };
     try {
-      const res = await fetch("/api/reservations", {
+      const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ room_id: room.id, check_in: snapshot.checkIn, check_out: snapshot.checkOut, guests: snapshot.adults + snapshot.children }),
+        body: JSON.stringify({
+          room_id: room.id,
+          check_in: snapshot.checkIn,
+          check_out: snapshot.checkOut,
+          guests: snapshot.adults + snapshot.children,
+          payment: { card_number: card.number, exp_month: card.expMonth, exp_year: card.expYear, cvc: card.cvc, name_on_card: card.name },
+        }),
         signal,
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; reservation?: { id?: string; total_price?: number | string } };
       if (res.status === 401) return fail("Your sign-in has ended. Sign in again to finish booking.", true);
+      if (res.status === 402) {
+        // A declined card saves nothing, so the guest can just try another one
+        setSubmitting(false);
+        setErrors({ cardNumber: `${body.error ?? "Your card was declined."} Try another card.` });
+        document.getElementById("cardNumber")?.focus();
+        return;
+      }
       if (res.status === 409) return fail(`${body.error ?? "Those dates were just booked."} Go back and pick other dates.`);
       if (!res.ok || !body.reservation) return fail(body.error ?? "We couldn’t save your booking. Try again.");
 
@@ -535,7 +552,7 @@ export function StayReservation({
                     Confirming…
                   </>
                 ) : (
-                  `Confirm reservation · ${money(total)}`
+                  `Confirm and pay ${money(total)}`
                 )}
               </button>
               <p className="text-center text-sm text-slate">By confirming, you agree to the house rules and cancellation policy.</p>
@@ -566,9 +583,15 @@ export function StayReservation({
                 <Row label="Guests" value={guestLabel(booking.adults, booking.children)} />
                 <Row label="Total" value={money(booking.total)} />
               </dl>
-              <Link href="/" className={`${buttonPrimary} w-full`}>
-                Back to home
-              </Link>
+              {booking.saved ? (
+                <Link href={PAGE_ROUTES.MY_BOOKINGS} className={`${buttonPrimary} w-full`}>
+                  View My Bookings
+                </Link>
+              ) : (
+                <Link href="/" className={`${buttonPrimary} w-full`}>
+                  Back to home
+                </Link>
+              )}
               <button type="button" onClick={startOver} className={`${buttonSecondary} w-full`}>
                 Book different dates
               </button>
