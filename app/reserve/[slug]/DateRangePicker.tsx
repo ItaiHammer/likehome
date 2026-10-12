@@ -113,7 +113,7 @@ export function DateRangePicker({
         </div>
       </div>
       {error && (
-        <p id="dates-error" className="mt-1.5 text-sm text-danger">
+        <p id="dates-error" role="alert" className="mt-1.5 text-sm text-danger">
           {error}
         </p>
       )}

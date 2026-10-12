@@ -78,10 +78,12 @@ export function StayReservation({
   );
   const [popover, setPopover] = useState<Popover>(null);
   const [step, setStep] = useState<Step>("stay");
+  // Changing dates from the payment step, so typed card details aren't lost going back
+  const [editingDates, setEditingDates] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
   const [booking, setBooking] = useState<Booking | null>(null);
-  // Contact details survive going back to change the stay (card details aren't kept)
+  // Contact details survive going back to the stay (card details aren't kept)
   const [contact, setContact] = useState<Contact>({ firstName: "", lastName: "", email: "", phone: "" });
   const cardRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -147,8 +149,32 @@ export function StayReservation({
     return null;
   }
 
+  function goTo(next: Step) {
+    setEditingDates(false);
+    setStep(next);
+  }
+
+  // A dates problem found on the payment step: fix the dates right there instead of going back
+  function showDatesHere(message: string) {
+    setErrors(message ? { dates: message } : {});
+    setEditingDates(true);
+    setPopover("dates");
+    // After the calendar renders: it sits near the top of a long form, above the Confirm button
+    window.setTimeout(() => {
+      const field = document.getElementById("checkIn");
+      field?.focus({ preventScroll: true });
+      field?.scrollIntoView({ block: "center", behavior: isMotionReduced() ? "auto" : "smooth" });
+    });
+  }
+
+  // Closing the calendar on the payment step folds it back into the summary once the dates work
+  function setDetailsDatesOpen(open: boolean) {
+    setDatesOpen(open);
+    if (!open && nights > 0 && nights <= MAX_NIGHTS) setEditingDates(false);
+  }
+
   function showStayProblem(problem: StayProblem) {
-    setStep("stay");
+    goTo("stay");
     if (problem.field === "dates") {
       setErrors(problem.message ? { dates: problem.message } : {});
       setPopover("dates");
@@ -174,7 +200,7 @@ export function StayReservation({
     if (!account) return router.push(signInHref());
     setErrors({});
     setPopover(null);
-    setStep("details");
+    goTo("details");
   }
 
   // Remember what's typed in the contact fields before the form goes away
@@ -192,7 +218,7 @@ export function StayReservation({
     setSubmitting(false);
     saveContact();
     setErrors({});
-    setStep("stay");
+    goTo("stay");
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -217,6 +243,7 @@ export function StayReservation({
 
     // Re-check the stay itself (room, dates, guests) right before confirming
     const problem = stayProblem();
+    if (problem?.field === "dates") return showDatesHere(problem.message);
     if (problem) {
       saveContact();
       return showStayProblem(problem);
@@ -233,7 +260,7 @@ export function StayReservation({
       confirmTimer.current = window.setTimeout(() => {
         setBooking({ ...snapshot, saved: false, confirmation: `LH-${Math.random().toString(36).slice(2, 8).toUpperCase()}` });
         setSubmitting(false);
-        setStep("done");
+        goTo("done");
       }, 900);
       return;
     }
@@ -274,7 +301,10 @@ export function StayReservation({
         document.getElementById("cardNumber")?.focus();
         return;
       }
-      if (res.status === 409) return fail(`${body.error ?? "Those dates were just booked."} Go back and pick other dates.`);
+      if (res.status === 409) {
+        setSubmitting(false);
+        return showDatesHere(`${body.error ?? "Those dates were just booked."} Pick other dates.`);
+      }
       if (!res.ok || !body.reservation) return fail(body.error ?? "We couldn’t save your booking. Try again.");
 
       const { id, total_price } = body.reservation;
@@ -287,7 +317,7 @@ export function StayReservation({
         confirmation: id ? `LH-${id.slice(0, 8).toUpperCase()}` : "LH-SAVED",
       });
       setSubmitting(false);
-      setStep("done");
+      goTo("done");
     } catch (err) {
       if (signal.aborted) return;
       console.error("Saving the booking failed", err);
@@ -300,7 +330,7 @@ export function StayReservation({
     setCheckOut("");
     setErrors({});
     setBooking(null);
-    setStep("stay");
+    goTo("stay");
   }
 
   return (
@@ -459,15 +489,44 @@ export function StayReservation({
 
               <div className="rounded-control border border-edge bg-paper p-4 text-sm text-slate">
                 <p className="text-base font-semibold leading-5 text-ink">{room.name}</p>
-                <p className="mt-1">
-                  {formatShort(checkIn)} - {formatShort(checkOut)} · {nights} {nights === 1 ? "night" : "nights"}
+                <p className="mt-1 flex items-baseline justify-between gap-3">
+                  <span>{nights > 0 ? `${formatShort(checkIn)} - ${formatShort(checkOut)} · ${nights} ${nights === 1 ? "night" : "nights"}` : "Pick your dates"}</span>
+                  {!editingDates && (
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => {
+                        setEditingDates(true);
+                        setPopover("dates");
+                      }}
+                      className="shrink-0 font-semibold text-blue hover:text-blue-dark disabled:cursor-not-allowed disabled:text-slate"
+                    >
+                      Change dates
+                    </button>
+                  )}
                 </p>
                 <p>{guestLabel(adults, children)}</p>
                 <p className="mt-2 flex justify-between text-base font-bold text-ink">
                   <span>Total</span>
-                  <span>{money(total)}</span>
+                  <span>{nights > 0 ? money(total) : "—"}</span>
                 </p>
               </div>
+
+              {editingDates && (
+                <DateRangePicker
+                  checkIn={checkIn}
+                  checkOut={checkOut}
+                  onChange={(a, b) => {
+                    setCheckIn(a);
+                    setCheckOut(b);
+                    clear("dates");
+                  }}
+                  blockedOffsets={stay.blockedNights}
+                  open={popover === "dates"}
+                  onOpenChange={setDetailsDatesOpen}
+                  error={errors.dates}
+                />
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <Field id="firstName" name="firstName" label="First name" autoComplete="given-name" defaultValue={contact.firstName} error={errors.firstName} onChange={() => clear("firstName")} />
@@ -552,7 +611,7 @@ export function StayReservation({
                     Confirming…
                   </>
                 ) : (
-                  `Confirm and pay ${money(total)}`
+                  nights > 0 ? `Confirm and pay ${money(total)}` : "Confirm and pay"
                 )}
               </button>
               <p className="text-center text-sm text-slate">By confirming, you agree to the house rules and cancellation policy.</p>
