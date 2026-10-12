@@ -1,9 +1,9 @@
-import { Tag } from "@/app/_components/ui";
+import { Button, Tag } from "@/app/_components/ui";
 import { bookingCode, bookingSummary, type Booking } from "@/lib/bookings";
 import { HotelPhoto } from "./HotelPhoto";
 import { SoonButton } from "./SoonButton";
 
-export function UpcomingBooking({ booking, priority = false }: { booking: Booking; priority?: boolean }) {
+export function UpcomingBooking({ booking, href, priority = false }: { booking: Booking; href: string; priority?: boolean }) {
   return (
     <article className="flex flex-col gap-5 rounded-lg border border-edge bg-surface p-4 sm:flex-row sm:flex-wrap sm:items-center sm:p-5 xl:flex-nowrap">
       <HotelPhoto url={booking.photoUrl} priority={priority} className="aspect-[3/2] w-full sm:w-48" />
@@ -14,9 +14,9 @@ export function UpcomingBooking({ booking, priority = false }: { booking: Bookin
         <p className="mt-1 text-sm text-slate">Booking {bookingCode(booking.id)}</p>
       </div>
       <div className="flex flex-wrap gap-3 sm:w-full xl:w-auto xl:flex-col">
-        <SoonButton variant="primary" className="flex-1 xl:flex-none">
+        <Button href={href} className="flex-1 xl:flex-none">
           View booking
-        </SoonButton>
+        </Button>
         <SoonButton className="flex-1 xl:flex-none">Contact hotel</SoonButton>
       </div>
     </article>

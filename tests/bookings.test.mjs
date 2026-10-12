@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   bookingCode,
   bookingSummary,
+  changeBlocker,
   findOverlap,
   firstName,
   formatStayDates,
@@ -92,6 +93,18 @@ test('first name and initials', () => {
   assert.equal(initials('Cher', null), 'C')
   assert.equal(initials(null, 'nolan@example.com'), 'N')
   assert.equal(initials(null, null), '?')
+})
+
+test('a booking can be changed until check-in day (UTC)', () => {
+  const stay = (checkIn, checkOut, status = 'confirmed') => ({ checkIn, checkOut, status })
+  assert.equal(changeBlocker(stay('2026-10-11', '2026-10-14'), TODAY), null)
+  assert.match(changeBlocker(stay(TODAY, '2026-10-14'), TODAY), /too close to check-in/)
+  assert.match(changeBlocker(stay('2026-10-08', '2026-10-12'), TODAY), /stay has started/)
+  // Check-out day in UTC can still be the last night for a US guest
+  assert.match(changeBlocker(stay('2026-10-07', TODAY), TODAY), /stay has started/)
+  assert.match(changeBlocker(stay('2026-10-01', '2026-10-05'), TODAY), /over/)
+  assert.match(changeBlocker(stay('2026-10-20', '2026-10-24', 'completed'), TODAY), /over/)
+  assert.match(changeBlocker(stay('2026-10-20', '2026-10-24', 'cancelled'), TODAY), /cancelled/)
 })
 
 test('finds a booking at another hotel that the new dates overlap', () => {

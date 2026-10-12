@@ -73,6 +73,19 @@ export function overlapMessage(stay: OtherStay): string {
   return `You already have a booking at ${stay.hotelName} for ${formatStayDates(stay.checkIn, stay.checkOut)}. Pick dates that don’t overlap it.`
 }
 
+export const TOO_CLOSE_TO_CHANGE = 'It’s too close to check-in to change this booking online.'
+
+// Mirrors PATCH /api/reservations/[id], which refuses once check-in day has come in UTC. That's
+// still the evening before for US guests, so the wording never names a day.
+// Returns why a booking can't be changed, or null if it can.
+export function changeBlocker(booking: { status: string; checkIn: string; checkOut: string }, today: string): string | null {
+  if (booking.status === 'cancelled') return 'This booking was cancelled, so it can’t be changed.'
+  if (booking.status === 'completed' || booking.checkOut < today) return 'This stay is over, so it can’t be changed.'
+  if (booking.checkIn < today) return 'Your stay has started, so it can’t be changed online.'
+  if (booking.checkIn === today) return TOO_CLOSE_TO_CHANGE
+  return null
+}
+
 export function firstName(fullName: string | null | undefined): string | null {
   return fullName?.trim().split(/\s+/)[0] || null
 }

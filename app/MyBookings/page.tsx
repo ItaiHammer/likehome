@@ -11,6 +11,7 @@ import { getRoomsByIds } from "@/utils/rooms";
 import { getUserId } from "@/utils/user";
 import { AccountSidebar } from "./_components/AccountSidebar";
 import { PastBooking } from "./_components/PastBooking";
+import { SampleNotice } from "./_components/SampleNotice";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
 import { getSampleBookings } from "./sampleBookings";
 
@@ -66,7 +67,9 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: P
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
-      {showSample && <SampleNotice />}
+      {showSample && (
+        <SampleNotice>Sample bookings, shown only on your local dev server. Take ?sample off the address to see your real bookings.</SampleNotice>
+      )}
 
       {/* Ink, not blue or slate: lighter text on the sky strip is too faint to read */}
       <p className="text-sm font-semibold uppercase tracking-[0.08em] text-ink">Your account</p>
@@ -86,7 +89,11 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: P
               <ul className="mt-4 space-y-4">
                 {upcoming.map((booking, i) => (
                   <li key={booking.id}>
-                    <UpcomingBooking booking={booking} priority={i === 0} />
+                    <UpcomingBooking
+                      booking={booking}
+                      href={`${PAGE_ROUTES.MY_BOOKINGS}/${booking.id}${showSample ? "?sample" : ""}`}
+                      priority={i === 0}
+                    />
                   </li>
                 ))}
               </ul>
@@ -136,17 +143,6 @@ function NoUpcoming({ firstTrip }: { firstTrip: boolean }) {
       <Button href="/search" className="mt-5">
         Find a stay
       </Button>
-    </div>
-  );
-}
-
-function SampleNotice() {
-  return (
-    <div className="mb-8 flex items-start gap-3 rounded-lg border border-edge bg-surface/75 px-4 py-3 text-sm text-slate">
-      <span className="mt-0.5 inline-flex shrink-0 rounded-control bg-blue/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] text-blue-dark">
-        Demo data
-      </span>
-      <p>Sample bookings, shown only on your local dev server. Take ?sample off the address to see your real bookings.</p>
     </div>
   );
 }

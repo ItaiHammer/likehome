@@ -1,4 +1,7 @@
-import type { Booking } from "@/lib/bookings";
+import { changeBlocker, type Booking, type OtherStay } from "@/lib/bookings";
+import { calculateTotalPrice } from "@/utils/reservation-logic";
+import type { Room } from "../_data/stays";
+import type { BookingToChange } from "./[id]/ChangeBooking";
 
 // Dev-only, so the page can be checked without signing in or writing test rows to the shared database.
 // Dates count from today so each section always has something in it.
@@ -24,6 +27,17 @@ export function getSampleBookings(today: string, empty = false): { name: string;
         city: "San Diego",
         photoUrl: "https://picsum.photos/seed/sunset-1/800/600",
         roomType: "Ocean studio",
+      },
+      {
+        id: "c41f6b2d-0e8a-4d3c-9f57-1a2b3c4d5e6f",
+        checkIn: daysFrom(today, 18),
+        checkOut: daysFrom(today, 21),
+        guests: 1,
+        status: "confirmed",
+        hotelName: "Alpine Lodge",
+        city: "Banff",
+        photoUrl: "https://picsum.photos/seed/alpine-1/800/600",
+        roomType: "Lodge king",
       },
       {
         id: "a7c2e913-5d40-4b8e-8f61-0e3b9d2c7a55",
@@ -59,5 +73,38 @@ export function getSampleBookings(today: string, empty = false): { name: string;
         roomType: "Loft studio",
       },
     ],
+  };
+}
+
+/** One sample booking for the change-booking page, with made-up rooms at its hotel */
+export function getSampleBooking(id: string, today: string): { booking: BookingToChange; rooms: Room[]; otherStays: OtherStay[] } | null {
+  const { bookings } = getSampleBookings(today);
+  const b = bookings.find((x) => x.id === id);
+  if (!b) return null;
+
+  const rooms: Room[] = [
+    { id: "standard", name: "Standard room", description: "Queen bed", sleeps: 2, nightly: 149 },
+    { id: "booked", name: b.roomType ?? "Room", description: "King bed · View", sleeps: 2, nightly: 189 },
+    { id: "suite", name: "Family suite", description: "2 bedrooms · Kitchenette", sleeps: 4, nightly: 289 },
+  ];
+  const otherStays = bookings
+    .filter((x) => x.id !== id && x.status === "confirmed" && x.hotelName !== b.hotelName && x.checkOut > today)
+    .map((x) => ({ checkIn: x.checkIn, checkOut: x.checkOut, hotelName: x.hotelName }));
+
+  return {
+    booking: {
+      id: b.id,
+      hotelName: b.hotelName,
+      location: b.city ?? "",
+      photoUrl: b.photoUrl,
+      checkIn: b.checkIn,
+      checkOut: b.checkOut,
+      guests: b.guests ?? 1,
+      roomId: "booked",
+      total: calculateTotalPrice(b.checkIn, b.checkOut, 189),
+      blocker: changeBlocker(b, today),
+    },
+    rooms,
+    otherStays,
   };
 }
