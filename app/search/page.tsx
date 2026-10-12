@@ -11,6 +11,7 @@ import { SearchResultCard, type HotelSearchResult } from "./components/SearchRes
 import { SortSelect } from "./components/SortSelect";
 import { FilterSheetButton, FilterSidebar, type FilterValues } from "./components/FilterSidebar";
 import { getMockSearchResults } from "./mockResults";
+import {parseDate, todayInTimeZone} from "@/utils/reservation-logic";
 
 type RawParams = Record<string, string | string[] | undefined>;
 type SortValue = "recommended" | "price-low" | "price-high";
@@ -212,65 +213,65 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 }
 
 type SearchParams = {
-  where?: string;
-  checkIn?: string;
-  checkOut?: string;
-  adults?: string;
-  children?: string;
-  minPrice?: string;
-  maxPrice?: string;
-  minRating?: string;
-  numBeds?: string;
-  bedSize?: string;
-  tags: string[];
-  sort?: SortValue;
-  page?: string;
-  aiPrompt?: string;
-  aiReply?: string;
-  tz?: string;
+    where?: string;
+    checkIn?: string;
+    checkOut?: string;
+    adults?: string;
+    children?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    minRating?: string;
+    numBeds?: string;
+    bedSize?: string;
+    tags: string[];
+    sort?: SortValue;
+    page?: string;
+    aiPrompt?: string;
+    aiReply?: string;
+    tz?: string;
 };
 
 function normalizeParams(raw: RawParams): SearchParams {
-  const sort = first(raw.sort);
-  return {
-    where: first(raw.where),
-    checkIn: first(raw.checkIn),
-    checkOut: first(raw.checkOut),
-    adults: first(raw.adults),
-    children: first(raw.children),
-    minPrice: first(raw.minPrice),
-    maxPrice: first(raw.maxPrice),
-    minRating: first(raw.minRating),
-    numBeds: first(raw.numBeds),
-    bedSize: first(raw.bedSize),
-    tags: values(raw.tags),
-    sort: sort === "price-low" || sort === "price-high" ? sort : "recommended",
-    page: first(raw.page),
-    aiPrompt: first(raw.aiPrompt),
-    aiReply: first(raw.aiReply),
-    tz: first(raw.tz),
-  };
+    const sort = first(raw.sort);
+    return {
+        where: first(raw.where),
+        checkIn: first(raw.checkIn)?.split("T")[0],
+        checkOut: first(raw.checkOut)?.split("T")[0],
+        adults: first(raw.adults),
+        children: first(raw.children),
+        minPrice: first(raw.minPrice),
+        maxPrice: first(raw.maxPrice),
+        minRating: first(raw.minRating),
+        numBeds: first(raw.numBeds),
+        bedSize: first(raw.bedSize),
+        tags: values(raw.tags),
+        sort: sort === "price-low" || sort === "price-high" ? sort : "recommended",
+        page: first(raw.page),
+        aiPrompt: first(raw.aiPrompt),
+        aiReply: first(raw.aiReply),
+        tz: first(raw.tz),
+    };
 }
 
 function toRawParams(params: SearchParams): RawParams {
-  return {
-    where: params.where,
-    checkIn: params.checkIn,
-    checkOut: params.checkOut,
-    adults: params.adults,
-    children: params.children,
-    minPrice: params.minPrice,
-    maxPrice: params.maxPrice,
-    minRating: params.minRating,
-    numBeds: params.numBeds,
-    bedSize: params.bedSize,
-    tags: params.tags.length ? params.tags : undefined,
-    sort: params.sort,
-    page: params.page,
-    aiPrompt: params.aiPrompt,
-    aiReply: params.aiReply,
-    tz: params.tz,
-  };
+    return {
+        where: params.where,
+        checkIn: params.checkIn,
+        checkOut: params.checkOut,
+        adults: params.adults,
+        children: params.children,
+        minPrice: params.minPrice,
+        maxPrice: params.maxPrice,
+        minRating: params.minRating,
+        numBeds: params.numBeds,
+        bedSize: params.bedSize,
+        tags: params.tags.length ? params.tags : undefined,
+        sort: params.sort,
+        page: params.page,
+        aiPrompt: params.aiPrompt,
+        aiReply: params.aiReply,
+        tz: params.tz,
+    };
 }
 
 // Cara's SearchRequest uses the same names as the link, so this only drops
@@ -371,7 +372,12 @@ function getFrontendValidationError(params: SearchParams) {
     }
 
     if (params.checkIn && params.checkOut) {
-        const today = new Date().toISOString().slice(0, 10);
+        if (!parseDate(params.checkIn) || !parseDate(params.checkOut)) {
+            return "Please select valid check-in and check-out dates.";
+        }
+        // The guest's today (tz is sent by the search bar), not UTC's: after 5pm
+        // Pacific it's already tomorrow in UTC, which would reject tonight's stays
+        const today = todayInTimeZone(params.tz);
 
         if (params.checkIn < today || params.checkOut < today) {
             return "Please select dates that are today or later.";
