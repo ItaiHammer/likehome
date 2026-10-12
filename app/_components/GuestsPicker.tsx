@@ -90,7 +90,7 @@ export function GuestsPicker({
         aria-label="Choose guests"
         data-open={open}
         inert={!open}
-        className="dropdown absolute right-0 left-0 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:left-1/2 md:right-auto md:w-80 md:-translate-x-1/2"
+        className="dropdown absolute right-0 left-0 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:left-auto md:w-80 lg:left-1/2 lg:right-auto lg:-translate-x-1/2"
       >
         {rows.map((r, i) => (
           <div
