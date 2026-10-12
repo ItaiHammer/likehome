@@ -3,6 +3,7 @@ import { LogoMark } from "./LogoMark";
 import { DesktopNav, MobileNav } from "./SiteNav";
 import { ThemeToggle } from "./ThemeToggle";
 import { PAGE_ROUTES } from "@/constants/routes";
+import { AuthButton } from "@/components/auth-button";
 
 function Logo() {
   return (
@@ -23,9 +24,7 @@ export function SiteHeader() {
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Link href={PAGE_ROUTES.LOGIN} className="rounded-control px-3 py-2 text-base font-semibold text-blue hover:text-blue-dark">
-            Sign in
-          </Link>
+          <AuthButton />
           <MobileNav />
         </div>
       </div>

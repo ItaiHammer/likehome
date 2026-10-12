@@ -38,6 +38,29 @@ export function todayUTC(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10)
 }
 
+/**
+ * Today's date as YYYY-MM-DD in the guest's own time zone (an IANA name such as
+ * "America/Los_Angeles", sent by the browser). Falls back to UTC when the zone is
+ * missing or not a real zone, so a bad value can never break validation.
+ *
+ * Why: at 6pm Pacific it is already tomorrow in UTC, so judging "today" in UTC
+ * rejected same-day check-ins for US guests every evening.
+ */
+export function todayInTimeZone(timeZone: unknown, now: Date = new Date()): string {
+  if (typeof timeZone !== 'string' || timeZone.trim() === '') return todayUTC(now)
+  try {
+    // en-CA formats dates as YYYY-MM-DD
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timeZone.trim(),
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now)
+  } catch {
+    return todayUTC(now)
+  }
+}
+
 /** Number of nights between check-in and check-out. */
 export function countNights(checkIn: string, checkOut: string): number {
   const inDate = parseDate(checkIn)
