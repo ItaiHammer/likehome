@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { money } from "@/lib/bookings";
 import { cardErrors } from "@/lib/card";
@@ -78,6 +78,8 @@ export function StayReservation({
   );
   const [popover, setPopover] = useState<Popover>(null);
   const [step, setStep] = useState<Step>("stay");
+  // Steps only animate in once the guest has moved between them, never on page load
+  const [moved, setMoved] = useState(false);
   // Changing dates from the payment step, so typed card details aren't lost going back
   const [editingDates, setEditingDates] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
@@ -91,6 +93,9 @@ export function StayReservation({
   const confirmTimer = useRef<number | undefined>(undefined);
   const saveRequest = useRef<AbortController | null>(null);
   const lastStep = useRef(step);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // The card's height and screen position just before a step change, for the transition
+  const fromBox = useRef<{ height: number; top: number } | null>(null);
   // After Reserve, the room list is locked until the guest goes back to their stay
   const roomsLocked = step !== "stay";
 
@@ -110,11 +115,31 @@ export function StayReservation({
   const setDatesOpen = useCallback((open: boolean) => setPopover((p) => (open ? "dates" : p === "dates" ? null : p)), []);
   const setGuestsOpen = useCallback((open: boolean) => setPopover((p) => (open ? "guests" : p === "guests" ? null : p)), []);
 
-  // When the card changes step, bring it into view and move focus to its heading.
-  useEffect(() => {
+  // A step change resizes the card smoothly (the new step fades in through .step-in), keeps the
+  // card where it was on screen, and moves focus to the step's heading
+  useLayoutEffect(() => {
     if (lastStep.current === step) return;
+    const prev = lastStep.current;
     lastStep.current = step;
-    cardRef.current?.scrollIntoView({ block: "nearest", behavior: isMotionReduced() ? "auto" : "smooth" });
+    const card = cardRef.current;
+    const body = bodyRef.current;
+    const from = fromBox.current;
+    fromBox.current = null;
+    const reduced = isMotionReduced();
+    if (card && from) {
+      // On wide screens the stay step's card is pinned while scrolling and the others aren't, so
+      // leaving it would make the card jump up the page: scroll by the jump to keep it in place
+      const jump = prev === "stay" ? card.getBoundingClientRect().top - from.top : 0;
+      if (jump) window.scrollBy({ top: jump, behavior: "instant" });
+      if (body && !reduced && body.offsetHeight !== from.height) {
+        body.animate([{ height: `${from.height}px`, overflow: "hidden" }, { height: `${body.offsetHeight}px`, overflow: "hidden" }], {
+          duration: 700,
+          easing: "cubic-bezier(0.33, 1, 0.68, 1)",
+        });
+      }
+    }
+    const top = card?.getBoundingClientRect().top ?? 0;
+    if (card && (top < 0 || top > window.innerHeight - 160)) card.scrollIntoView({ block: "start", behavior: reduced ? "auto" : "smooth" });
     headingRef.current?.focus({ preventScroll: true });
   }, [step]);
 
@@ -150,6 +175,11 @@ export function StayReservation({
   }
 
   function goTo(next: Step) {
+    if (next === step) return;
+    const card = cardRef.current;
+    const body = bodyRef.current;
+    if (card && body) fromBox.current = { height: body.offsetHeight, top: card.getBoundingClientRect().top };
+    setMoved(true);
     setEditingDates(false);
     setStep(next);
   }
@@ -385,8 +415,9 @@ export function StayReservation({
           // Form card from the sheet: white surface, pale blue edge, 50px horizontal inset.
           className={`scroll-mt-6 rounded-2xl border border-edge bg-surface p-5 sm:p-6 lg:p-7 ${step === "stay" ? "lg:sticky lg:top-6" : ""}`}
         >
+          <div ref={bodyRef}>
           {step === "stay" && (
-            <div className="space-y-5">
+            <div className={`space-y-5 ${moved ? "step-in" : ""}`}>
               <h2 ref={headingRef} tabIndex={-1} className="sr-only">
                 Your stay
               </h2>
@@ -465,7 +496,7 @@ export function StayReservation({
           )}
 
           {step === "details" && (
-            <form ref={formRef} noValidate onSubmit={handleSubmit} className="space-y-5">
+            <form ref={formRef} noValidate onSubmit={handleSubmit} className={`space-y-5 ${moved ? "step-in" : ""}`}>
               <button
                 type="button"
                 onClick={backToStay}
@@ -619,7 +650,7 @@ export function StayReservation({
           )}
 
           {step === "done" && booking && (
-            <div className="space-y-5">
+            <div className={`space-y-5 ${moved ? "step-in" : ""}`}>
               <div>
                 <h2 ref={headingRef} tabIndex={-1} className="text-[32px] font-bold leading-10 text-ink outline-none">
                   {booking.saved ? "You’re booked." : "That was a sample stay."}
@@ -656,6 +687,7 @@ export function StayReservation({
               </button>
             </div>
           )}
+          </div>
         </aside>
       </div>
     </>

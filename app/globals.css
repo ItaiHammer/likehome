@@ -188,6 +188,19 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
   transition-duration: var(--theme-fade) !important;
 }
 
+/* The reservation card's steps (your stay → details and payment → done) fade and rise in while the
+   card resizes to fit them. Backwards fill only, so nothing lingers (a held transform would trap the
+   date and guest dropdowns in its own layer). */
+.step-in {
+  animation: step-in 0.7s cubic-bezier(0.33, 1, 0.68, 1) backwards;
+}
+@keyframes step-in {
+  from { opacity: 0; transform: translateY(12px); }
+}
+[data-motion="reduce"] .step-in {
+  animation: none;
+}
+
 /* Popular destination tiles rise in one after another (on load and on each tab switch) */
 .tile-in {
   animation: tile-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
