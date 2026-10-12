@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { money } from "@/lib/bookings";
+import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
 import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS, todayUTC } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
@@ -57,11 +57,14 @@ const formatExpiry = (v: string) => {
 export function StayReservation({
   stay,
   account,
+  otherStays = [],
   initial = {},
 }: {
   stay: Stay;
   /** The signed-in guest, or null when signed out (booking needs an account) */
   account: { email: string } | null;
+  /** The guest's bookings at other hotels, which a new stay can't overlap */
+  otherStays?: OtherStay[];
   initial?: StayChoices;
 }) {
   const router = useRouter();
@@ -169,6 +172,8 @@ export function StayReservation({
     if (booked.some((night) => night >= checkIn && night < checkOut)) return { field: "dates", message: "Some of those nights are already booked." };
     // The booking API counts days in UTC, so in the US evening "today" has already passed for it
     if (stay.bookable && checkIn < todayUTC()) return { field: "dates", message: "That check-in date is too soon to book. Pick a later date." };
+    const clash = stay.bookable ? findOverlap(otherStays, checkIn, checkOut) : null;
+    if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     return null;

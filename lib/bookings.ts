@@ -61,6 +61,18 @@ export const money = (n: number) => {
   return `$${cents.toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(cents) ? 0 : 2, maximumFractionDigits: 2 })}`
 }
 
+/** One of the guest's confirmed bookings at another hotel. The database refuses a stay that overlaps one. */
+export type OtherStay = { checkIn: string; checkOut: string; hotelName: string }
+
+// Check-out day is free, so back-to-back stays don't overlap
+export function findOverlap(stays: OtherStay[], checkIn: string, checkOut: string): OtherStay | null {
+  return stays.find((s) => s.checkIn < checkOut && s.checkOut > checkIn) ?? null
+}
+
+export function overlapMessage(stay: OtherStay): string {
+  return `You already have a booking at ${stay.hotelName} for ${formatStayDates(stay.checkIn, stay.checkOut)}. Pick dates that don’t overlap it.`
+}
+
 export function firstName(fullName: string | null | undefined): string | null {
   return fullName?.trim().split(/\s+/)[0] || null
 }

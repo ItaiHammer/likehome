@@ -3,11 +3,13 @@ import assert from 'node:assert/strict'
 import {
   bookingCode,
   bookingSummary,
+  findOverlap,
   firstName,
   formatStayDates,
   groupBookings,
   initials,
   money,
+  overlapMessage,
 } from '../lib/bookings.ts'
 
 const TODAY = '2026-10-10'
@@ -90,6 +92,26 @@ test('first name and initials', () => {
   assert.equal(initials('Cher', null), 'C')
   assert.equal(initials(null, 'nolan@example.com'), 'N')
   assert.equal(initials(null, null), '?')
+})
+
+test('finds a booking at another hotel that the new dates overlap', () => {
+  const others = [
+    { checkIn: '2026-10-20', checkOut: '2026-10-23', hotelName: 'Casa del Sol' },
+    { checkIn: '2026-11-02', checkOut: '2026-11-05', hotelName: 'Alpine Lodge' },
+  ]
+  assert.equal(findOverlap(others, '2026-10-22', '2026-10-25')?.hotelName, 'Casa del Sol')
+  assert.equal(findOverlap(others, '2026-10-30', '2026-11-03')?.hotelName, 'Alpine Lodge')
+  // Back to back is fine: check-out day is free
+  assert.equal(findOverlap(others, '2026-10-23', '2026-10-26'), null)
+  assert.equal(findOverlap(others, '2026-10-17', '2026-10-20'), null)
+  assert.equal(findOverlap([], '2026-10-22', '2026-10-25'), null)
+})
+
+test('the overlap message names the other hotel and its dates', () => {
+  assert.equal(
+    overlapMessage({ checkIn: '2026-10-20', checkOut: '2026-10-23', hotelName: 'Casa del Sol' }),
+    'You already have a booking at Casa del Sol for Oct 20 - 23, 2026. Pick dates that don’t overlap it.'
+  )
 })
 
 test('money shows cents only when there are some', () => {

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { getOtherStays } from "@/lib/other-stays";
 import { countNights, MAX_NIGHTS, parseDate, todayUTC } from "@/utils/reservation-logic";
 import { createClient } from "@/utils/supabase/server";
 import { addDays } from "../../_components/dates";
@@ -64,12 +65,13 @@ export default async function ReservePage(props: PageProps<"/reserve/[slug]">) {
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
   const account = claims?.sub ? { email: typeof claims.email === "string" ? claims.email : "" } : null;
+  const otherStays = claims?.sub && stay.bookable ? await getOtherStays(claims.sub, stay.slug) : [];
 
   return (
     <div className="relative isolate flex flex-1 flex-col">
       <PageBackdrop />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
-        <StayReservation stay={stay} account={account} initial={readChoices(await props.searchParams, stay)} />
+        <StayReservation stay={stay} account={account} otherStays={otherStays} initial={readChoices(await props.searchParams, stay)} />
       </main>
     </div>
   );
