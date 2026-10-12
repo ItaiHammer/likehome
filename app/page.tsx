@@ -20,23 +20,11 @@ const features = [
     icon: <path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.4l-5.2 2.8 1-5.9L3.5 9.2l5.9-.8z" strokeLinejoin="round" />,
   },
   {
-    title: "Homes, not just rooms",
-    body: "Kitchens, living rooms and space to unpack.",
+    title: "Homes that bend with your plans",
+    body: "Kitchens and space to unpack, and you can change your dates, room or guests in My Bookings up to the day before check-in.",
     link: "Browse stays",
     href: "/search",
     icon: <path d="M4 11l8-6 8 6v9H4v-9z M10 20v-5h4v5" strokeLinejoin="round" />,
-  },
-  {
-    title: "Plans change. We get it.",
-    body: "Free cancellation on most stays.",
-    link: "Find a flexible stay",
-    href: "/search",
-    icon: (
-      <>
-        <rect x="4" y="5" width="16" height="15" rx="2" />
-        <path d="M4 10h16M9 3v4M15 3v4M9 15l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-      </>
-    ),
   },
 ];
 
@@ -150,7 +138,7 @@ export default function Home() {
               hover tint stops at 14% so blue-dark keeps 4.5:1 on it too. Light mode
               mixes the tint into white: over the warm paper it read as the grey
               disabled fill. */}
-          <section className="grid gap-4 md:grid-cols-3">
+          <section className="grid gap-4 md:grid-cols-2">
             {features.map((f) => (
               <Link
                 key={f.title}
