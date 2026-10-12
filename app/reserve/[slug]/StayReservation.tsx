@@ -116,6 +116,34 @@ export function StayReservation({
   // Free cancellation ends 2 days before check-in; for a stay that starts sooner, it's already over.
   // Today is "" while rendering on the server, so the server and the browser agree on first render.
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
+  const [userBookingBlockedOffsets, setUserBookingBlockedOffsets] = useState<number[]>([]);
+
+  useEffect(() => {
+    const currentDate = todayISO();
+
+    const offsets = otherStays.flatMap((booking) => {
+      const bookingOffsets: number[] = [];
+
+      for (
+        let night = booking.checkIn;
+        night < booking.checkOut;
+        night = addDays(night, 1)
+      ) {
+        if (night >= currentDate) {
+          bookingOffsets.push(nightsBetween(currentDate, night));
+        }
+      }
+
+      return bookingOffsets;
+    });
+
+    setUserBookingBlockedOffsets(offsets);
+  }, [otherStays]);
+
+  const blockedOffsets = [
+    ...new Set([...stay.blockedNights, ...userBookingBlockedOffsets]),
+  ];
+
   const cancelBy = checkIn ? addDays(checkIn, -2) : "";
   const freeCancel = !checkIn || !today || cancelBy > today;
 
@@ -174,7 +202,7 @@ export function StayReservation({
   function stayProblem(): StayProblem | null {
     if (!nights) return { field: "dates", message: "" };
     if (nights > MAX_NIGHTS) return { field: "dates", message: `Stays can be up to ${MAX_NIGHTS} nights.` };
-    const booked = stay.blockedNights.map((o) => addDays(todayISO(), o));
+    const booked = blockedOffsets.map((offset) => addDays(todayISO(), offset));
     if (booked.some((night) => night >= checkIn && night < checkOut)) return { field: "dates", message: "Some of those nights are already booked." };
     // The booking API judges "today" in the guest's time zone (sent with the booking), so this uses the local date
     if (stay.bookable && checkIn < todayISO()) return { field: "dates", message: "That check-in date is too soon to book. Pick a later date." };
@@ -516,7 +544,7 @@ export function StayReservation({
                     setCheckOut(b);
                     clear("dates");
                   }}
-                  blockedOffsets={stay.blockedNights}
+                  blockedOffsets={blockedOffsets}
                   open={popover === "dates"}
                   onOpenChange={setDatesOpen}
                   onDone={foldDates}
@@ -679,7 +707,7 @@ export function StayReservation({
                   setCheckOut(b);
                   clear("dates");
                 }}
-                blockedOffsets={stay.blockedNights}
+                blockedOffsets={blockedOffsets}
                 open={popover === "dates"}
                 onOpenChange={setDatesOpen}
                 error={errors.dates}
