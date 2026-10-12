@@ -1,7 +1,8 @@
 "use client";
 
 // Grainient background from React Bits (https://reactbits.dev/backgrounds/grainient),
-// TS + Tailwind variant, copied as-is apart from this header and small lint fixes.
+// TS + Tailwind variant, copied as-is apart from this header, small lint fixes, a WebGL 2 check
+// and rounding the canvas size up.
 import React, { useEffect, useRef } from 'react';
 import { Renderer, Program, Mesh, Triangle } from 'ogl';
 
@@ -180,7 +181,12 @@ const Grainient: React.FC<GrainientProps> = ({
     const container = containerRef.current;
     if (!container) return;
 
+    const canvas = document.createElement('canvas');
+    // ogl throws without WebGL 2 and takes the whole page down; keep the CSS background instead.
+    // Same attributes ogl asks for, so it reuses this context.
+    if (!canvas.getContext('webgl2', { antialias: false, premultipliedAlpha: false })) return;
     const renderer = new Renderer({
+      canvas,
       webgl: 2,
       alpha: true,
       antialias: false,
@@ -188,7 +194,6 @@ const Grainient: React.FC<GrainientProps> = ({
     });
 
     const gl = renderer.gl;
-    const canvas = gl.canvas as HTMLCanvasElement;
     canvas.style.width = '100%';
     canvas.style.height = '100%';
     canvas.style.display = 'block';
@@ -231,8 +236,10 @@ const Grainient: React.FC<GrainientProps> = ({
 
     const setSize = () => {
       const rect = container.getBoundingClientRect();
-      const w = Math.max(1, Math.floor(rect.width));
-      const h = Math.max(1, Math.floor(rect.height));
+      // Round up: rounding down left a sub-pixel strip of the parent's background under the sky
+      // on fractional-height pages; the container clips the overshoot
+      const w = Math.max(1, Math.ceil(rect.width));
+      const h = Math.max(1, Math.ceil(rect.height));
       renderer.setSize(w, h);
       const res = (program.uniforms.iResolution as { value: Float32Array }).value;
       res[0] = gl.drawingBufferWidth;
