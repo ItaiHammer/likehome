@@ -109,6 +109,7 @@ export async function createHotel(hotel: {
   region?: string
   country?: string
   photo_urls?: string[]
+  tags?: string[];
 }) {
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)
@@ -129,6 +130,7 @@ export async function updateHotel(
     region: string
     country: string
     photo_urls: string[]
+    tags: string[];
   }>
 ) {
   const cookieStore = await cookies()

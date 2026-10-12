@@ -191,7 +191,7 @@ export function validateHotelInfo(info: HotelInfo): HotelInfoErrors {
   const value = (field: keyof HotelInfo) => info[field].trim();
 
   if (!value("name")) errors.name = "Enter a property name";
-  if (!PROPERTY_TYPES.includes(info.propertyType)) errors.propertyType = "Choose a property type";
+  // if (!PROPERTY_TYPES.includes(info.propertyType)) errors.propertyType = "Choose a property type";
   if (!value("streetAddress")) errors.streetAddress = "Enter a street address";
   if (!value("city")) errors.city = "Enter a city";
   if (value("postalCode") && !/^[A-Za-z0-9][A-Za-z0-9 -]*$/.test(value("postalCode"))) {
