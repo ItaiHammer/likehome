@@ -15,7 +15,8 @@ export default async function MyListingsPage() {
   if (!user) redirect(PAGE_ROUTES.LOGIN);
 
   const { data: listings, error } = await getMyListings(user.id);
-  if (error) throw new Error(error);
+  if (error) throw new Error(error.message);
+  if (!listings) throw new Error("Listings unavailable");
 
   return (
     <div className="flex flex-1 flex-col">
