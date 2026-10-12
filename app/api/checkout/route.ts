@@ -10,6 +10,7 @@ import { createTransaction } from '@/utils/transactions'
 import {
   calculateTotalPrice,
   checkCapacity,
+  todayInTimeZone,
   validateReservationInput,
   type RoomForBooking,
 } from '@/utils/reservation-logic'
@@ -38,8 +39,10 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  // 1. Validate the stay and the card
-  const stay = validateReservationInput(body)
+  // 1. Validate the stay and the card. "Today" is the guest's today, from the
+  //    time_zone the browser sends (e.g. "America/Los_Angeles"); UTC if it's missing.
+  const timeZone = (body as Record<string, unknown> | null)?.time_zone
+  const stay = validateReservationInput(body, todayInTimeZone(timeZone))
   if (!stay.ok) {
     return Response.json({ error: stay.error }, { status: 400 })
   }

@@ -220,3 +220,48 @@ test('successfully updates reservation and returns 200', async () => {
     guests: 2,
   })
 })
+// "Today" is the guest's today (from time_zone), not UTC's.
+// 6pm Pacific on Oct 10 is already Oct 11 in UTC.
+test('uses the guest time zone for "today": 6pm Pacific can still book from today', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-11T01:00:00Z') })
+  mockReservationResult.data.check_in = '2026-10-11'
+  mockReservationResult.data.check_out = '2026-10-13'
+
+  const req = createMockRequest({
+    time_zone: 'America/Los_Angeles',
+    check_in: '2026-10-10',
+    check_out: '2026-10-12',
+  })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  const json = await res.json()
+  assert.equal(json.reservation.check_in, '2026-10-10')
+})
+
+test('without a time zone, "today" falls back to UTC', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-11T01:00:00Z') })
+  mockReservationResult.data.check_in = '2026-10-11'
+  mockReservationResult.data.check_out = '2026-10-13'
+
+  const req = createMockRequest({ check_in: '2026-10-10', check_out: '2026-10-12' })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  // Oct 11 is "today" in UTC, so the reservation counts as already started
+  assert.equal(res.status, 422)
+})
+
+test('an invalid time zone falls back to UTC instead of erroring', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-11T01:00:00Z') })
+  const req = createMockRequest({
+    time_zone: 'Not/AZone',
+    check_in: '2026-10-10',
+    check_out: '2026-10-12',
+  })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  // check_in Oct 10 is in the past in UTC
+  assert.equal(res.status, 400)
+  const json = await res.json()
+  assert.equal(json.error, 'check_in cannot be in the past.')
+})
