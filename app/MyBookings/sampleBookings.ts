@@ -94,6 +94,7 @@ export function getSampleBooking(id: string, today: string): { booking: BookingT
   return {
     booking: {
       id: b.id,
+      hotelId: b.hotelName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
       hotelName: b.hotelName,
       location: b.city ?? "",
       photoUrl: b.photoUrl,
@@ -103,6 +104,7 @@ export function getSampleBooking(id: string, today: string): { booking: BookingT
       roomId: "booked",
       total: calculateTotalPrice(b.checkIn, b.checkOut, 189),
       blocker: changeBlocker(b, today),
+      livePrices: false,
     },
     rooms,
     otherStays,

@@ -17,6 +17,7 @@ export type HotelSearchResult = {
   tags?: string[] | null;
   num_beds?: number | string | null;
   bed_size?: string | null;
+  liteapi_id?: string | null;
   mock_variant?: SceneVariant;
 };
 

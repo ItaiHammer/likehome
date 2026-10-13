@@ -1,6 +1,7 @@
 import { getHotel } from "@/utils/hotels";
 import { getRoomsByHotel } from "@/utils/rooms";
 import { roomAmenityList, stayOffers } from "@/lib/stay-filters";
+import { getRoomRates, liveRatesEnabled, quoteForRoom, type StayQuery } from "@/lib/liteapi/rates";
 import type { Room, Stay } from "../../_data/stays";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -14,6 +15,7 @@ type HotelRow = {
   photo_urls: string[] | null;
   rating: number | string | null;
   tags: string[] | null;
+  liteapi_id: string | null;
 };
 
 type RoomRow = {
@@ -26,6 +28,7 @@ type RoomRow = {
   num_beds: number | null;
   bed_size: string | null;
   tags: string[] | null;
+  liteapi_room_id: string | null;
 };
 
 // num_beds defaults to 1 in the database, so without a bed size the count was never filled in
@@ -62,6 +65,7 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
       beds: r.num_beds ?? 1,
       bedSize: r.bed_size,
       tags: r.tags ?? [],
+      liteapiRoomId: r.liteapi_room_id,
     }))
     .sort((a, b) => a.nightly - b.nightly);
 
@@ -83,6 +87,26 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
     blockedNights: [],
     rooms,
     bookable: true,
+    liteapiId: hotel.liteapi_id,
+    liteapiConfigured: liveRatesEnabled(),
   };
   return { ...stay, ...stayOffers(tags, rows.map((r) => r.tags)) };
+}
+
+/** The stay with each room's live price for these dates and guests. Owner hotels come back unchanged. */
+export async function withLiveRoomPrices(stay: Stay, q: StayQuery, keepOpenRoomId?: string): Promise<Stay> {
+  if (!stay.liteapiId) return stay;
+  // No room holds that many guests, so a quote can't be booked; skipping it saves the shared LiteAPI rate limit
+  if (q.guests > Math.max(0, ...stay.rooms.map((room) => room.sleeps))) return { ...stay, priceSource: "stored" };
+  const r = (await getRoomRates([stay.liteapiId], q)).get(stay.liteapiId)!;
+  if (r.status === "unavailable") return { ...stay, priceSource: "stored" };
+  const rooms = stay.rooms
+    .map((room) => {
+      const quote = r.status === "sold_out" ? r : quoteForRoom(r.value, { liteapiRoomId: room.liteapiRoomId ?? null, name: room.name });
+      if (quote.status === "live") return { ...room, nightly: quote.value.perNight, soldOut: false };
+      if (quote.status === "sold_out") return { ...room, soldOut: room.id !== keepOpenRoomId };
+      return room;
+    })
+    .sort((a, b) => a.nightly - b.nightly);
+  return { ...stay, rooms, priceSource: "live" };
 }

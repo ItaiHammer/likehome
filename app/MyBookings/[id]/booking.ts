@@ -38,6 +38,7 @@ export function toBooking(r: ReservationRow, stay: Stay | null, today: string): 
   const status = r.status ?? "confirmed";
   return {
     id: r.id,
+    hotelId: r.hotel_id,
     hotelName: stay?.name ?? "Hotel no longer listed",
     location: stay?.location ?? "",
     photoUrl: stay?.photos?.[0] ?? null,
@@ -47,5 +48,6 @@ export function toBooking(r: ReservationRow, stay: Stay | null, today: string): 
     roomId: r.room_id,
     total: Number(r.total_price),
     blocker: changeBlocker({ status, checkIn: r.check_in, checkOut: r.check_out }, today),
+    livePrices: !!stay?.liteapiId && !!stay.liteapiConfigured,
   };
 }

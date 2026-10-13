@@ -15,6 +15,7 @@ import {
   type RoomForBooking,
 } from '@/utils/reservation-logic'
 import { authorizeMockPayment, validatePaymentInput } from '@/utils/payment-logic'
+import { liveRoomPrice } from '@/lib/liteapi/rates'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
 const EXCLUSION_VIOLATION = '23P01'
@@ -53,10 +54,11 @@ export async function POST(request: Request) {
   const input = stay.value
   const payment = card.value
 
-  // 2. Look up the room and check capacity
+  // 2. Look up the room and check capacity. `*` rather than the LiteAPI columns by name, so booking
+  //    keeps working (at stored prices) on a database without supabase/migrations/liteapi_hotels.sql.
   const { data: room, error: roomError } = await supabase
     .from('rooms')
-    .select('id, hotel_id, price_per_night, capacity')
+    .select('*, hotels(*)')
     .eq('id', input.room_id)
     .single<RoomForBooking>()
 
@@ -68,8 +70,22 @@ export async function POST(request: Request) {
     return Response.json({ error: capacityError }, { status: 400 })
   }
 
-  // 3. Price is always calculated here, never taken from the browser
-  const total_price = calculateTotalPrice(input.check_in, input.check_out, room.price_per_night)
+  // 3. Price is always calculated here, never taken from the browser. LiteAPI hotels reuse the
+  //    quote the stay page cached, so the guest pays what they were shown; if LiteAPI is down,
+  //    the stored estimate is charged instead.
+  let nightly: number | string = room.price_per_night
+  const liteapiHotelId = room.hotels?.liteapi_id
+  if (liteapiHotelId) {
+    const live = await liveRoomPrice(
+      { liteapiHotelId, liteapiRoomId: room.liteapi_room_id ?? null, roomType: room.room_type ?? '' },
+      { checkIn: input.check_in, checkOut: input.check_out, guests: input.guests ?? 2 }
+    )
+    if (live.status === 'sold_out') {
+      return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
+    }
+    if (live.status === 'live') nightly = live.value.perNight
+  }
+  const total_price = calculateTotalPrice(input.check_in, input.check_out, nightly)
 
   // 4. Mock charge. A decline writes nothing.
   const auth = authorizeMockPayment(payment.cardNumber, total_price)

@@ -19,8 +19,11 @@ AS $function$
     where (p_guests is null    or rm.capacity >= p_guests)
       and (p_adults is null    or rm.max_adults is null   or rm.max_adults >= p_adults)
       and (p_children is null  or rm.max_children is null or rm.max_children >= p_children)
-      and (p_min_price is null or rm.price_per_night >= p_min_price)
-      and (p_max_price is null or rm.price_per_night <= p_max_price)
+      -- LiteAPI hotels are priced live when dates are given; the app filters their price itself
+      and (p_min_price is null or rm.price_per_night >= p_min_price
+           or (h.liteapi_id is not null and p_check_in is not null and p_check_out is not null))
+      and (p_max_price is null or rm.price_per_night <= p_max_price
+           or (h.liteapi_id is not null and p_check_in is not null and p_check_out is not null))
       and (p_num_beds is null  or rm.num_beds >= p_num_beds)
       and (p_bed_size is null  or rm.bed_size = p_bed_size)
       -- every requested tag must be on the hotel or on the room
@@ -34,7 +37,11 @@ AS $function$
   ),
   per_hotel as (
     select hotel_id,
-           min(price_per_night) as min_price,
+           -- LiteAPI rooms skipped the price filter above. When LiteAPI can't price the hotel, the app falls
+           -- back to this, so it must still be the cheapest room in range, as it is for owner hotels.
+           coalesce(min(price_per_night) filter (where (p_min_price is null or price_per_night >= p_min_price)
+                                                   and (p_max_price is null or price_per_night <= p_max_price)),
+                    min(price_per_night)) as min_price,
            max(capacity)        as max_capacity,
            count(*)             as available_rooms
     from matching_rooms

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { getOtherStays } from "@/lib/other-stays";
 import { todayUTC } from "@/utils/reservation-logic";
-import { getHotelStay } from "../../reserve/[slug]/hotelStay";
+import { getHotelStay, withLiveRoomPrices } from "../../reserve/[slug]/hotelStay";
 import { SampleNotice } from "../_components/SampleNotice";
 import { getSampleBooking } from "../sampleBookings";
 import { loadReservation, toBooking } from "./booking";
@@ -17,7 +17,13 @@ export const dynamic = "force-dynamic";
 async function loadBooking(id: string, today: string) {
   const { userId, reservation: r } = await loadReservation(id, `${PAGE_ROUTES.MY_BOOKINGS}/${id}`);
   const [stay, otherStays] = await Promise.all([getHotelStay(r.hotel_id), getOtherStays(userId, r.hotel_id, r.id)]);
-  return { booking: toBooking(r, stay, today), rooms: stay?.rooms ?? [], otherStays };
+  const booking = toBooking(r, stay, today);
+  let rooms = stay?.rooms ?? [];
+  if (!booking.blocker && stay?.liteapiId) {
+    // The guest's own room stays selectable even when LiteAPI has no more of it for these dates
+    rooms = (await withLiveRoomPrices(stay, { checkIn: r.check_in, checkOut: r.check_out, guests: r.guests ?? 1 }, r.room_id)).rooms;
+  }
+  return { booking, rooms, otherStays };
 }
 
 export default async function BookingPage(props: PageProps<"/MyBookings/[id]">) {

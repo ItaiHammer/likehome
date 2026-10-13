@@ -16,6 +16,7 @@ export type Room = {
   beds?: number;
   bedSize?: string | null;
   tags?: string[];
+  liteapiRoomId?: string | null;
 };
 
 /** Something a stay has, named like the search filter it matches */
@@ -41,6 +42,11 @@ export type Stay = {
   goodFor?: string[];
   /** A real hotel whose rooms can be booked through /api/reservations (the sample stays can't) */
   bookable?: boolean;
+  liteapiId?: string | null;
+  /** "stored" when live prices were asked for but LiteAPI couldn't give any */
+  priceSource?: "live" | "stored";
+  /** The server has a LiteAPI key. Without one, the stored prices hold for any dates, so pages never refetch them. */
+  liteapiConfigured?: boolean;
   /** Tax added to the room and cleaning fee; TAX_RATE when not set */
   taxRate?: number;
   cleaningFee: number;

@@ -39,6 +39,8 @@ mock.module('@/utils/supabase/server', {
 mock.module('@/utils/reservations', { namedExports: { createReservation, updateReservation } })
 mock.module('@/utils/payments', { namedExports: { createPayment } })
 mock.module('@/utils/transactions', { namedExports: { createTransaction } })
+const liveRoomPrice = mock.fn(async () => ({ status: 'unavailable' }))
+mock.module('@/lib/liteapi/rates', { namedExports: { liveRoomPrice } })
 
 const { POST } = await import('../app/api/checkout/route.ts')
 
@@ -88,9 +90,10 @@ const writes = () =>
 beforeEach(() => {
   claims = { data: { claims: { sub: 'user-1' } }, error: null }
   roomResult = { data: { ...ROOM }, error: null }
-  for (const fn of [createReservation, updateReservation, createPayment, createTransaction, consoleError]) {
+  for (const fn of [createReservation, updateReservation, createPayment, createTransaction, consoleError, liveRoomPrice]) {
     fn.mock.resetCalls()
   }
+  liveRoomPrice.mock.mockImplementation(async () => ({ status: 'unavailable' }))
   createReservation.mock.mockImplementation(async (r) => ({
     data: [{ id: 'res-1', status: 'confirmed', ...r }],
     error: null,
@@ -200,6 +203,7 @@ describe('pricing', () => {
     assert.equal(createReservation.mock.calls[0].arguments[0].total_price, 389.97)
     assert.equal(createTransaction.mock.calls[0].arguments[0].amount, 389.97)
     assert.equal(r.json.transaction.amount, 389.97)
+    assert.equal(liveRoomPrice.mock.callCount(), 0)
   })
 
   test('handles a numeric-string price from Postgres', async () => {
@@ -216,6 +220,69 @@ describe('pricing', () => {
       assert.equal(r.json.error, 'Invalid payment amount.')
     }
     assert.equal(writes(), 0)
+  })
+})
+
+describe('LiteAPI hotels', () => {
+  const LITE_ROOM = {
+    ...ROOM,
+    room_type: 'Standard King Room',
+    liteapi_room_id: '2617267',
+    hotels: { liteapi_id: 'lp1897' },
+  }
+  const live = (total, nights) => ({
+    status: 'live',
+    value: { total, perNight: total / nights, offerId: 'offer-1', rateName: 'Standard King Room', boardType: 'RO', refundable: true, dueAtProperty: 0 },
+  })
+
+  beforeEach(() => {
+    roomResult = { data: { ...LITE_ROOM }, error: null }
+  })
+
+  test('priced live: the quote total is charged and stored, to the cent', async () => {
+    liveRoomPrice.mock.mockImplementation(async () => live(163.66, 3))
+    const body = validBody()
+    const r = await post(body)
+    assert.equal(r.status, 201)
+    assert.equal(createReservation.mock.calls[0].arguments[0].total_price, 163.66)
+    assert.equal(createTransaction.mock.calls[0].arguments[0].amount, 163.66)
+    assert.equal(r.json.transaction.amount, 163.66)
+    assert.deepEqual(liveRoomPrice.mock.calls[0].arguments, [
+      { liteapiHotelId: 'lp1897', liteapiRoomId: '2617267', roomType: 'Standard King Room' },
+      { checkIn: body.check_in, checkOut: body.check_out, guests: 2 },
+    ])
+  })
+
+  test('without a guest count, LiteAPI is asked for 2 adults', async () => {
+    liveRoomPrice.mock.mockImplementation(async () => live(163.66, 3))
+    const body = validBody()
+    delete body.guests
+    assert.equal((await post(body)).status, 201)
+    assert.equal(liveRoomPrice.mock.calls[0].arguments[1].guests, 2)
+  })
+
+  test('sold out: 409 before the card is charged, nothing written', async () => {
+    liveRoomPrice.mock.mockImplementation(async () => ({ status: 'sold_out' }))
+    const r = await post(validBody())
+    assert.deepEqual(r, { status: 409, json: { error: 'Room is not available for those dates.' } })
+    assert.equal(writes(), 0)
+  })
+
+  test('LiteAPI unavailable: falls back to the stored price', async () => {
+    const r = await post(validBody())
+    assert.equal(r.status, 201)
+    assert.equal(liveRoomPrice.mock.callCount(), 1)
+    assert.equal(createReservation.mock.calls[0].arguments[0].total_price, 389.97)
+    assert.equal(r.json.transaction.amount, 389.97)
+  })
+
+  test('an owner hotel (no liteapi_id) never calls LiteAPI', async () => {
+    for (const hotels of [null, { liteapi_id: null }]) {
+      roomResult = { data: { ...LITE_ROOM, liteapi_room_id: null, hotels }, error: null }
+      const r = await post(validBody())
+      assert.equal(r.json.reservation.total_price, 389.97)
+    }
+    assert.equal(liveRoomPrice.mock.callCount(), 0)
   })
 })
 

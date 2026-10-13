@@ -13,6 +13,9 @@ export type RoomForBooking = {
   hotel_id: string
   price_per_night: number | string
   capacity: number | null
+  room_type?: string
+  liteapi_room_id?: string | null
+  hotels?: { liteapi_id: string | null } | null
 }
 
 export type ValidationResult =

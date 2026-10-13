@@ -16,6 +16,7 @@ import { HotelPhoto } from "../_components/HotelPhoto";
 
 export type BookingToChange = {
   id: string;
+  hotelId: string;
   hotelName: string;
   location: string;
   photoUrl: string | null;
@@ -26,9 +27,11 @@ export type BookingToChange = {
   total: number;
   /** Why the booking can't be changed, or null when it can */
   blocker: string | null;
+  livePrices: boolean;
 };
 
 type Stay = { checkIn: string; checkOut: string; guests: number; roomId: string; total: number };
+type LivePrices = { key: string; byId: Record<string, { nightly: number; soldOut: boolean }> };
 type Errors = { dates?: string; guests?: string; form?: string; signIn?: boolean };
 
 const nightsLabel = (n: number) => `${n} ${n === 1 ? "night" : "nights"}`;
@@ -38,7 +41,7 @@ const guestsLabel = (n: number) => `${n} ${n === 1 ? "guest" : "guests"}`;
 // The API reprices the stay (nights × nightly price); no difference is charged or refunded yet.
 export function ChangeBooking({
   booking,
-  rooms,
+  rooms: listedRooms,
   otherStays,
   sample = false,
 }: {
@@ -69,15 +72,31 @@ export function ChangeBooking({
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [livePrices, setLivePrices] = useState<LivePrices | null>(null);
+  const [pricingOff, setPricingOff] = useState(false);
   const request = useRef<AbortController | null>(null);
   const sampleTimer = useRef<number | undefined>(undefined);
   const cardRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const lastDone = useRef(done);
 
+  const nights = nightsBetween(checkIn, checkOut);
+  // The page priced the rooms for the booked dates and guests; anything else needs a fresh quote
+  const initialKey = `${booking.checkIn}|${booking.checkOut}|${booking.guests}`;
+  const priceKey = booking.livePrices && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${guests}` : null;
+  const pricesPending = !!priceKey && priceKey !== initialKey && livePrices?.key !== priceKey;
+  const sameStay = checkIn === current.checkIn && checkOut === current.checkOut && guests === current.guests;
+  const rooms =
+    livePrices && livePrices.key === priceKey
+      ? listedRooms.map((r) => {
+          const live = livePrices.byId[r.id];
+          if (!live) return r;
+          // The guest already holds this room for these dates, even if LiteAPI has sold out of it since
+          return { ...r, ...live, soldOut: live.soldOut && !(sameStay && r.id === current.roomId) };
+        })
+      : listedRooms;
   const room = rooms.find((r) => r.id === roomId) ?? rooms[0];
   const currentRoom = rooms.find((r) => r.id === current.roomId);
-  const nights = nightsBetween(checkIn, checkOut);
   const changed = checkIn !== current.checkIn || checkOut !== current.checkOut || guests !== current.guests || roomId !== current.roomId;
   // Any change is repriced at today's nightly price (the API does the same), so until something
   // changes the booked room shows what was actually booked
@@ -102,6 +121,29 @@ export function ChangeBooking({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!priceKey || priceKey === initialKey || livePrices?.key === priceKey) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      const query = new URLSearchParams({ checkIn, checkOut, guests: String(guests) });
+      try {
+        const res = await fetch(`/api/stays/${booking.hotelId}/prices?${query}`, { signal: controller.signal });
+        if (!res.ok) throw new Error(`Room prices failed: ${res.status}`);
+        const body = (await res.json()) as { configured?: boolean; rooms?: { id: string; nightly: number; soldOut: boolean }[] };
+        if (controller.signal.aborted) return;
+        setLivePrices({ key: priceKey, byId: Object.fromEntries((body.rooms ?? []).map(({ id, nightly, soldOut }) => [id, { nightly, soldOut }])) });
+        if (body.configured === false) setPricingOff(true);
+      } catch {
+        // Keep the prices shown and let Save through: the API reprices the change itself
+        if (!controller.signal.aborted) setLivePrices({ key: priceKey, byId: {} });
+      }
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [priceKey, initialKey, livePrices?.key, booking.hotelId, checkIn, checkOut, guests]);
 
   if (blocker || !room || !currentRoom) {
     return (
@@ -138,7 +180,7 @@ export function ChangeBooking({
   }
 
   async function save() {
-    if (saving) return;
+    if (saving || pricesPending) return;
     const found = problem();
     if (found) {
       setErrors({ [found.field]: found.message });
@@ -337,8 +379,10 @@ export function ChangeBooking({
               )}
 
               {/* aria-disabled while saving (not disabled), so a focused button keeps focus */}
-              <button type="button" onClick={save} disabled={!changed} aria-disabled={saving || undefined} className={`${buttonPrimary} w-full`}>
-                {saving ? (
+              <button type="button" onClick={save} disabled={!changed || pricesPending} aria-disabled={saving || undefined} className={`${buttonPrimary} w-full`}>
+                {pricesPending ? (
+                  "Updating prices…"
+                ) : saving ? (
                   <>
                     <svg viewBox="0 0 24 24" className="h-5 w-5 animate-spin" fill="none" aria-hidden>
                       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3" />
