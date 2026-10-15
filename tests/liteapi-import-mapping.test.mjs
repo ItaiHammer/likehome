@@ -92,9 +92,11 @@ test('hotel and room tags only ever use the 17 filter strings', () => {
     parking: true,
     petsAllowed: true,
     facilities: [
-      'Free WiFi', 'Parking garage', 'Electric vehicle charging station', 'Outdoor swimming pool', 'Fitness center',
-      'Gift shop', 'Laundry facilities', 'Housekeeping', 'Pets allowed', 'Spa', 'Restaurant',
-    ].map((name, i) => ({ facilityId: i, name })).concat({ facilityId: 56, name: 'Kids club' }, { facilityId: 28, name: 'Family rooms' }),
+      'Free WiFi', 'Parking garage', 'Gift shop', 'Laundry facilities', 'Housekeeping', 'Pets allowed', 'Spa', 'Restaurant',
+    ].map((name, i) => ({ facilityId: i, name })).concat(
+      { facilityId: 182, name: 'Electric vehicle charging station' }, { facilityId: 104, name: 'Outdoor pool' }, { facilityId: 11, name: 'Fitness center' },
+      { facilityId: 56, name: 'Kids club' }, { facilityId: 28, name: 'Family rooms' },
+    ),
     hotelFacilities: ['Free Parking', 'Bar'],
     rooms: [room(1, { maxOccupancy: 6, roomAmenities: amenities(...Array.from({ length: 400 }, (_, i) => i)) })],
   })
@@ -107,19 +109,38 @@ test('hotel and room tags only ever use the 17 filter strings', () => {
 
 test('facility names map to hotel tags, with the known false friends left out', () => {
   const tagsFor = (...names) => hotelTagsFor(detail({ facilities: names.map((name, i) => ({ facilityId: i, name })) }), [])
-  assert.deepEqual(tagsFor('Pool table'), [])
-  assert.deepEqual(tagsFor('Billiards'), [])
-  assert.deepEqual(tagsFor('Swimming pool'), ['Pool'])
-  assert.deepEqual(tagsFor('Pool'), ['Pool'])
   assert.deepEqual(tagsFor('No parking'), [])
   assert.deepEqual(tagsFor('Laundry service', 'Ironing service'), [])
   assert.deepEqual(tagsFor('Self-service laundry'), ['Washer & Dryer'])
   assert.deepEqual(tagsFor('WiFi'), [], 'not known to be free')
   assert.deepEqual(tagsFor('Free Wi-Fi in all areas'), ['Free Wi-Fi'])
-  assert.deepEqual(tagsFor('EV charging station'), ['EV Charging'])
   assert.deepEqual(tagsFor('No pets allowed'), [])
   assert.deepEqual(tagsFor('Family rooms', 'Kids club', 'Babysitting/child services'), [], 'Kids and Families go by facility id')
-  assert.deepEqual(hotelTagsFor(detail({ hotelFacilities: ['Gift shop', 'Fitness center'] }), []), ['Gym', 'Gift Shops'])
+  assert.deepEqual(tagsFor('Swimming pool', 'Fitness center', 'Electric vehicle charging station'), [], 'so do Pool, Gym and EV Charging')
+  assert.deepEqual(hotelTagsFor(detail({ hotelFacilities: ['Gift shop', 'Fitness center'] }), []), ['Gift Shops'])
+})
+
+test('EV Charging, Pool and Gym come from facility ids, leaving out nearby pools and gyms and pool extras', () => {
+  const tagsFor = (...facilities) => hotelTagsFor(detail({ facilities: facilities.map(([facilityId, name]) => ({ facilityId, name })) }), [])
+  for (const id of [182, 765, 2014]) assert.deepEqual(tagsFor([id, `facility ${id}`]), ['EV Charging'], `facility ${id}`)
+  // Includes 941 "Wheelchair-accessible pool", 194 "Pool with view" and the "Number of outdoor pools - 1" kind
+  for (const id of [103, 104, 120, 122, 192, 193, 194, 195, 196, 197, 301, 781, 830, 832, 835, 837, 941, 1097, 1253, 8995, 9020, 11199, 11469]) {
+    assert.deepEqual(tagsFor([id, `facility ${id}`]), ['Pool'], `facility ${id}`)
+  }
+  // Includes the surcharge ones (757, 6848) and health clubs (530, 749, 2066)
+  for (const id of [11, 492, 530, 723, 749, 757, 942, 1725, 2066, 6848]) assert.deepEqual(tagsFor([id, `facility ${id}`]), ['Gym'], `facility ${id}`)
+  assert.deepEqual(tagsFor([182]), ['EV Charging'], 'a facility with no name still counts')
+
+  assert.deepEqual(tagsFor([967, 'Electric bicycle charging station'], [2413, 'Electric bicycle charging station']), [])
+  assert.deepEqual(tagsFor(
+    [169, 'Swimming pool toys'], [199, 'Pool bar'], [579, 'Billiards or pool table'],
+    [630, 'Access to nearby indoor pool'], [631, 'Access to nearby outdoor pool'], [916, 'Swimming nearby'],
+  ), [])
+  assert.deepEqual(tagsFor([258, "Kids' pool"]), ['Families', 'Kids'], 'a wading pool is not Pool')
+  assert.deepEqual(tagsFor(
+    [537, 'Free use of nearby fitness center'], [569, 'Use of nearby fitness center (discount)'],
+    [255, 'Fitness classes'], [256, 'Personal trainer'], [257, 'Fitness/spa locker rooms'],
+  ), [])
 })
 
 test('Kids and Families come from facility ids, whatever the name', () => {
@@ -348,7 +369,7 @@ test('roomRowsFor keeps the room limits, treating a room with 0 max adults as un
 
 test('unmappedFacilities lists the names no rule matched, leaving out adults-only', () => {
   const d = detail({
-    facilities: [{ facilityId: 1, name: 'Spa' }, { facilityId: 2, name: 'Fitness center' }, { facilityId: 3 }],
+    facilities: [{ facilityId: 1, name: 'Spa' }, { facilityId: 11, name: 'Fitness center' }, { facilityId: 3 }],
     hotelFacilities: ['Restaurant', 'spa', ' '],
   })
   assert.deepEqual(unmappedFacilities(d), ['spa', 'restaurant'], 'no empty names')

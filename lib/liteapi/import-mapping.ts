@@ -137,12 +137,17 @@ type FacilityRule = { tags: Tag[]; ids?: number[]; match?: RegExp; unless?: RegE
 const FAMILY_ROOMS = 28
 const ADULT_ONLY = 149
 export const KIDS_FACILITIES = [21, 56, 144, 148, 172, 173, 174, 176, 177, 214, 258, 495, 570, 652, 696, 697, 737, 770, 890, 891]
+const EV_FACILITIES = [182, 765, 2014]
+// On-site pools only: not 630 / 631 (a pool nearby), 258 "Kids' pool" or extras like 169 "Swimming pool toys"
+const POOL_FACILITIES = [103, 104, 120, 122, 192, 193, 194, 195, 196, 197, 301, 781, 830, 832, 835, 837, 941, 1097, 1253, 8995, 9020, 11199, 11469]
+// Not 537 / 569 (a fitness center nearby), and fitness classes or a personal trainer aren't a gym
+const GYM_FACILITIES = [11, 492, 530, 723, 749, 757, 942, 1725, 2066, 6848]
 
 const FACILITY_RULES: FacilityRule[] = [
   { tags: ['Parking'], match: /parking|garage/, unless: /no parking/ },
-  { tags: ['EV Charging'], match: /electric vehicle|\bev charg/ },
-  { tags: ['Pool'], match: /(?:swimming|outdoor|indoor|infinity|rooftop|heated|plunge|salt ?water) pool|^pool$/, unless: /pool table|billiard|pool view/ },
-  { tags: ['Gym'], match: /fitness|gym/ },
+  { tags: ['EV Charging'], ids: EV_FACILITIES },
+  { tags: ['Pool'], ids: POOL_FACILITIES },
+  { tags: ['Gym'], ids: GYM_FACILITIES },
   { tags: ['Gift Shops'], match: /gift shop|shopping on site|minimarket|convenience store/ },
   { tags: ['Washer & Dryer'], match: /laundry facilities|launderette|self-service laundry/ },
   { tags: ['Free Wi-Fi'], match: /^free wi-?fi/ },
