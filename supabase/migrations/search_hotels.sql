@@ -60,7 +60,8 @@ AS $function$
   order by
     case when p_sort = 'price-low'  then ph.min_price end asc,
     case when p_sort = 'price-high' then ph.min_price end desc,
-    h.created_at desc
+    -- An import saves its hotels in one transaction, so they share created_at: id keeps pages from overlapping
+    h.created_at desc, h.id
   limit least(p_limit, 100) offset p_offset;
 $function$;
 
