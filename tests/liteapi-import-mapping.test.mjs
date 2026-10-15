@@ -19,8 +19,14 @@ const amenities = (...ids) => ids.map((amenitiesId) => ({ amenitiesId, name: `am
 const detail = (more = {}) => ({ id: 'lp1', name: 'Detail Name', rooms: [room(1)], ...more })
 const summary = (more = {}) => ({ id: 'lp1', name: 'Summary Name', country: 'us', city: 'San Francisco', latitude: 37.78, longitude: -122.41, ...more })
 
-test('bedSizeFor maps the width band first, then the bed type', () => {
-  const size = (bedSize, bedType = 'Bed') => bedSizeFor([{ quantity: 1, bedType, bedSize }])
+test('bedSizeFor maps the bed type id first, then the width band, then the bed type', () => {
+  const size = (bedSize, bedType = 'Bed', id) => bedSizeFor([{ id, quantity: 1, bedType, bedSize }])
+  assert.equal(size('151-180 cm wide', 'King bed', 10), 'King', 'a King bed in the Queen width band')
+  assert.equal(size('151-180 cm wide', 'Queen bed', 167), 'Queen')
+  assert.equal(size('151-180 cm wide', 'Large bed', 100), 'Queen')
+  assert.equal(size(undefined, undefined, 10), 'King', 'the id alone')
+  assert.equal(size('181-210 cm wide', 'Extra-large double bed (Super-king size)', 39), 'King', 'other ids go by width')
+  assert.equal(size('151-180 cm wide', 'Large bed', 999), 'Queen')
   assert.equal(size('90-130 cm wide'), 'Twin')
   assert.equal(size('131-150 cm wide'), 'Double')
   assert.equal(size('151-180cm wide'), 'Queen')
@@ -38,6 +44,10 @@ test('bedSizeFor maps the width band first, then the bed type', () => {
 
 test('bedSizeFor takes the largest bed and ignores sofa beds unless they are all there is', () => {
   assert.equal(bedSizeFor([{ quantity: 2, bedType: 'Single bed' }, { quantity: 1, bedType: 'King bed' }]), 'King')
+  assert.equal(bedSizeFor([
+    { id: 167, quantity: 1, bedType: 'Queen bed', bedSize: '151-180 cm wide' },
+    { id: 10, quantity: 1, bedType: 'King bed', bedSize: '151-180 cm wide' },
+  ]), 'King')
   assert.equal(bedSizeFor([{ quantity: 1, bedType: 'Twin bed' }, { quantity: 1, bedType: 'Double sofa bed' }]), 'Twin')
   assert.equal(bedSizeFor([{ quantity: 1, bedType: 'Double sofa bed' }]), 'Double')
 })
@@ -260,7 +270,7 @@ test('hotelRowFor puts the default image first, prefers HD, removes duplicates a
 test('roomRowsFor keeps priced rooms first, then the cheapest, up to --max-rooms', () => {
   const sample = samplePricesFor([offer(180.4, {}, { mappedRoomId: 3 }), offer(99.6, {}, { mappedRoomId: 2 })])
   const rooms = [
-    room(1, { roomName: '  Standard King Room ', bedTypes: [{ quantity: 1, bedType: 'Large bed', bedSize: '151-180cm wide' }] }),
+    room(1, { roomName: '  Standard King Room ', bedTypes: [{ id: 10, quantity: 1, bedType: 'King bed', bedSize: '151-180 cm wide' }] }),
     room(2, { roomAmenities: amenities(118) }),
     room(3),
     room(4),
@@ -271,7 +281,7 @@ test('roomRowsFor keeps priced rooms first, then the cheapest, up to --max-rooms
   assert.deepEqual(rows[0].tags, ['Free Wi-Fi'])
   assert.ok(rows.every((r) => Array.isArray(r.tags)))
   assert.deepEqual(rows[2], {
-    liteapi_room_id: '1', room_type: 'Standard King Room', capacity: 2, max_adults: null, max_children: null, num_beds: 1, bed_size: 'Queen',
+    liteapi_room_id: '1', room_type: 'Standard King Room', capacity: 2, max_adults: null, max_children: null, num_beds: 1, bed_size: 'King',
     price_per_night: 100, tags: [],
   })
   assert.equal(roomRowsFor(rooms, sample, 10).length, 4)

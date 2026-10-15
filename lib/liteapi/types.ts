@@ -22,7 +22,8 @@ export interface LiteRoom {
   maxAdults?: number
   maxChildren?: number
   maxOccupancy?: number
-  bedTypes?: { quantity: number; bedType: string; bedSize?: string }[]
+  // The docs call the bed type id "Id", but the API sends "id"
+  bedTypes?: { id?: number; quantity: number; bedType: string; bedSize?: string }[]
   bedRelation?: 'NONE' | 'AND' | 'OR' | 'COMPLEX'
   roomAmenities?: { amenitiesId: number; name: string }[]
 }

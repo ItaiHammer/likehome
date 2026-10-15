@@ -40,7 +40,7 @@ export type SamplePrices = {
   cheapest: number
 }
 
-type Bed = { quantity?: number; bedType?: string; bedSize?: string }
+type Bed = { id?: number; quantity?: number; bedType?: string; bedSize?: string }
 
 const MAX_PHOTOS = 12
 
@@ -65,7 +65,13 @@ const BED_KEYWORDS: [RegExp, BedSize][] = [
   [/twin|single|bunk/, 'Twin'],
 ]
 
+// 151-180 cm holds both 10 "King bed" and 167 "Queen bed", so their width can't tell them apart.
+// 100 "Large bed" is only on rooms named Queen.
+const BED_TYPE_SIZES = new Map<number, BedSize>([[10, 'King'], [167, 'Queen'], [100, 'Queen']])
+
 function sizeOfBed(bed: Bed): BedSize | null {
+  const byId = BED_TYPE_SIZES.get(Number(bed.id))
+  if (byId) return byId
   const width = /(\d{2,3})\s*-\s*(\d{2,3})\s*cm/i.exec(bed.bedSize ?? '')
   if (width) {
     // Booking.com calls 151-180 cm "King size", but a US queen is 152 cm wide
