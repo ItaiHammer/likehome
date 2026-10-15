@@ -25,6 +25,8 @@ test('bedSizeFor maps the bed type id first, then the width band, then the bed t
   assert.equal(size('151-180 cm wide', 'Queen bed', 167), 'Queen')
   assert.equal(size('151-180 cm wide', 'Large bed', 100), 'Queen')
   assert.equal(size(undefined, undefined, 10), 'King', 'the id alone')
+  assert.equal(size(undefined, 'Bed', 167), 'Queen')
+  assert.equal(size(undefined, 'Large bed', 100), 'Queen')
   assert.equal(size('181-210 cm wide', 'Extra-large double bed (Super-king size)', 39), 'King', 'other ids go by width')
   assert.equal(size('151-180 cm wide', 'Large bed', 999), 'Queen')
   assert.equal(size('90-130 cm wide'), 'Twin')
@@ -184,22 +186,27 @@ test('"Pets allowed" still gives Pets when petsAllowed is false', () => {
   assert.ok(!hotelTagsFor(detail({ petsAllowed: false }), []).includes('Pets'))
 })
 
-test('a pets policy that says no removes Pets; allowing pets or service animals does not', () => {
-  const pets = (...descriptions) => hotelTagsFor(detail({
-    facilities: [{ facilityId: 4, name: 'Pets allowed' }],
-    rooms: [room(1, { roomAmenities: amenities(250) })],
-    policies: descriptions.map((description) => ({ policy_type: 'POLICY_HOTEL_PETS', name: 'Pets', description })),
-  }), []).includes('Pets')
+test('a pets policy that says no removes Pets unless a room allows pets; allowing pets or service animals does not', () => {
+  const policies = (...descriptions) => descriptions.map((description) => ({ policy_type: 'POLICY_HOTEL_PETS', name: 'Pets', description }))
+  const pets = (...descriptions) => hotelTagsFor(detail({ facilities: [{ facilityId: 4, name: 'Pets allowed' }], policies: policies(...descriptions) }), []).includes('Pets')
   assert.ok(!pets('Pets are not allowed.\n'))
   assert.ok(!pets('Pets not allowed', 'Service animals are exempt from fees/restrictions', 'Service animals are allowed'))
-  assert.ok(!pets('No pets'))
-  assert.ok(!pets('Only service animals are allowed.'), 'service animals are not pets')
+  for (const description of [
+    'No pets', 'We do not allow pets.', "Pets aren't allowed.", 'Pets are not permitted.', 'No pets or service animals allowed.',
+    'No pets allowed, except service animals', 'Pets are not allowed, service animals are welcome.',
+    'Only service animals are allowed.', 'We do not allow animals, only service animals are allowed.', 'Please note that only service animals are allowed.',
+  ]) assert.ok(!pets(description), description)
   assert.ok(pets('Pets are allowed. Charges may be applicable.\n'))
   assert.ok(pets('Pets are allowed on request. A maximum of 2 pets under 25 lbs, for a fee.'))
   assert.ok(pets('Service animals are allowed'))
   assert.ok(pets('Pets are not allowed in the pool area.'), 'whole sentences only')
+  assert.ok(pets('Pets are allowed. No pets allowed over 25 lbs.'))
+  assert.ok(pets('Pets allowed on request. Pets not allowed in suites.'))
   assert.ok(pets(undefined))
   assert.ok(pets())
+  assert.ok(!hotelTagsFor(detail({ petsAllowed: true, policies: policies('Pets are not allowed.') }), []).includes('Pets'), 'the policy beats petsAllowed')
+  const petRooms = detail({ rooms: [room(1, { roomAmenities: amenities(250) })], policies: policies('Pets are not allowed.\n') })
+  assert.ok(hotelTagsFor(petRooms, []).includes('Pets'), 'a room that allows pets beats the policy')
   const general = detail({ petsAllowed: true, policies: [{ policy_type: 'POLICY_GENERAL', name: 'General', description: 'Pets are not allowed.' }] })
   assert.ok(hotelTagsFor(general, []).includes('Pets'), 'only pets policies count')
 })

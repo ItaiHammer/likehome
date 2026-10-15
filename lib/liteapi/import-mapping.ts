@@ -196,7 +196,7 @@ const GROUP_AMENITIES = [183, 186, 84, 85, 298, 302, 303, 304, 305, 328, 9, 10, 
 
 // US hotels must take service animals and they aren't pets, so "only service animals" is a no.
 // Whole sentences only, so "Pets are not allowed in the pool area" doesn't count.
-const NO_PETS = /^(?:no pets(?: allowed)?|pets (?:are )?not allowed|only service animals are allowed)$/
+const NO_PETS = /^(?:(?:no pets(?: are)?|(?:pets|animals) (?:are not|aren['’]t|not) (?:allowed|permitted)|we do not allow (?:pets|animals))(?: allowed| permitted)?(?:[,;]? (?:but |except |only |or )?service animals.*)?|(?:please note that )?only service animals are allowed)$/
 
 function refusesPets(d: LiteHotelDetail): boolean {
   return (d.policies ?? []).some((policy) => policy?.policy_type === 'POLICY_HOTEL_PETS' && typeof policy.description === 'string' &&
@@ -258,8 +258,10 @@ export function hotelTagsFor(d: LiteHotelDetail, offers: LiteOffer[] | undefined
   const allIds = new Set((d.rooms ?? []).flatMap((room) => [...amenityIds(room)]))
 
   // The docs' example has a "Pets allowed" facility with petsAllowed:false, so false never removes Pets
-  if (d.petsAllowed === true || hasAny(allIds, PET_AMENITIES)) found.add('Pets')
+  if (d.petsAllowed === true) found.add('Pets')
   if (refusesPets(d)) found.delete('Pets')
+  // Rooms marked "Pets allowed" outrank the hotel's stock "no pets" text: Conrad Las Vegas has both and takes dogs
+  if (hasAny(allIds, PET_AMENITIES)) found.add('Pets')
   if (d.parking === true || d.parking === 'PAID' || d.parking === 'FREE') found.add('Parking')
   if (d.parking === 'NOT_AVAILABLE') found.delete('Parking')
   if (hasAny(allIds, POOL_AMENITIES)) found.add('Pool')

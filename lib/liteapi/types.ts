@@ -41,7 +41,7 @@ export interface LiteHotelDetail {
   hotelFacilities?: string[]
   // The docs say boolean, but the API sends "PAID", "FREE", "NOT_AVAILABLE" or ""
   parking?: boolean | string | null
-  petsAllowed?: boolean
+  petsAllowed?: boolean | null
   policies?: { policy_type?: string; name?: string; description?: string }[]
   rooms?: LiteRoom[]
   deletedAt?: string | null
