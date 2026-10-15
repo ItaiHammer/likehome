@@ -1,0 +1,270 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import {
+  bedSizeFor, capacityFor, hotelRowFor, hotelSql, hotelTagsFor, numBedsFor, roomRowsFor, roomTagsFor,
+  samplePricesFor, stripHtml, unmappedFacilities,
+} from '../lib/liteapi/import-mapping.ts'
+import { tags as filterTags } from '../app/search/types.ts'
+
+const SF = { countryCode: 'US', cityName: 'San Francisco', city: 'San Francisco', region: 'California', country: 'USA' }
+
+const usd = (amount) => ({ amount, currency: 'USD' })
+const offer = (amount, more = {}, rate = {}) => ({
+  offerId: `o-${amount}-${rate.mappedRoomId ?? ''}`,
+  rates: [{ rateId: 'r', name: 'Standard King Room', boardType: 'RO', retailRate: { total: [usd(amount)] }, ...rate }],
+  ...more,
+})
+const room = (id, more = {}) => ({ id, roomName: `Room ${id}`, maxOccupancy: 2, bedTypes: [{ quantity: 1, bedType: 'Queen bed' }], ...more })
+const amenities = (...ids) => ids.map((amenitiesId) => ({ amenitiesId, name: `amenity ${amenitiesId}` }))
+const detail = (more = {}) => ({ id: 'lp1', name: 'Detail Name', rooms: [room(1)], ...more })
+const summary = (more = {}) => ({ id: 'lp1', name: 'Summary Name', country: 'us', city: 'San Francisco', latitude: 37.78, longitude: -122.41, ...more })
+
+test('bedSizeFor maps the width band first, then the bed type', () => {
+  const size = (bedSize, bedType = 'Bed') => bedSizeFor([{ quantity: 1, bedType, bedSize }])
+  assert.equal(size('90-130 cm wide'), 'Twin')
+  assert.equal(size('131-150 cm wide'), 'Double')
+  assert.equal(size('151-180cm wide'), 'Queen')
+  assert.equal(size('181-210 cm wide'), 'King')
+  assert.equal(size('151-180cm wide', 'Twin XL bed'), 'Queen', 'width wins over the name')
+  assert.equal(size(undefined, 'Twin XL'), 'Twin XL')
+  assert.equal(size(undefined, 'Queen bed'), 'Queen')
+  assert.equal(size(undefined, 'Super-king bed'), 'King')
+  assert.equal(size(undefined, 'Full bed'), 'Double')
+  assert.equal(size(undefined, 'Bunk bed'), 'Twin')
+  assert.equal(size(undefined, 'Futon'), null)
+  assert.equal(size('', 'Mystery sleeper'), null)
+  assert.equal(bedSizeFor([]), null)
+})
+
+test('bedSizeFor takes the largest bed and ignores sofa beds unless they are all there is', () => {
+  assert.equal(bedSizeFor([{ quantity: 2, bedType: 'Single bed' }, { quantity: 1, bedType: 'King bed' }]), 'King')
+  assert.equal(bedSizeFor([{ quantity: 1, bedType: 'Twin bed' }, { quantity: 1, bedType: 'Double sofa bed' }]), 'Twin')
+  assert.equal(bedSizeFor([{ quantity: 1, bedType: 'Double sofa bed' }]), 'Double')
+})
+
+test('num_beds sums AND layouts, takes the first OR / COMPLEX layout, and is at least 1', () => {
+  const beds = [{ quantity: 2, bedType: 'Twin bed' }, { quantity: 1, bedType: 'King bed' }]
+  assert.equal(numBedsFor(room(1, { bedTypes: beds, bedRelation: 'AND' })), 3)
+  assert.equal(numBedsFor(room(1, { bedTypes: beds })), 3)
+  assert.equal(numBedsFor(room(1, { bedTypes: beds, bedRelation: 'OR' })), 2)
+  assert.equal(numBedsFor(room(1, { bedTypes: beds, bedRelation: 'COMPLEX' })), 2)
+  assert.equal(numBedsFor(room(1, { bedTypes: [] })), 1)
+  assert.equal(numBedsFor(room(1, { bedTypes: undefined })), 1)
+  assert.equal(numBedsFor(room(1, { bedTypes: [{ quantity: 0, bedType: 'Bed' }] })), 1)
+})
+
+test('capacity falls back from maxOccupancy to adults + children, then to 2', () => {
+  assert.equal(capacityFor({ id: 1, roomName: 'r', maxOccupancy: 5, maxAdults: 2 }), 5)
+  assert.equal(capacityFor({ id: 1, roomName: 'r', maxAdults: 2, maxChildren: 1 }), 3)
+  assert.equal(capacityFor({ id: 1, roomName: 'r', maxAdults: 3 }), 3)
+  assert.equal(capacityFor({ id: 1, roomName: 'r' }), 2)
+  assert.equal(capacityFor({ id: 1, roomName: 'r', maxOccupancy: 0 }), 2)
+})
+
+test('stripHtml turns markup into plain text', () => {
+  assert.equal(
+    stripHtml('<p><strong>Location.</strong> Near&nbsp;the bay</p><p>Tom&#39;s &quot;pick&quot; &amp; more<br/>1 &lt; 2 &gt; 0</p>'),
+    'Location. Near the bay Tom\'s "pick" & more 1 < 2 > 0',
+  )
+  assert.equal(stripHtml('A &amp;lt; B'), 'A &lt; B')
+  assert.equal(stripHtml('  \n '), '')
+})
+
+test('room tags come from room amenity ids and are never null', () => {
+  assert.deepEqual(roomTagsFor(room(1, { roomAmenities: amenities(118, 77, 186, 378, 272, 382, 999) })),
+    ['Pool', 'ADA Compliant', 'Kitchen', 'Free Wi-Fi', 'Housekeeping', 'Washer & Dryer'].sort((a, b) => filterTags.indexOf(a) - filterTags.indexOf(b)))
+  assert.deepEqual(roomTagsFor(room(1)), [])
+  assert.deepEqual(roomTagsFor(room(1, { roomAmenities: amenities(158, 194, 193) })), [], 'paid wifi, laundry service and detergent alone')
+})
+
+test('hotel and room tags only ever use the 16 filter strings', () => {
+  const everything = detail({
+    parking: true,
+    petsAllowed: true,
+    facilities: [
+      'Free WiFi', 'Parking garage', 'Electric vehicle charging station', 'Outdoor swimming pool', 'Fitness center',
+      'Gift shop', 'Laundry facilities', 'Housekeeping', 'Pets allowed', 'Kids club', 'Family rooms', 'Spa', 'Restaurant',
+    ].map((name, i) => ({ facilityId: i, name })),
+    hotelFacilities: ['Free Parking', 'Bar'],
+    rooms: [room(1, { maxOccupancy: 6, roomAmenities: amenities(...Array.from({ length: 400 }, (_, i) => i)) })],
+  })
+  const hotelTags = hotelTagsFor(everything, [offer(100, {}, { boardType: 'BI' })])
+  assert.ok(hotelTags.length > 0)
+  for (const tag of [...hotelTags, ...roomTagsFor(everything.rooms[0])]) assert.ok(filterTags.includes(tag), tag)
+  assert.ok(!hotelTags.includes('ADA Compliant'), 'never hotel-wide')
+  assert.equal(new Set(hotelTags).size, hotelTags.length)
+})
+
+test('facility names map to hotel tags, with the known false friends left out', () => {
+  const tagsFor = (...names) => hotelTagsFor(detail({ facilities: names.map((name, i) => ({ facilityId: i, name })) }), [])
+  assert.deepEqual(tagsFor('Pool table'), [])
+  assert.deepEqual(tagsFor('Billiards'), [])
+  assert.deepEqual(tagsFor('Swimming pool'), ['Pool'])
+  assert.deepEqual(tagsFor('Pool'), ['Pool'])
+  assert.deepEqual(tagsFor('No parking'), [])
+  assert.deepEqual(tagsFor('Laundry service', 'Ironing service'), [])
+  assert.deepEqual(tagsFor('Self-service laundry'), ['Washer & Dryer'])
+  assert.deepEqual(tagsFor('WiFi'), [], 'not known to be free')
+  assert.deepEqual(tagsFor('Free Wi-Fi in all areas'), ['Free Wi-Fi'])
+  assert.deepEqual(tagsFor('EV charging station'), ['EV Charging'])
+  assert.deepEqual(tagsFor('No pets allowed'), [])
+  assert.deepEqual(tagsFor('Family rooms'), ['Families'])
+  assert.deepEqual(tagsFor('Babysitting', 'Adults only'), ['Couples'], 'adults-only hotels are never for kids or families')
+  assert.deepEqual(hotelTagsFor(detail({ hotelFacilities: ['Gift shop', 'Fitness center'] }), []), ['Gym', 'Gift Shops'])
+})
+
+test('"Pets allowed" still gives Pets when petsAllowed is false', () => {
+  assert.ok(hotelTagsFor(detail({ petsAllowed: false, facilities: [{ facilityId: 4, name: 'Pets allowed' }] }), []).includes('Pets'))
+  assert.ok(hotelTagsFor(detail({ petsAllowed: true }), []).includes('Pets'))
+  assert.ok(hotelTagsFor(detail({ rooms: [room(1, { roomAmenities: amenities(250) })] }), []).includes('Pets'))
+  assert.ok(!hotelTagsFor(detail({ petsAllowed: false }), []).includes('Pets'))
+})
+
+test('room amenities give hotel-wide pool, gym, kids and families', () => {
+  const tagsFor = (...ids) => hotelTagsFor(detail({ rooms: [room(1), room(2, { roomAmenities: amenities(...ids) })] }), [])
+  assert.deepEqual(tagsFor(155), ['Pool'])
+  assert.deepEqual(tagsFor(123), ['Gym'])
+  assert.deepEqual(tagsFor(74), ['Families', 'Kids'])
+  assert.deepEqual(tagsFor(72), ['Families'])
+  assert.deepEqual(tagsFor(256), [], 'pool view')
+})
+
+test('Couples needs adults-only or a private hot tub / pool, never stars or a spa', () => {
+  const spa = detail({ starRating: 5, facilities: [{ facilityId: 1, name: 'Spa' }], rooms: [room(1, { roomAmenities: amenities(169, 296, 331) })] })
+  assert.ok(!hotelTagsFor(spa, []).includes('Couples'))
+  const hotTub = detail({ rooms: [room(1), room(2, { roomAmenities: amenities(160) })] })
+  assert.ok(hotelTagsFor(hotTub, []).includes('Couples'))
+  assert.ok(!hotelTagsFor(hotTub, [], [hotTub.rooms[0]]).includes('Couples'), 'only rooms being imported count')
+  assert.ok(hotelTagsFor(detail({ facilities: [{ facilityId: 1, name: 'Adults only' }] }), []).includes('Couples'))
+})
+
+test('Friends needs one room that sleeps 4 and has a kitchen, living area or extra bathroom', () => {
+  const tagsFor = (...rooms) => hotelTagsFor(detail({ rooms }), [])
+  assert.ok(tagsFor(room(1, { maxOccupancy: 4, roomAmenities: amenities(183) })).includes('Friends'))
+  assert.ok(tagsFor(room(1, { maxOccupancy: 6, roomAmenities: amenities(9) })).includes('Friends'))
+  assert.ok(!tagsFor(room(1, { maxOccupancy: 3, roomAmenities: amenities(183) })).includes('Friends'))
+  assert.ok(!tagsFor(room(1, { maxOccupancy: 4 }), room(2, { roomAmenities: amenities(183) })).includes('Friends'))
+})
+
+test('Free Meals only when every priced sample offer includes meals', () => {
+  const meals = (...offers) => hotelTagsFor(detail(), offers).includes('Free Meals')
+  assert.ok(meals(offer(100, {}, { boardType: 'BI' }), offer(120, {}, { boardType: 'HB' })))
+  assert.ok(!meals(offer(100, {}, { boardType: 'BI' }), offer(90, {}, { boardType: 'RO' })))
+  assert.ok(!meals(offer(100, {}, { boardType: '' })))
+  assert.ok(!meals())
+  const placeholder = { offerId: 'p', rates: [{ rateId: '', boardType: '', retailRate: { total: null } }] }
+  assert.ok(meals(offer(100, {}, { boardType: 'AI' }), placeholder), 'unpriced offers do not count')
+})
+
+test('samplePricesFor keeps the cheapest priced offer per mapped room and skips the rest', () => {
+  const sample = samplePricesFor([
+    offer(200, {}, { mappedRoomId: 11 }),
+    offer(150, {}, { mappedRoomId: '11' }),
+    offer(90, { mappedRoomId: 12 }, { name: 'Twin Room' }),
+    { rates: [{ retailRate: { total: [usd(10)] } }] },
+    offer(5, {}, { retailRate: { total: [{ amount: 5, currency: 'EUR' }] } }),
+    offer(0),
+  ])
+  assert.equal(sample.mapped, true)
+  assert.deepEqual([...sample.byRoom], [['11', 150], ['12', 90]])
+  assert.equal(sample.cheapest, 90)
+  assert.equal(sample.byName.get('twinroom'), 90)
+  assert.equal(samplePricesFor([{ offerId: 'p', rates: [{ retailRate: { total: null } }] }]), null)
+  assert.equal(samplePricesFor(undefined), null)
+  assert.equal(samplePricesFor([{ offerId: 'o', rates: [{ retailRate: { total: usd(240) } }] }], 2).cheapest, 120, 'money as an object')
+})
+
+test('hotelRowFor takes the location from the target and stars for the rating', () => {
+  const row = hotelRowFor(SF, summary({ stars: 4.5, hotelDescription: '<p>Summary</p>' }), detail({
+    hotelDescription: '<p>Great <b>views</b></p><p>Tom&#39;s pick</p>', address: '1 Main St', starRating: 3, rating: 9.1,
+  }))
+  assert.equal(row.liteapi_id, 'lp1')
+  assert.equal(row.name, 'Detail Name')
+  assert.equal(row.city, 'San Francisco')
+  assert.equal(row.region, 'California')
+  assert.equal(row.country, 'USA')
+  assert.equal(row.description, "Great views Tom's pick")
+  assert.equal(row.address, '1 Main St')
+  assert.equal(row.rating, 4.5)
+  assert.equal(row.latitude, 37.78)
+  assert.equal(row.longitude, -122.41)
+  assert.ok(!('owner_id' in row))
+
+  const rating = (stars, starRating) => hotelRowFor(SF, summary({ stars }), detail({ starRating })).rating
+  assert.equal(rating(7), 5)
+  assert.equal(rating(0), null)
+  assert.equal(rating(undefined, undefined), null)
+  assert.equal(rating(undefined, 3), 3)
+  assert.equal(rating(3.25), 3.3)
+
+  const fallback = hotelRowFor(SF, summary({ latitude: undefined, longitude: undefined, address: '2 Side St' }), detail({ location: { latitude: 1.5, longitude: 2.5 } }))
+  assert.deepEqual([fallback.latitude, fallback.longitude, fallback.address, fallback.description], [1.5, 2.5, '2 Side St', ''])
+})
+
+test('hotelRowFor puts the default image first, prefers HD, removes duplicates and keeps 12', () => {
+  const hotelImages = [
+    { url: 'a.jpg', order: 2 },
+    { url: 'b.jpg', urlHd: 'b-hd.jpg', order: 1 },
+    { url: 'main.jpg', order: 9, defaultImage: true },
+    { url: 'a.jpg', order: 3 },
+    ...Array.from({ length: 20 }, (_, i) => ({ url: `x${i}.jpg`, order: 10 + i })),
+  ]
+  const photos = hotelRowFor(SF, summary(), detail({ hotelImages })).photo_urls
+  assert.deepEqual(photos.slice(0, 4), ['main.jpg', 'b-hd.jpg', 'a.jpg', 'x0.jpg'])
+  assert.equal(photos.length, 12)
+  assert.equal(new Set(photos).size, 12)
+
+  assert.deepEqual(hotelRowFor(SF, summary({ main_photo: 's.jpg' }), detail({ main_photo: '' })).photo_urls, ['s.jpg'])
+  assert.deepEqual(hotelRowFor(SF, summary(), detail()).photo_urls, [])
+})
+
+test('roomRowsFor keeps priced rooms first, then the cheapest, up to --max-rooms', () => {
+  const sample = samplePricesFor([offer(180.4, {}, { mappedRoomId: 3 }), offer(99.6, {}, { mappedRoomId: 2 })])
+  const rooms = [
+    room(1, { roomName: '  Standard King Room ', bedTypes: [{ quantity: 1, bedType: 'Large bed', bedSize: '151-180cm wide' }] }),
+    room(2, { roomAmenities: amenities(118) }),
+    room(3),
+    room(4),
+  ]
+  const rows = roomRowsFor(rooms, sample, 3)
+  assert.deepEqual(rows.map((r) => r.liteapi_room_id), ['2', '3', '1'])
+  assert.deepEqual(rows.map((r) => r.price_per_night), [100, 180, 100], 'unpriced rooms get the hotel cheapest')
+  assert.deepEqual(rows[0].tags, ['Free Wi-Fi'])
+  assert.ok(rows.every((r) => Array.isArray(r.tags)))
+  assert.deepEqual(rows[2], {
+    liteapi_room_id: '1', room_type: 'Standard King Room', capacity: 2, num_beds: 1, bed_size: 'Queen', price_per_night: 100, tags: [],
+  })
+  assert.equal(roomRowsFor(rooms, sample, 10).length, 4)
+})
+
+test('roomRowsFor drops rooms without an id or name and repeated ids', () => {
+  const sample = samplePricesFor([offer(100)])
+  const rows = roomRowsFor([room(1), room(1, { roomName: 'Copy' }), room(undefined), room(2, { roomName: '  ' })], sample)
+  assert.deepEqual(rows.map((r) => [r.liteapi_room_id, r.room_type]), [['1', 'Room 1']])
+  assert.deepEqual(roomRowsFor(undefined, sample), [])
+})
+
+test('roomRowsFor matches by rate name only when the hotel is not mapped', () => {
+  const unmapped = samplePricesFor([offer(300, {}, { name: 'Deluxe Suite!' }), offer(100, {}, { name: 'Basic' })])
+  const rows = roomRowsFor([room(1, { roomName: 'deluxe suite' }), room(2)], unmapped)
+  assert.deepEqual(rows.map((r) => [r.liteapi_room_id, r.price_per_night]), [['1', 300], ['2', 100]])
+})
+
+test('unmappedFacilities lists the names no rule matched', () => {
+  const d = detail({ facilities: [{ facilityId: 1, name: 'Spa' }, { facilityId: 2, name: 'Fitness center' }], hotelFacilities: ['Restaurant', 'spa'] })
+  assert.deepEqual(unmappedFacilities(d), ['spa', 'restaurant'])
+})
+
+test('hotelSql writes idempotent upserts with escaped strings and text arrays', () => {
+  const hotel = hotelRowFor(SF, summary({ stars: 4 }), detail({ name: "Tom's Inn", facilities: [{ facilityId: 1, name: 'Free WiFi' }] }))
+  const rooms = roomRowsFor([room(7, { roomName: "King's Room" }), room(8, { bedTypes: [] })], samplePricesFor([offer(120)]))
+  const sql = hotelSql(hotel, rooms)
+  assert.match(sql, /insert into public\.hotels \(liteapi_id, name, description, address, city, region, country, photo_urls, rating, latitude, longitude, tags\)/)
+  assert.match(sql, /values \('lp1', 'Tom''s Inn', '', '', 'San Francisco', 'California', 'USA', array\[\]::text\[\], 4, 37\.78, -122\.41, array\['Free Wi-Fi'\]::text\[\]\)/)
+  assert.match(sql, /on conflict \(liteapi_id\) do update set name = excluded\.name, .*tags = excluded\.tags;/)
+  assert.ok(!/excluded\.liteapi_id|owner_id|delete/i.test(sql))
+  assert.match(sql, /\('7', 'King''s Room', 2, 1, 'Queen', 120, array\[\]::text\[\]\)/)
+  assert.match(sql, /\('8', 'Room 8', 2, 1, null, 120, array\[\]::text\[\]\)/)
+  assert.match(sql, /join public\.hotels h on h\.liteapi_id = 'lp1'\non conflict \(hotel_id, liteapi_room_id\) do update set room_type = excluded\.room_type/)
+  assert.ok(!hotelSql(hotel, []).includes('public.rooms'))
+})
