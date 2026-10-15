@@ -163,6 +163,38 @@ test('"Pets allowed" still gives Pets when petsAllowed is false', () => {
   assert.ok(!hotelTagsFor(detail({ petsAllowed: false }), []).includes('Pets'))
 })
 
+test('a pets policy that says no removes Pets; allowing pets or service animals does not', () => {
+  const pets = (...descriptions) => hotelTagsFor(detail({
+    facilities: [{ facilityId: 4, name: 'Pets allowed' }],
+    rooms: [room(1, { roomAmenities: amenities(250) })],
+    policies: descriptions.map((description) => ({ policy_type: 'POLICY_HOTEL_PETS', name: 'Pets', description })),
+  }), []).includes('Pets')
+  assert.ok(!pets('Pets are not allowed.\n'))
+  assert.ok(!pets('Pets not allowed', 'Service animals are exempt from fees/restrictions', 'Service animals are allowed'))
+  assert.ok(!pets('No pets'))
+  assert.ok(!pets('Only service animals are allowed.'), 'service animals are not pets')
+  assert.ok(pets('Pets are allowed. Charges may be applicable.\n'))
+  assert.ok(pets('Pets are allowed on request. A maximum of 2 pets under 25 lbs, for a fee.'))
+  assert.ok(pets('Service animals are allowed'))
+  assert.ok(pets('Pets are not allowed in the pool area.'), 'whole sentences only')
+  assert.ok(pets(undefined))
+  assert.ok(pets())
+  const general = detail({ petsAllowed: true, policies: [{ policy_type: 'POLICY_GENERAL', name: 'General', description: 'Pets are not allowed.' }] })
+  assert.ok(hotelTagsFor(general, []).includes('Pets'), 'only pets policies count')
+})
+
+test('parking PAID and FREE add Parking, NOT_AVAILABLE removes it, anything else changes nothing', () => {
+  const parking = (value, ...names) => hotelTagsFor(detail({ parking: value, facilities: names.map((name, i) => ({ facilityId: i, name })) }), []).includes('Parking')
+  assert.ok(parking('PAID'))
+  assert.ok(parking('FREE'))
+  assert.ok(parking(true))
+  assert.ok(!parking('NOT_AVAILABLE', 'Parking garage'), 'even with a parking facility')
+  for (const value of ['', null, undefined, false]) {
+    assert.ok(parking(value, 'Parking garage'), String(value))
+    assert.ok(!parking(value), String(value))
+  }
+})
+
 test('room amenities give hotel-wide pool, gym, cribs, kids and families, even from a room type not imported', () => {
   const tagsFor = (...ids) => {
     const d = detail({ rooms: [room(1), room(2, { roomAmenities: amenities(...ids) })] })

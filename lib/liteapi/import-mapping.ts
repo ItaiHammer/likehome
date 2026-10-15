@@ -189,6 +189,15 @@ const KID_AMENITIES = [17, 18, 19, 36, 48, 50, 51, 52, 53, 54, 55, 159, 170, 241
 const PRIVATE_SPA_AMENITIES = [160, 172, 173, 238, 242, 243, 273, 274, 275, 333, 2, 253, 271, 272]
 const GROUP_AMENITIES = [183, 186, 84, 85, 298, 302, 303, 304, 305, 328, 9, 10, 299]
 
+// US hotels must take service animals and they aren't pets, so "only service animals" is a no.
+// Whole sentences only, so "Pets are not allowed in the pool area" doesn't count.
+const NO_PETS = /^(?:no pets(?: allowed)?|pets (?:are )?not allowed|only service animals are allowed)$/
+
+function refusesPets(d: LiteHotelDetail): boolean {
+  return (d.policies ?? []).some((policy) => policy?.policy_type === 'POLICY_HOTEL_PETS' && typeof policy.description === 'string' &&
+    policy.description.toLowerCase().split(/[.!\n]/).some((sentence) => NO_PETS.test(sentence.replace(/\s+/g, ' ').trim())))
+}
+
 const moneyOf = (total: unknown) => (Array.isArray(total) ? total[0] : total) as { amount?: unknown; currency?: unknown } | null | undefined
 
 // Placeholder and package offers come with a null total; those, and non-USD ones, are not prices
@@ -245,7 +254,9 @@ export function hotelTagsFor(d: LiteHotelDetail, offers: LiteOffer[] | undefined
 
   // The docs' example has a "Pets allowed" facility with petsAllowed:false, so false never removes Pets
   if (d.petsAllowed === true || hasAny(allIds, PET_AMENITIES)) found.add('Pets')
-  if (d.parking === true) found.add('Parking')
+  if (refusesPets(d)) found.delete('Pets')
+  if (d.parking === true || d.parking === 'PAID' || d.parking === 'FREE') found.add('Parking')
+  if (d.parking === 'NOT_AVAILABLE') found.delete('Parking')
   if (hasAny(allIds, POOL_AMENITIES)) found.add('Pool')
   if (hasAny(allIds, GYM_AMENITIES)) found.add('Gym')
   if (hasAny(allIds, CRIB_AMENITIES)) found.add('Cribs')
