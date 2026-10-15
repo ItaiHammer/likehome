@@ -122,7 +122,13 @@ export function roomTagsFor(room: LiteRoom): Tag[] {
   return inTagOrder(new Set(ROOM_TAGS.filter(([, wanted]) => hasAny(ids, wanted)).map(([tag]) => tag)))
 }
 
-const FACILITY_RULES: { tags: Tag[]; match: RegExp; unless?: RegExp }[] = [
+type FacilityRule = { tags: Tag[]; ids?: number[]; match?: RegExp; unless?: RegExp }
+
+const FAMILY_ROOMS = 28
+const ADULT_ONLY = 149
+const KIDS_FACILITIES = [21, 56, 144, 148, 172, 173, 174, 176, 177, 214, 258, 495, 570, 652, 696, 697, 737, 770, 890, 891]
+
+const FACILITY_RULES: FacilityRule[] = [
   { tags: ['Parking'], match: /parking|garage/, unless: /no parking/ },
   { tags: ['EV Charging'], match: /electric vehicle|\bev charg/ },
   { tags: ['Pool'], match: /(?:swimming|outdoor|indoor|infinity|rooftop|heated|plunge|salt ?water) pool|^pool$/, unless: /pool table|billiard|pool view/ },
@@ -132,29 +138,41 @@ const FACILITY_RULES: { tags: Tag[]; match: RegExp; unless?: RegExp }[] = [
   { tags: ['Free Wi-Fi'], match: /^free wi-?fi/ },
   { tags: ['Housekeeping'], match: /housekeeping/ },
   { tags: ['Pets'], match: /pets allowed|pet friendly/, unless: /no pets/ },
-  { tags: ['Kids', 'Families'], match: /kids club|playground|babysitting/ },
-  { tags: ['Families'], match: /family rooms/ },
-  { tags: ['Couples'], match: /adults only/ },
+  { tags: ['Kids', 'Families'], ids: KIDS_FACILITIES },
+  { tags: ['Families'], ids: [FAMILY_ROOMS] },
 ]
 
-const ADULTS_ONLY = /adults only/
+type Facility = { id: number | null; name: string }
 
-function facilityNames(d: LiteHotelDetail): string[] {
-  const names: unknown[] = [...(d.facilities ?? []).map((facility) => facility?.name), ...(d.hotelFacilities ?? [])]
-  return [...new Set(names.filter((name): name is string => typeof name === 'string').map((name) => name.trim().toLowerCase()).filter(Boolean))]
+const facilityName = (name: unknown) => (typeof name === 'string' ? name.trim().toLowerCase() : '')
+
+// hotelFacilities is a plain list of names, so each takes the id of the facilities entry with that name
+function facilitiesOf(d: LiteHotelDetail): Facility[] {
+  const listed = (d.facilities ?? []).map((facility) => ({ id: finiteOrNull(Number(facility?.facilityId)), name: facilityName(facility?.name) }))
+  const idByName = new Map(listed.map(({ id, name }) => [name, id]))
+  const named = (d.hotelFacilities ?? []).map(facilityName).map((name) => ({ id: idByName.get(name) ?? null, name }))
+  return [...listed, ...named].filter(({ name }) => name)
 }
 
-const rulesFor = (name: string) => FACILITY_RULES.filter((rule) => rule.match.test(name) && !rule.unless?.test(name))
+const rulesFor = ({ id, name }: Facility) => FACILITY_RULES.filter((rule) =>
+  (id !== null && rule.ids?.includes(id)) || (rule.match?.test(name) && !rule.unless?.test(name)))
 
 export function unmappedFacilities(d: LiteHotelDetail): string[] {
-  return facilityNames(d).filter((name) => rulesFor(name).length === 0)
+  return [...new Set(facilitiesOf(d).filter((facility) => facility.id !== ADULT_ONLY && rulesFor(facility).length === 0).map(({ name }) => name))]
+}
+
+// Some hotels list 149 but have rooms for children (an adults-only area?), so the rooms must agree.
+// A room with 0 max adults has unknown limits and counts neither way.
+export function isAdultsOnly(d: LiteHotelDetail): boolean {
+  if (!facilitiesOf(d).some(({ id }) => id === ADULT_ONLY)) return false
+  const known = (d.rooms ?? []).filter((room) => count(room.maxAdults) > 0)
+  return known.length > 0 && known.every((room) => room.maxChildren === 0)
 }
 
 const POOL_AMENITIES = [155, 174, 287, 294, 257, 306, 254, 255, 109]
 const GYM_AMENITIES = [123, 390, 334, 363, 128]
 const PET_AMENITIES = [250]
-const KID_AMENITIES = [74, 73, 121, 362, 17, 18, 19, 36, 48, 50, 51, 52, 53, 54, 55, 159, 170, 241, 168]
-const FAMILY_AMENITIES = [72, 176]
+const KID_AMENITIES = [17, 18, 19, 36, 48, 50, 51, 52, 53, 54, 55, 159, 170, 241, 168]
 const PRIVATE_SPA_AMENITIES = [160, 172, 173, 238, 242, 243, 273, 274, 275, 333, 2, 253, 271, 272]
 const GROUP_AMENITIES = [183, 186, 84, 85, 298, 302, 303, 304, 305, 328, 9, 10, 299]
 
@@ -209,8 +227,7 @@ function allOffersIncludeMeals(offers: LiteOffer[] | undefined): boolean {
 // Couples and Friends describe one bookable room, so only the imported `rooms` count for them;
 // hotel-wide facts (pool, gym, cribs, pets) may come from any room type of the hotel.
 export function hotelTagsFor(d: LiteHotelDetail, offers: LiteOffer[] | undefined, rooms: LiteRoom[] = d.rooms ?? []): Tag[] {
-  const names = facilityNames(d)
-  const found = new Set<Tag>(names.flatMap((name) => rulesFor(name).flatMap((rule) => rule.tags)))
+  const found = new Set<Tag>(facilitiesOf(d).flatMap((facility) => rulesFor(facility).flatMap((rule) => rule.tags)))
   const allIds = new Set((d.rooms ?? []).flatMap((room) => [...amenityIds(room)]))
 
   // The docs' example has a "Pets allowed" facility with petsAllowed:false, so false never removes Pets
@@ -219,14 +236,14 @@ export function hotelTagsFor(d: LiteHotelDetail, offers: LiteOffer[] | undefined
   if (hasAny(allIds, POOL_AMENITIES)) found.add('Pool')
   if (hasAny(allIds, GYM_AMENITIES)) found.add('Gym')
   if (hasAny(allIds, KID_AMENITIES)) found.add('Kids').add('Families')
-  if (hasAny(allIds, FAMILY_AMENITIES)) found.add('Families')
   if (allOffersIncludeMeals(offers)) found.add('Free Meals')
   if (rooms.some((room) => hasAny(amenityIds(room), PRIVATE_SPA_AMENITIES))) found.add('Couples')
   if (rooms.some((room) => capacityFor(room) >= 4 && hasAny(amenityIds(room), GROUP_AMENITIES))) found.add('Friends')
 
-  if (names.some((name) => ADULTS_ONLY.test(name))) {
+  if (isAdultsOnly(d)) {
     found.delete('Kids')
     found.delete('Families')
+    found.add('Couples')
   }
   return inTagOrder(found)
 }
