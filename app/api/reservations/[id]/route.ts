@@ -2,12 +2,14 @@
 import { getUserId } from '../../../../utils/user.ts'
 import { updateReservation, getReservation } from '../../../../utils/reservations.ts'
 import {
+  bookingParty,
   calculateTotalPrice,
   checkCapacity,
   validateReservationInput,
   type RoomForBooking,
   todayInTimeZone,
 } from '../../../../utils/reservation-logic.ts'
+import { partyOf } from '../../../../lib/liteapi/party.ts'
 import { liveRoomPrice } from '../../../../lib/liteapi/rates.ts'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
@@ -81,13 +83,16 @@ export async function PATCH(
   }
 
   // Price. An unchanged booking keeps what was paid instead of picking up today's live rate.
+  // A change is quoted for its adults and children, as the change page priced it.
+  const { adults, children } = bookingParty(input)
   const unchanged = input.room_id === curReservation.room_id && input.check_in === curReservation.check_in
     && input.check_out === curReservation.check_out && input.guests === curReservation.guests
+    && children === (curReservation.children ?? 0)
   let nightly: number | string = room.price_per_night
   if (!unchanged && room.hotels?.liteapi_id) {
     const live = await liveRoomPrice(
       { liteapiHotelId: room.hotels.liteapi_id, liteapiRoomId: room.liteapi_room_id ?? null, roomType: room.room_type ?? '' },
-      { checkIn: input.check_in, checkOut: input.check_out, guests: input.guests ?? 2 }
+      { checkIn: input.check_in, checkOut: input.check_out, ...partyOf(adults, children) }
     )
     if (live.status === 'sold_out') {
       return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
@@ -104,6 +109,7 @@ export async function PATCH(
       room_id: room.id,
       hotel_id: room.hotel_id,
       guests: input.guests,
+      children: input.children,
       check_in: input.check_in,
       check_out: input.check_out,
       total_price,

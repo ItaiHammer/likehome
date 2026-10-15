@@ -55,6 +55,7 @@ const validBody = () => ({
   check_in: future(10),
   check_out: future(13),
   guests: 2,
+  children: 0,
   payment: {
     card_number: '4242 4242 4242 4242',
     exp_month: 12,
@@ -139,6 +140,11 @@ describe('request body', () => {
       { check_in: 'tomorrow' },
       { guests: 0 },
       { guests: '2' },
+      { children: -1 },
+      { children: 1.5 },
+      { children: '1' },
+      // every booking needs an adult
+      { guests: 2, children: 2 },
     ]
     for (const patch of cases) {
       const r = await post({ ...validBody(), ...patch })
@@ -249,16 +255,35 @@ describe('LiteAPI hotels', () => {
     assert.equal(r.json.transaction.amount, 163.66)
     assert.deepEqual(liveRoomPrice.mock.calls[0].arguments, [
       { liteapiHotelId: 'lp1897', liteapiRoomId: '2617267', roomType: 'Standard King Room' },
-      { checkIn: body.check_in, checkOut: body.check_out, guests: 2 },
+      { checkIn: body.check_in, checkOut: body.check_out, adults: 2, children: [] },
     ])
+  })
+
+  test('children are priced as children, the party the stay page quoted, and saved with the booking', async () => {
+    roomResult = { data: { ...LITE_ROOM, capacity: 4 }, error: null }
+    liveRoomPrice.mock.mockImplementation(async () => live(198.94, 3))
+    const r = await post({ ...validBody(), guests: 4, children: 2 })
+    assert.equal(r.status, 201)
+    assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1], {
+      checkIn: validBody().check_in,
+      checkOut: validBody().check_out,
+      adults: 2,
+      children: [8, 8],
+    })
+    const saved = createReservation.mock.calls[0].arguments[0]
+    assert.equal(saved.guests, 4)
+    assert.equal(saved.children, 2)
+    assert.equal(saved.total_price, 198.94)
   })
 
   test('without a guest count, LiteAPI is asked for 2 adults', async () => {
     liveRoomPrice.mock.mockImplementation(async () => live(163.66, 3))
     const body = validBody()
     delete body.guests
+    delete body.children
     assert.equal((await post(body)).status, 201)
-    assert.equal(liveRoomPrice.mock.calls[0].arguments[1].guests, 2)
+    assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].adults, 2)
+    assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].children, [])
   })
 
   test('sold out: 409 before the card is charged, nothing written', async () => {
@@ -393,6 +418,7 @@ describe('success', () => {
       check_out: validBody().check_out,
       total_price: 389.97,
       guests: 2,
+      children: 0,
     })
     assert.deepEqual(createPayment.mock.calls[0].arguments[0], {
       reservation_id: 'res-1',

@@ -67,19 +67,27 @@ export interface LiteRate {
   name?: string
   boardType?: string
   mappedRoomId?: number | string
+  // The party this rate was quoted for, repeated from the request. Not the room's limits.
+  maxOccupancy?: number
+  adultCount?: number
+  childCount?: number
+  childrenAges?: number[]
   retailRate?: {
     total?: LiteMoney[] | LiteMoney | null
     /** The lowest price the offer may be shown at publicly */
     suggestedSellingPrice?: LiteMoney[] | LiteMoney | null
     taxesAndFees?: { included: boolean; amount: number; currency: string; description?: string }[] | null
   }
-  cancellationPolicies?: { refundableTag?: 'RFN' | 'NRFN' } | null
+  cancellationPolicies?: {
+    refundableTag?: 'RFN' | 'NRFN'
+    /** From cancelTime (GMT, "YYYY-MM-DD HH:mm:ss") on, cancelling costs `amount` */
+    cancelPolicyInfos?: { cancelTime?: string; amount?: number; currency?: string; type?: string; timezone?: string }[] | null
+  } | null
 }
 
 export interface LiteOffer {
   offerId?: string
   rates?: LiteRate[]
-  mappedRoomId?: number | string
   offerRetailRate?: LiteMoney | LiteMoney[]
 }
 

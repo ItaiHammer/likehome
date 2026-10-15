@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PAGE_ROUTES } from "@/constants/routes";
+import { partyOf } from "@/lib/liteapi/party";
 import { getOtherStays } from "@/lib/other-stays";
 import { todayUTC } from "@/utils/reservation-logic";
 import { getHotelStay, withLiveRoomPrices } from "../../reserve/[slug]/hotelStay";
@@ -21,7 +22,8 @@ async function loadBooking(id: string, today: string) {
   let rooms = stay?.rooms ?? [];
   if (!booking.blocker && stay?.liteapiId) {
     // The guest's own room stays selectable even when LiteAPI has no more of it for these dates
-    rooms = (await withLiveRoomPrices(stay, { checkIn: r.check_in, checkOut: r.check_out, guests: r.guests ?? 1 }, r.room_id)).rooms;
+    const party = partyOf(booking.guests - booking.children, booking.children);
+    rooms = (await withLiveRoomPrices(stay, { checkIn: r.check_in, checkOut: r.check_out, ...party }, r.room_id)).rooms;
   }
   return { booking, rooms, otherStays };
 }

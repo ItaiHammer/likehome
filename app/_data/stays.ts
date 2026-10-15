@@ -17,6 +17,13 @@ export type Room = {
   bedSize?: string | null;
   tags?: string[];
   liteapiRoomId?: string | null;
+  // A LiteAPI room's live quote; null when it has none (the stored price shows). Owner rooms leave these out
+  // and follow the site's own cancellation rule.
+  refundable?: boolean | null;
+  /** Free cancellation ends as this day starts; null for a refundable rate that lists no fee */
+  cancelBy?: string | null;
+  /** Hotel fees for the whole stay, paid at the property on top of the price */
+  dueAtProperty?: number | null;
 };
 
 /** Something a stay has, named like the search filter it matches */

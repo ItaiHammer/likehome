@@ -1,3 +1,4 @@
+import { partyOf } from '../../lib/liteapi/party.ts';
 import { getFromPrices } from '../../lib/liteapi/rates.ts';
 import type { Live, Quote } from '../../lib/liteapi/rates.ts';
 import type { HotelSearchResult } from './components/SearchResultCard';
@@ -9,11 +10,12 @@ export async function priceSearchResults(rows: HotelSearchResult[], p: PropertyF
         return rows;
     }
 
-    // A pricing bug must not turn into a failed search: treat it like LiteAPI being down
+    // A pricing bug must not turn into a failed search: treat it like LiteAPI being down.
+    // Adults default to 2 like the stay page, so a result's price is the one its stay page quotes.
     const live = await getFromPrices(ids, {
         checkIn: p.dates.checkIn,
         checkOut: p.dates.checkOut,
-        guests: p.guests?.total || 2,
+        ...partyOf(p.guests?.adults || 2, p.guests?.children ?? 0),
     }).catch((error: unknown): Map<string, Live<Quote>> => {
         console.warn('[search] live prices failed', error);
         return new Map();

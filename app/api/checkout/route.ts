@@ -8,6 +8,7 @@ import { createReservation, updateReservation } from '@/utils/reservations'
 import { createPayment } from '@/utils/payments'
 import { createTransaction } from '@/utils/transactions'
 import {
+  bookingParty,
   calculateTotalPrice,
   checkCapacity,
   todayInTimeZone,
@@ -15,6 +16,7 @@ import {
   type RoomForBooking,
 } from '@/utils/reservation-logic'
 import { authorizeMockPayment, validatePaymentInput } from '@/utils/payment-logic'
+import { partyOf } from '@/lib/liteapi/party'
 import { liveRoomPrice } from '@/lib/liteapi/rates'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
@@ -71,14 +73,15 @@ export async function POST(request: Request) {
   }
 
   // 3. Price is always calculated here, never taken from the browser. LiteAPI hotels reuse the
-  //    quote the stay page cached, so the guest pays what they were shown; if LiteAPI is down,
-  //    the stored estimate is charged instead.
+  //    quote the stay page cached (the same adults and children), so the guest pays what they were
+  //    shown; if LiteAPI is down, the stored estimate is charged instead.
   let nightly: number | string = room.price_per_night
   const liteapiHotelId = room.hotels?.liteapi_id
   if (liteapiHotelId) {
+    const { adults, children } = bookingParty(input)
     const live = await liveRoomPrice(
       { liteapiHotelId, liteapiRoomId: room.liteapi_room_id ?? null, roomType: room.room_type ?? '' },
-      { checkIn: input.check_in, checkOut: input.check_out, guests: input.guests ?? 2 }
+      { checkIn: input.check_in, checkOut: input.check_out, ...partyOf(adults, children) }
     )
     if (live.status === 'sold_out') {
       return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
@@ -102,6 +105,8 @@ export async function POST(request: Request) {
     check_out: input.check_out,
     total_price,
     guests: input.guests,
+    // Saved so a later change is priced for the same party
+    children: input.children,
   })
   const reservation = reservations?.[0]
 

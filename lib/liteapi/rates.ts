@@ -1,10 +1,23 @@
 import 'server-only'
 import { countNights, MAX_NIGHTS, todayUTC } from '../../utils/reservation-logic.ts'
+import { MAX_CHILD_AGE, type Party } from './party.ts'
 import { LITEAPI_BASE } from './types.ts'
-import type { LiteMoney, LiteOffer, LiteRatesRequest, LiteRatesResponse } from './types.ts'
+import type { LiteMoney, LiteOffer, LiteRate, LiteRatesRequest, LiteRatesResponse } from './types.ts'
 
-export type StayQuery = { checkIn: string; checkOut: string; guests: number }
-export type Quote = { total: number; perNight: number; offerId: string; rateName: string; boardType: string; refundable: boolean; dueAtProperty: number }
+export type StayQuery = { checkIn: string; checkOut: string } & Party
+export type Quote = {
+  /** What the stay is sold for: the retail total, raised to LiteAPI's suggested selling price when that's higher */
+  total: number
+  perNight: number
+  offerId: string
+  rateName: string
+  boardType: string
+  refundable: boolean
+  /** Refundable rates: free cancellation ends as this day starts, like the site's own rule. null when the rate lists no fee. */
+  cancelBy: string | null
+  /** Fees the guest pays the hotel on arrival, on top of `total` */
+  dueAtProperty: number
+}
 export type HotelRates = { mapped: boolean; byRoom: Record<string, Quote>; byName: Record<string, Quote>; cheapest: Quote }
 export type Live<T> = { status: 'live'; value: T } | { status: 'sold_out' } | { status: 'unavailable' }
 
@@ -36,21 +49,46 @@ function usd(money: LiteMoney[] | LiteMoney | null | undefined): number | null {
   return Number.isFinite(amount) ? amount : null
 }
 
-function quoteOf(offer: LiteOffer, nights: number): Quote | null {
+// The day free cancellation ends as it starts. cancelTime is GMT, so in US time zones the first fee can start on
+// the evening before its date: ending a day early holds in every one of them.
+function cancelByOf(rate: LiteRate): string | null {
+  const starts = (rate.cancellationPolicies?.cancelPolicyInfos ?? [])
+    .filter((info) => Number(info?.amount) > 0 && /^\d{4}-\d{2}-\d{2}/.test(info.cancelTime ?? ''))
+    .map((info) => info.cancelTime!.slice(0, 10))
+    .sort()
+  if (starts.length === 0) return null
+  const day = new Date(`${starts[0]}T00:00:00Z`)
+  day.setUTCDate(day.getUTCDate() - 1)
+  return day.toISOString().slice(0, 10)
+}
+
+// adultCount and childCount only repeat the party the rate was quoted for (never the room's limits), so
+// a rate for any other party can't be sold to this one
+const quotedFor = (rate: LiteRate, party: Party) =>
+  (typeof rate.adultCount !== 'number' || rate.adultCount === party.adults) &&
+  (typeof rate.childCount !== 'number' || rate.childCount === party.children.length)
+
+function quoteOf(offer: LiteOffer, nights: number, party?: Party): Quote | null {
   const rates = offer.rates
   if (!offer.offerId || !Array.isArray(rates) || rates.length === 0) return null
   let sum = 0
   let dueAtProperty = 0
+  let cancelBy: string | null = null
   for (const rate of rates) {
     const amount = usd(rate?.retailRate?.total)
     if (amount === null) return null
-    sum += amount
+    if (party && !quotedFor(rate, party)) return null
+    // LiteAPI's terms: a public page may not sell below the suggested selling price (SSP)
+    sum += Math.max(amount, usd(rate.retailRate?.suggestedSellingPrice) ?? 0)
     for (const fee of rate.retailRate?.taxesAndFees ?? []) {
       if (fee?.included === false && fee.currency === 'USD') dueAtProperty += Number(fee.amount) || 0
     }
+    const ends = cancelByOf(rate)
+    if (ends && (!cancelBy || ends < cancelBy)) cancelBy = ends
   }
   const total = cents(sum)
   if (total <= 0) return null
+  const refundable = rates.every((r) => r.cancellationPolicies?.refundableTag === 'RFN')
   return {
     total,
     // Unrounded so calculateTotalPrice (nights × perNight, rounded to cents) gives back exactly `total`
@@ -58,7 +96,8 @@ function quoteOf(offer: LiteOffer, nights: number): Quote | null {
     offerId: offer.offerId,
     rateName: rates[0].name ?? '',
     boardType: rates[0].boardType ?? '',
-    refundable: rates.every((r) => r.cancellationPolicies?.refundableTag === 'RFN'),
+    refundable,
+    cancelBy: refundable ? cancelBy : null,
     dueAtProperty: cents(dueAtProperty),
   }
 }
@@ -67,19 +106,20 @@ function keepCheapest(into: Record<string, Quote>, key: string, quote: Quote) {
   if (!Object.hasOwn(into, key) || quote.total < into[key].total) into[key] = quote
 }
 
-export function parseRatesResponse(body: LiteRatesResponse, nights: number): Map<string, HotelRates> {
+/** `party` drops any rate LiteAPI quoted for a different party */
+export function parseRatesResponse(body: LiteRatesResponse, nights: number, party?: Party): Map<string, HotelRates> {
   const out = new Map<string, HotelRates>()
   if (!(nights > 0)) return out
   for (const hotel of Array.isArray(body?.data) ? body.data : []) {
     if (!hotel?.hotelId || !Array.isArray(hotel.roomTypes)) continue
     for (const offer of hotel.roomTypes) {
-      const quote = offer ? quoteOf(offer, nights) : null
+      const quote = offer ? quoteOf(offer, nights, party) : null
       if (!quote) continue
       let r = out.get(hotel.hotelId)
       if (!r) out.set(hotel.hotelId, (r = { mapped: false, byRoom: {}, byName: {}, cheapest: quote }))
       else if (quote.total < r.cheapest.total) r.cheapest = quote
       const first = offer.rates![0]
-      const roomId = first.mappedRoomId ?? offer.mappedRoomId
+      const roomId = first.mappedRoomId
       if (roomId != null && String(roomId) !== '') {
         r.mapped = true
         keepCheapest(r.byRoom, String(roomId), quote)
@@ -106,7 +146,7 @@ const every = (ids: string[], live: Live<HotelRates>) => new Map(ids.map((id): [
 async function requestRates(hotelIds: string[], q: StayQuery, nights: number, mode: Mode, apiKey: string) {
   const body: LiteRatesRequest = {
     hotelIds,
-    occupancies: [{ adults: q.guests }],
+    occupancies: [{ adults: q.adults, ...(q.children.length ? { children: q.children } : {}) }],
     currency: 'USD',
     guestNationality: 'US',
     checkin: q.checkIn,
@@ -132,7 +172,7 @@ async function requestRates(hotelIds: string[], q: StayQuery, nights: number, mo
       console.warn('[liteapi] rates failed', res.status, json?.error?.code)
       return every(hotelIds, UNAVAILABLE)
     }
-    const parsed = parseRatesResponse({ data }, nights)
+    const parsed = parseRatesResponse({ data }, nights, q)
     const offered = new Set(data.filter((h) => h?.roomTypes?.length).map((h) => h.hotelId))
     return new Map(
       hotelIds.map((id): [string, Live<HotelRates>] => {
@@ -150,7 +190,15 @@ async function requestRates(hotelIds: string[], q: StayQuery, nights: number, mo
 
 export const liveRatesEnabled = () => Boolean(process.env.LITEAPI_KEY)
 
-const cacheKey = (mode: Mode, id: string, q: StayQuery) => `${mode}|${id}|${q.checkIn}|${q.checkOut}|${q.guests}`
+// The ages in order, so the same children listed differently share a quote
+const cacheKey = (mode: Mode, id: string, q: StayQuery) =>
+  `${mode}|${id}|${q.checkIn}|${q.checkOut}|${q.adults}|${[...q.children].sort((a, b) => a - b).join(',')}`
+
+const validParty = (q: Party) =>
+  Number.isInteger(q.adults) &&
+  q.adults >= 1 &&
+  Array.isArray(q.children) &&
+  q.children.every((age) => Number.isInteger(age) && age >= 0 && age <= MAX_CHILD_AGE)
 
 async function ratesFor(mode: Mode, liteapiIds: string[], q: StayQuery): Promise<Map<string, Live<HotelRates>>> {
   const ids = [...new Set(liteapiIds.filter(Boolean))]
@@ -161,8 +209,7 @@ async function ratesFor(mode: Mode, liteapiIds: string[], q: StayQuery): Promise
     nights < 1 ||
     nights > MAX_NIGHTS ||
     countNights(todayUTC(), q.checkIn) > MAX_DAYS_AHEAD ||
-    !Number.isInteger(q.guests) ||
-    q.guests < 1
+    !validParty(q)
   ) {
     return every(ids, UNAVAILABLE)
   }

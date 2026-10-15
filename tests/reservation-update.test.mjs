@@ -256,7 +256,7 @@ test('LiteAPI room with new dates is repriced at the live rate', async () => {
   assert.equal(json.reservation.total_price, 487.31)
   assert.deepEqual(liveRoomPrice.mock.calls[0].arguments, [
     { liteapiHotelId: 'lp1897', liteapiRoomId: '2617267', roomType: 'Standard King Room' },
-    { checkIn: getDateFromToday(5), checkOut: getDateFromToday(9), guests: 2 },
+    { checkIn: getDateFromToday(5), checkOut: getDateFromToday(9), adults: 2, children: [] },
   ])
 })
 
@@ -268,7 +268,40 @@ test('LiteAPI room: a guest-count change alone is repriced too', async () => {
 
   assert.equal(res.status, 200)
   assert.equal((await res.json()).reservation.total_price, 250.5)
-  assert.equal(liveRoomPrice.mock.calls[0].arguments[1].guests, 1)
+  assert.equal(liveRoomPrice.mock.calls[0].arguments[1].adults, 1)
+})
+
+test('LiteAPI room: an adult becoming a child is repriced for the new party, and saved', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM }, error: null }
+  liveRoomPrice.mock.mockImplementation(async () => liveQuote(210, 3))
+  const req = createMockRequest({ guests: 2, children: 1 })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  const { reservation } = await res.json()
+  assert.equal(reservation.total_price, 210)
+  assert.equal(reservation.children, 1)
+  assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].adults, 1)
+  assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].children, [8])
+})
+
+test('a saved children count carries into a change that leaves it out', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM, capacity: 3 }, error: null }
+  mockReservationResult.data = { ...mockReservationResult.data, guests: 3, children: 1 }
+  liveRoomPrice.mock.mockImplementation(async () => liveQuote(480, 4))
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(9) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].adults, 2)
+  assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].children, [8])
+})
+
+test('400 when the children leave no adult', async () => {
+  const req = createMockRequest({ guests: 2, children: 2 })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 400)
+  assert.equal(updateCalls, 0)
 })
 
 test('LiteAPI room sold out for the new dates: 409 and nothing updated', async () => {
@@ -296,12 +329,25 @@ test('unchanged room, dates and guests keep the booked total without calling Lit
   mockRoomResult = { data: { ...LITE_ROOM }, error: null }
   liveRoomPrice.mock.mockImplementation(async () => liveQuote(999, 3))
   const { room_id, check_in, check_out, guests } = mockReservationResult.data
-  const req = createMockRequest({ room_id, check_in, check_out, guests })
+  // A booking saved before the children column existed counts as 0 children
+  const req = createMockRequest({ room_id, check_in, check_out, guests, children: 0 })
   const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
 
   assert.equal(res.status, 200)
   assert.equal((await res.json()).reservation.total_price, 300)
   assert.equal(liveRoomPrice.mock.callCount(), 0)
+})
+
+test('a children change alone is not "unchanged"', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM }, error: null }
+  liveRoomPrice.mock.mockImplementation(async () => liveQuote(270, 3))
+  const { room_id, check_in, check_out, guests } = mockReservationResult.data
+  const req = createMockRequest({ room_id, check_in, check_out, guests, children: 1 })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  assert.equal((await res.json()).reservation.total_price, 270)
+  assert.equal(liveRoomPrice.mock.callCount(), 1)
 })
 
 // "Today" is the guest's today (from time_zone), not UTC's.

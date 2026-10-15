@@ -11,6 +11,7 @@ import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Stepper } from "../../_components/ui";
 import type { Room } from "../../_data/stays";
 import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
+import { guestLabel } from "../../reserve/[slug]/GuestsField";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
 import { HotelPhoto } from "../_components/HotelPhoto";
 
@@ -23,6 +24,8 @@ export type BookingToChange = {
   checkIn: string;
   checkOut: string;
   guests: number;
+  /** How many of the guests are children */
+  children: number;
   roomId: string;
   total: number;
   /** Why the booking can't be changed, or null when it can */
@@ -30,12 +33,12 @@ export type BookingToChange = {
   livePrices: boolean;
 };
 
-type Stay = { checkIn: string; checkOut: string; guests: number; roomId: string; total: number };
-type LivePrices = { key: string; byId: Record<string, { nightly: number; soldOut: boolean }> };
+type Stay = { checkIn: string; checkOut: string; guests: number; children: number; roomId: string; total: number };
+type LivePrices = { key: string; byId: Record<string, Partial<Room>> };
 type Errors = { dates?: string; guests?: string; form?: string; signIn?: boolean };
 
 const nightsLabel = (n: number) => `${n} ${n === 1 ? "night" : "nights"}`;
-const guestsLabel = (n: number) => `${n} ${n === 1 ? "guest" : "guests"}`;
+const guestsLabel = (s: Pick<Stay, "guests" | "children">) => guestLabel(s.guests - s.children, s.children);
 
 // Change the dates, room or guests of a booking through PATCH /api/reservations/[id].
 // The API reprices the stay (nights × nightly price); no difference is charged or refunded yet.
@@ -61,12 +64,16 @@ export function ChangeBooking({
     checkIn: booking.checkIn,
     checkOut: booking.checkOut,
     guests: booking.guests,
+    children: booking.children,
     roomId: booking.roomId,
     total: booking.total,
   }));
   const [checkIn, setCheckIn] = useState(booking.checkIn);
   const [checkOut, setCheckOut] = useState(booking.checkOut);
-  const [guests, setGuests] = useState(booking.guests);
+  // Adults and children apart, since LiteAPI prices them apart
+  const [adults, setAdults] = useState(booking.guests - booking.children);
+  const [children, setChildren] = useState(booking.children);
+  const guests = adults + children;
   const [roomId, setRoomId] = useState(booking.roomId);
   const [datesOpen, setDatesOpen] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
@@ -82,10 +89,11 @@ export function ChangeBooking({
 
   const nights = nightsBetween(checkIn, checkOut);
   // The page priced the rooms for the booked dates and guests; anything else needs a fresh quote
-  const initialKey = `${booking.checkIn}|${booking.checkOut}|${booking.guests}`;
-  const priceKey = booking.livePrices && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${guests}` : null;
+  const initialKey = `${booking.checkIn}|${booking.checkOut}|${booking.guests - booking.children}|${booking.children}`;
+  const priceKey = booking.livePrices && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${adults}|${children}` : null;
   const pricesPending = !!priceKey && priceKey !== initialKey && livePrices?.key !== priceKey;
-  const sameStay = checkIn === current.checkIn && checkOut === current.checkOut && guests === current.guests;
+  const sameGuests = guests === current.guests && children === current.children;
+  const sameStay = checkIn === current.checkIn && checkOut === current.checkOut && sameGuests;
   const rooms =
     livePrices && livePrices.key === priceKey
       ? listedRooms.map((r) => {
@@ -97,7 +105,7 @@ export function ChangeBooking({
       : listedRooms;
   const room = rooms.find((r) => r.id === roomId) ?? rooms[0];
   const currentRoom = rooms.find((r) => r.id === current.roomId);
-  const changed = checkIn !== current.checkIn || checkOut !== current.checkOut || guests !== current.guests || roomId !== current.roomId;
+  const changed = checkIn !== current.checkIn || checkOut !== current.checkOut || !sameGuests || roomId !== current.roomId;
   // Any change is repriced at today's nightly price (the API does the same), so until something
   // changes the booked room shows what was actually booked
   const priceFor = (r: Room) => (!changed && r.id === current.roomId ? current.total : calculateTotalPrice(checkIn, checkOut, r.nightly));
@@ -126,13 +134,13 @@ export function ChangeBooking({
     if (!priceKey || priceKey === initialKey || livePrices?.key === priceKey) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
-      const query = new URLSearchParams({ checkIn, checkOut, guests: String(guests) });
+      const query = new URLSearchParams({ checkIn, checkOut, adults: String(adults), children: String(children) });
       try {
         const res = await fetch(`/api/stays/${booking.hotelId}/prices?${query}`, { signal: controller.signal });
         if (!res.ok) throw new Error(`Room prices failed: ${res.status}`);
-        const body = (await res.json()) as { configured?: boolean; rooms?: { id: string; nightly: number; soldOut: boolean }[] };
+        const body = (await res.json()) as { configured?: boolean; rooms?: (Partial<Room> & { id: string })[] };
         if (controller.signal.aborted) return;
-        setLivePrices({ key: priceKey, byId: Object.fromEntries((body.rooms ?? []).map(({ id, nightly, soldOut }) => [id, { nightly, soldOut }])) });
+        setLivePrices({ key: priceKey, byId: Object.fromEntries((body.rooms ?? []).map(({ id, ...live }) => [id, live])) });
         if (body.configured === false) setPricingOff(true);
       } catch {
         // Keep the prices shown and let Save through: the API reprices the change itself
@@ -143,7 +151,7 @@ export function ChangeBooking({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [priceKey, initialKey, livePrices?.key, booking.hotelId, checkIn, checkOut, guests]);
+  }, [priceKey, initialKey, livePrices?.key, booking.hotelId, checkIn, checkOut, adults, children]);
 
   if (blocker || !room || !currentRoom) {
     return (
@@ -191,7 +199,7 @@ export function ChangeBooking({
     setErrors({});
     setDatesOpen(false);
     setSaving(true);
-    const next = { checkIn, checkOut, guests, roomId, total };
+    const next = { checkIn, checkOut, guests, children, roomId, total };
 
     if (sample) {
       window.clearTimeout(sampleTimer.current);
@@ -206,7 +214,7 @@ export function ChangeBooking({
       const res = await fetch(`/api/reservations/${booking.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ room_id: roomId, check_in: checkIn, check_out: checkOut, guests }),
+        body: JSON.stringify({ room_id: roomId, check_in: checkIn, check_out: checkOut, guests, children }),
         signal: controller.signal,
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; reservation?: { total_price?: number | string | null } | null };
@@ -284,7 +292,7 @@ export function ChangeBooking({
                     {formatStayDates(current.checkIn, current.checkOut)} · {nightsLabel(nightsBetween(current.checkIn, current.checkOut))}
                   </p>
                   <p>
-                    {currentRoom.name} · {guestsLabel(current.guests)} · {money(current.total)}
+                    {currentRoom.name} · {guestsLabel(current)} · {money(current.total)}
                   </p>
                 </div>
               </div>
@@ -304,22 +312,38 @@ export function ChangeBooking({
               />
 
               <div>
-                <div className={`rounded-control border px-4 ${errors.guests ? "border-danger" : "border-edge"}`}>
+                {/* The stay page's guest limits, within what the biggest room sleeps */}
+                <div className={`divide-y divide-edge rounded-control border px-4 ${errors.guests ? "border-danger" : "border-edge"}`}>
                   <Stepper
-                    label="Guests"
-                    hint={`${room.name} sleeps up to ${room.sleeps}`}
-                    value={guests}
+                    label="Adults"
+                    hint="Ages 13 or above"
+                    value={adults}
                     min={1}
-                    max={maxGuests}
+                    max={Math.min(16, Math.max(1, maxGuests - children))}
                     onChange={(n) => {
-                      setGuests(n);
+                      setAdults(n);
+                      setErrors(({ dates }) => ({ dates }));
+                    }}
+                  />
+                  <Stepper
+                    label="Children"
+                    hint="Ages 0 to 12"
+                    value={children}
+                    min={0}
+                    max={Math.min(10, Math.max(0, maxGuests - adults))}
+                    onChange={(n) => {
+                      setChildren(n);
                       setErrors(({ dates }) => ({ dates }));
                     }}
                   />
                 </div>
-                {errors.guests && (
+                {errors.guests ? (
                   <p role="alert" className="mt-1.5 text-sm text-danger">
                     {errors.guests}
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-sm text-slate">
+                    {room.name} sleeps up to {room.sleeps}.
                   </p>
                 )}
               </div>
@@ -476,7 +500,7 @@ function StayDetails({ roomName, stay }: { roomName: string | null; stay: Stay }
     roomName && ["Room", roomName],
     ["Check-in", formatDate(stay.checkIn)],
     ["Check-out", formatDate(stay.checkOut)],
-    ["Guests", guestsLabel(stay.guests)],
+    ["Guests", guestsLabel(stay)],
     ["Total", money(stay.total)],
   ].filter(Boolean) as [string, string][];
   return (

@@ -269,14 +269,16 @@ test('samplePricesFor keeps the cheapest priced offer per mapped room and skips 
   const sample = samplePricesFor([
     offer(200, {}, { mappedRoomId: 11 }),
     offer(150, {}, { mappedRoomId: '11' }),
-    offer(90, { mappedRoomId: 12 }, { name: 'Twin Room' }),
+    offer(90, {}, { mappedRoomId: 12, name: 'Twin Room' }),
+    // LiteAPI puts mappedRoomId on the rate only; one on the offer is ignored
+    offer(80, { mappedRoomId: 13 }, { name: 'Suite' }),
     { rates: [{ retailRate: { total: [usd(10)] } }] },
     offer(5, {}, { retailRate: { total: [{ amount: 5, currency: 'EUR' }] } }),
     offer(0),
   ])
   assert.equal(sample.mapped, true)
   assert.deepEqual([...sample.byRoom], [['11', 150], ['12', 90]])
-  assert.equal(sample.cheapest, 90)
+  assert.equal(sample.cheapest, 80)
   assert.equal(sample.byName.get('twinroom'), 90)
   assert.equal(samplePricesFor([{ offerId: 'p', rates: [{ retailRate: { total: null } }] }]), null)
   assert.equal(samplePricesFor(undefined), null)

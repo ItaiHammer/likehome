@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { partyOf } from "@/lib/liteapi/party";
 import { getOtherStays } from "@/lib/other-stays";
 import { matchingRoom, originalSearch, readRoomFilters } from "@/lib/stay-filters";
 import { countNights, MAX_NIGHTS, parseDate, todayUTC } from "@/utils/reservation-logic";
@@ -77,7 +78,7 @@ export default async function ReservePage(props: PageProps<"/reserve/[slug]">) {
   const d = readStayDates(params);
   const priced =
     d.checkIn && d.checkOut && stay.liteapiId
-      ? await withLiveRoomPrices(stay, { checkIn: d.checkIn, checkOut: d.checkOut, guests: (d.adults ?? 2) + (d.children ?? 0) })
+      ? await withLiveRoomPrices(stay, { checkIn: d.checkIn, checkOut: d.checkOut, ...partyOf(d.adults ?? 2, d.children ?? 0) })
       : stay;
 
   const supabase = createClient(await cookies());

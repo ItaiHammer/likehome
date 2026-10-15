@@ -22,7 +22,7 @@ const { calculateTotalPrice } = await import('../utils/reservation-logic.ts')
 
 const IN = '2026-11-10'
 const OUT = '2026-11-13'
-const Q = { checkIn: IN, checkOut: OUT, guests: 2 }
+const Q = { checkIn: IN, checkOut: OUT, adults: 2, children: [] }
 
 const usd = (amount) => [{ amount, currency: 'USD' }]
 const rate = (amount, extra = {}) => ({
@@ -59,7 +59,7 @@ afterEach(() => {
 describe('request', () => {
   test('getRoomRates posts the stay with room mapping', async () => {
     fetchMock.mock.mockImplementation(async () => priced(hotel('lp1', offer('o1', 300))))
-    await getRoomRates(['lp1', 'lp2'], { checkIn: IN, checkOut: OUT, guests: 3 })
+    await getRoomRates(['lp1', 'lp2'], { checkIn: IN, checkOut: OUT, adults: 3, children: [] })
 
     assert.equal(fetchMock.mock.callCount(), 1)
     const [url, init] = fetchMock.mock.calls[0].arguments
@@ -80,6 +80,15 @@ describe('request', () => {
       limit: 2,
       roomMapping: true,
     })
+  })
+
+  test("children are sent as their ages, and left out when there are none", async () => {
+    await getRoomRates(['lp1'], { ...Q, children: [8, 8] })
+    assert.deepEqual(sentBody(0).occupancies, [{ adults: 2, children: [8, 8] }])
+    await getFromPrices(['lp1'], { ...Q, adults: 1, children: [5] })
+    assert.deepEqual(sentBody(1).occupancies, [{ adults: 1, children: [5] }])
+    await getFromPrices(['lp1'], { ...Q, adults: 4 })
+    assert.deepEqual(sentBody(2).occupancies, [{ adults: 4 }])
   })
 
   test('getFromPrices asks for one rate per hotel', async () => {
@@ -152,12 +161,13 @@ describe('parseRatesResponse', () => {
     assert.deepEqual(Object.values(r.byName).map((q) => q.offerId), ['good'])
   })
 
-  test('accepts money as an object or an array, and mappedRoomId on the rate or the offer', () => {
+  test('accepts money as an object or an array, and reads mappedRoomId from the rate only', () => {
     const body = {
       data: [
         hotel(
           'lp1',
           offer('a', 0, { retailRate: { total: { amount: 210, currency: 'USD' } }, mappedRoomId: 101 }),
+          // LiteAPI sets mappedRoomId on the rate; an offer-level one isn't real data
           offer('b', 220, {}, { mappedRoomId: '202' }),
           offer('c', 230, { mappedRoomId: '303' }, { mappedRoomId: 999 })
         ),
@@ -166,10 +176,87 @@ describe('parseRatesResponse', () => {
     const r = parseRatesResponse(body, 1).get('lp1')
 
     assert.equal(r.mapped, true)
-    assert.deepEqual(Object.keys(r.byRoom).sort(), ['101', '202', '303'])
+    assert.deepEqual(Object.keys(r.byRoom).sort(), ['101', '303'])
     assert.equal(r.byRoom['101'].total, 210)
-    assert.equal(r.byRoom['202'].total, 220)
     assert.equal(r.byRoom['303'].offerId, 'c')
+  })
+
+  test('the price is never below the suggested selling price', () => {
+    const ssp = (total, suggested) => ({ retailRate: { total: usd(total), suggestedSellingPrice: [{ ...usd(suggested)[0], source: '' }] } })
+    const body = {
+      data: [
+        hotel(
+          'lp1',
+          // The sandbox probe: retail 289.05, SSP 332.41
+          offer('below', 0, { ...ssp(289.05, 332.41), mappedRoomId: 1 }),
+          offer('above', 0, { ...ssp(300, 250), mappedRoomId: 2 }),
+          offer('no-ssp', 280, { mappedRoomId: 3 }),
+          offer('euro-ssp', 0, { retailRate: { total: usd(270), suggestedSellingPrice: [{ amount: 400, currency: 'EUR' }] }, mappedRoomId: 4 })
+        ),
+      ],
+    }
+    const r = parseRatesResponse(body, 2).get('lp1')
+
+    assert.equal(r.byRoom['1'].total, 332.41)
+    assert.equal(r.byRoom['1'].perNight, 332.41 / 2)
+    assert.equal(r.byRoom['2'].total, 300)
+    assert.equal(r.byRoom['3'].total, 280)
+    assert.equal(r.byRoom['4'].total, 270)
+    // The cheapest is picked on the price shown, so the SSP can reorder offers
+    assert.equal(r.cheapest.offerId, 'euro-ssp')
+    const raised = parseRatesResponse({ data: [hotel('lp2', offer('x', 0, ssp(200, 320)), offer('y', 300))] }, 1).get('lp2')
+    assert.equal(raised.cheapest.offerId, 'y')
+  })
+
+  test("a refundable rate's free cancellation ends a day before its first fee's GMT date", () => {
+    const policy = (refundableTag, ...infos) => ({
+      cancellationPolicies: {
+        refundableTag,
+        hotelRemarks: [],
+        cancelPolicyInfos: infos.map(([cancelTime, amount]) => ({ cancelTime, amount, currency: 'USD', type: 'amount', timezone: 'GMT' })),
+      },
+    })
+    const body = {
+      data: [
+        hotel(
+          'lp1',
+          offer('two-steps', 300, { ...policy('RFN', ['2026-11-08 10:00:00', 289.05], ['2026-11-11 10:00:00', 289.05]), mappedRoomId: 1 }),
+          // Listed out of order, and a 0 fee is still free
+          offer('unordered', 300, { ...policy('RFN', ['2026-11-10 20:00:00', 320], ['2026-11-01 08:00:00', 0], ['2026-11-02 20:00:00', 160]), mappedRoomId: 2 }),
+          offer('no-fee', 300, { ...policy('RFN'), mappedRoomId: 3 }),
+          offer('nrfn', 250, { ...policy('NRFN'), mappedRoomId: 4 }),
+          offer('month-start', 300, { ...policy('RFN', ['2026-12-01 05:00:00', 100]), mappedRoomId: 5 })
+        ),
+      ],
+    }
+    const r = parseRatesResponse(body, 3).get('lp1')
+
+    assert.deepEqual([r.byRoom['1'].refundable, r.byRoom['1'].cancelBy], [true, '2026-11-07'])
+    assert.equal(r.byRoom['2'].cancelBy, '2026-11-01')
+    assert.deepEqual([r.byRoom['3'].refundable, r.byRoom['3'].cancelBy], [true, null])
+    assert.deepEqual([r.byRoom['4'].refundable, r.byRoom['4'].cancelBy], [false, null])
+    assert.equal(r.byRoom['5'].cancelBy, '2026-11-30')
+  })
+
+  test('with a party, rates quoted for another party are dropped', () => {
+    const party = { adults: 2, children: [8, 8] }
+    const quoted = (adultCount, childCount) => ({ maxOccupancy: 4, adultCount, childCount, childrenAges: [8, 8] })
+    const body = {
+      data: [
+        hotel('lp1', offer('match', 200, { ...quoted(2, 2), mappedRoomId: 1 }), offer('as-adults', 150, { ...quoted(4, 0), mappedRoomId: 2 })),
+        hotel('lp2', offer('fewer-children', 180, quoted(2, 1))),
+        // Without the echo fields there's nothing to check against
+        hotel('lp3', offer('plain', 170)),
+      ],
+    }
+    const map = parseRatesResponse(body, 1, party)
+
+    assert.deepEqual(Object.keys(map.get('lp1').byRoom), ['1'])
+    assert.equal(map.get('lp1').cheapest.offerId, 'match')
+    assert.equal(map.has('lp2'), false)
+    assert.equal(map.get('lp3').cheapest.offerId, 'plain')
+    // Without a party nothing is checked
+    assert.equal(parseRatesResponse(body, 1).get('lp1').cheapest.offerId, 'as-adults')
   })
 
   test('keeps the cheapest quote per room, per name and overall', () => {
@@ -193,6 +280,7 @@ describe('parseRatesResponse', () => {
       rateName: 'Standard King Room',
       boardType: 'BB',
       refundable: true,
+      cancelBy: null,
       dueAtProperty: 0,
     })
     assert.equal(r.byRoom['2'].offerId, 'twin')
@@ -289,6 +377,12 @@ describe('sold out', () => {
     assert.deepEqual(rooms.get('lp1'), { status: 'unavailable' })
   })
 
+  test('a hotel that only quoted another party keeps its stored price', async () => {
+    fetchMock.mock.mockImplementation(async () => priced(hotel('lp1', offer('o1', 300, { adultCount: 4, childCount: 0 }))))
+    const rooms = await getRoomRates(['lp1'], { ...Q, children: [8, 8] })
+    assert.deepEqual(rooms.get('lp1'), { status: 'unavailable' })
+  })
+
   test('liveRoomPrice is sold out when a mapped hotel has no offer for the room', async () => {
     fetchMock.mock.mockImplementation(async () => priced(hotel('lp1', offer('o1', 300, { mappedRoomId: 1 }))))
     const q = await liveRoomPrice({ liteapiHotelId: 'lp1', liteapiRoomId: '2', roomType: 'Standard King Room' }, Q)
@@ -336,32 +430,46 @@ describe('unavailable', () => {
 
   test('stays of 0 or more than 30 nights give unavailable without calling fetch', async () => {
     for (const checkOut of [IN, '2026-12-11', 'not-a-date']) {
-      const rooms = await getRoomRates(['lp1'], { checkIn: IN, checkOut, guests: 2 })
+      const rooms = await getRoomRates(['lp1'], { ...Q, checkOut })
       assert.deepEqual(rooms.get('lp1'), { status: 'unavailable' }, checkOut)
     }
     const thirty = '2026-12-10'
     fetchMock.mock.mockImplementation(async () => priced(hotel('lp1', offer('o1', 3000))))
-    const ok = await getRoomRates(['lp1'], { checkIn: IN, checkOut: thirty, guests: 2 })
+    const ok = await getRoomRates(['lp1'], { ...Q, checkOut: thirty })
     assert.equal(ok.get('lp1').status, 'live')
     assert.equal(ok.get('lp1').value.cheapest.perNight, 100)
     assert.equal(fetchMock.mock.callCount(), 1)
   })
 
-  test('a non-positive guest count gives unavailable without calling fetch', async () => {
-    const rooms = await getRoomRates(['lp1'], { ...Q, guests: 0 })
-    assert.deepEqual(rooms.get('lp1'), { status: 'unavailable' })
+  test('no adult, or a child without a whole age from 0 to 17, gives unavailable without calling fetch', async () => {
+    for (const party of [
+      { adults: 0, children: [] },
+      { adults: 1.5, children: [] },
+      { adults: 0, children: [8] },
+      { adults: 2, children: [-1] },
+      { adults: 2, children: [18] },
+      { adults: 2, children: [8.5] },
+      { adults: 2, children: ['8'] },
+      { adults: 2 },
+    ]) {
+      const rooms = await getRoomRates(['lp1'], { checkIn: IN, checkOut: OUT, ...party })
+      assert.deepEqual(rooms.get('lp1'), { status: 'unavailable' }, JSON.stringify(party))
+    }
     assert.equal(fetchMock.mock.callCount(), 0)
+
+    await getRoomRates(['lp1'], { ...Q, children: [0, 17] })
+    assert.equal(fetchMock.mock.callCount(), 1)
   })
 
   test('a check-in more than 365 days ahead gives unavailable without calling fetch', async () => {
     mock.timers.enable({ apis: ['Date'], now: Date.now() })
     const day = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10)
-    const far = await getRoomRates(['lp1'], { checkIn: day(366), checkOut: day(367), guests: 2 })
+    const far = await getRoomRates(['lp1'], { ...Q, checkIn: day(366), checkOut: day(367) })
     assert.deepEqual(far.get('lp1'), { status: 'unavailable' })
     assert.equal(fetchMock.mock.callCount(), 0)
 
     fetchMock.mock.mockImplementation(async () => priced(hotel('lp1', offer('o1', 100))))
-    const lastDay = await getRoomRates(['lp1'], { checkIn: day(365), checkOut: day(366), guests: 2 })
+    const lastDay = await getRoomRates(['lp1'], { ...Q, checkIn: day(365), checkOut: day(366) })
     assert.equal(lastDay.get('lp1').status, 'live')
     assert.equal(fetchMock.mock.callCount(), 1)
   })
@@ -428,12 +536,22 @@ describe('cache', () => {
     assert.ok([...all.values()].every((r) => r.status === 'live'))
   })
 
-  test('a different guest count, dates or mode fetches again', async () => {
+  test('different adults, children, ages, dates or mode fetch again', async () => {
     await getRoomRates(['lp1'], Q)
-    await getRoomRates(['lp1'], { ...Q, guests: 3 })
+    await getRoomRates(['lp1'], { ...Q, adults: 3 })
+    // Same head count as 3 adults, but a different party and price
+    await getRoomRates(['lp1'], { ...Q, children: [8] })
+    await getRoomRates(['lp1'], { ...Q, children: [3] })
     await getRoomRates(['lp1'], { ...Q, checkOut: '2026-11-14' })
     await getFromPrices(['lp1'], Q)
-    assert.equal(fetchMock.mock.callCount(), 4)
+    assert.equal(fetchMock.mock.callCount(), 6)
+  })
+
+  test('the same children in another order share a quote', async () => {
+    await getRoomRates(['lp1'], { ...Q, children: [12, 3] })
+    await getRoomRates(['lp1'], { ...Q, children: [3, 12] })
+    assert.equal(fetchMock.mock.callCount(), 1)
+    assert.ok(globalThis.__likehomeLiteApi.has(`rooms|lp1|${IN}|${OUT}|2|3,12`))
   })
 
   test('live and sold-out results expire after 15 minutes', async () => {
@@ -479,7 +597,7 @@ describe('cache', () => {
 
     mock.timers.tick(15 * 60_000)
     await getRoomRates(['fresh'], Q)
-    assert.deepEqual([...globalThis.__likehomeLiteApi.keys()], [`rooms|fresh|${IN}|${OUT}|2`])
+    assert.deepEqual([...globalThis.__likehomeLiteApi.keys()], [`rooms|fresh|${IN}|${OUT}|2|`])
   })
 
   test('past 2000 keys with nothing expired, the earliest keys are dropped', async () => {
@@ -489,8 +607,8 @@ describe('cache', () => {
 
     const keys = [...globalThis.__likehomeLiteApi.keys()]
     assert.equal(keys.length, 2001)
-    assert.ok(!keys.includes(`from|lp0|${IN}|${OUT}|2`))
-    assert.equal(keys[0], `from|lp1|${IN}|${OUT}|2`)
-    assert.equal(keys.at(-1), `rooms|fresh|${IN}|${OUT}|2`)
+    assert.ok(!keys.includes(`from|lp0|${IN}|${OUT}|2|`))
+    assert.equal(keys[0], `from|lp1|${IN}|${OUT}|2|`)
+    assert.equal(keys.at(-1), `rooms|fresh|${IN}|${OUT}|2|`)
   })
 })

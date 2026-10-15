@@ -97,13 +97,17 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
 export async function withLiveRoomPrices(stay: Stay, q: StayQuery, keepOpenRoomId?: string): Promise<Stay> {
   if (!stay.liteapiId) return stay;
   // No room holds that many guests, so a quote can't be booked; skipping it saves the shared LiteAPI rate limit
-  if (q.guests > Math.max(0, ...stay.rooms.map((room) => room.sleeps))) return { ...stay, priceSource: "stored" };
+  if (q.adults + q.children.length > Math.max(0, ...stay.rooms.map((room) => room.sleeps))) return { ...stay, priceSource: "stored" };
   const r = (await getRoomRates([stay.liteapiId], q)).get(stay.liteapiId)!;
   if (r.status === "unavailable") return { ...stay, priceSource: "stored" };
   const rooms = stay.rooms
     .map((room) => {
       const quote = r.status === "sold_out" ? r : quoteForRoom(r.value, { liteapiRoomId: room.liteapiRoomId ?? null, name: room.name });
-      if (quote.status === "live") return { ...room, nightly: quote.value.perNight, soldOut: false };
+      if (quote.status === "live") {
+        const { rateName, perNight, refundable, cancelBy, dueAtProperty } = quote.value;
+        // The rate's own room name: LiteAPI's stored room names are for reference only
+        return { ...room, name: rateName || room.name, nightly: perNight, soldOut: false, refundable, cancelBy, dueAtProperty };
+      }
       if (quote.status === "sold_out") return { ...room, soldOut: room.id !== keepOpenRoomId };
       return room;
     })

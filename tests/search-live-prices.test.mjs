@@ -49,16 +49,21 @@ test('LiteAPI rows get the live per-night price; owner rows keep theirs', async 
     );
     assert.deepEqual(result, [lite('h1', 'lp1', 163.66 / 3), owner('o1', 129.99), lite('h2', 'lp2', 80)]);
     assert.equal(getFromPrices.mock.callCount(), 1);
-    assert.deepEqual(getFromPrices.mock.calls[0].arguments, [['lp1', 'lp2'], { ...DATES, guests: 3 }]);
+    // Children are priced as children (at the default age), not as more adults
+    assert.deepEqual(getFromPrices.mock.calls[0].arguments, [['lp1', 'lp2'], { ...DATES, adults: 2, children: [8] }]);
 });
 
-test('guests default to 2, like the search bar', async () => {
+test('adults default to 2, like the stay page, and children to none', async () => {
     quotes = { lp1: live(100) };
     await priceSearchResults([lite('h1', 'lp1', 120)], { dates: DATES });
-    // adults=0 in the link parses to a total of 0
+    // adults=0 in the link parses to 0 adults
     await priceSearchResults([lite('h1', 'lp1', 120)], { dates: DATES, guests: { adults: 0, total: 0 } });
-    assert.deepEqual(getFromPrices.mock.calls.map((call) => call.arguments[1].guests), [2, 2]);
-    assert.deepEqual(getFromPrices.mock.calls[0].arguments, [['lp1'], { ...DATES, guests: 2 }]);
+    // children only: the stay page adds its 2 adults, so the search prices the same party
+    await priceSearchResults([lite('h1', 'lp1', 120)], { dates: DATES, guests: { children: 2, total: 2 } });
+    assert.deepEqual(
+        getFromPrices.mock.calls.map((call) => call.arguments[1]),
+        [{ ...DATES, adults: 2, children: [] }, { ...DATES, adults: 2, children: [] }, { ...DATES, adults: 2, children: [8, 8] }],
+    );
 });
 
 test('sold-out LiteAPI rows are dropped', async () => {

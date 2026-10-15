@@ -5,7 +5,8 @@ export type CheckoutForm = {
   roomId: string;
   checkIn: string;
   checkOut: string;
-  guests: number;
+  adults: number;
+  children: number;
   cardNumber: string;
   /** MM/YY, as typed */
   expiry: string;
@@ -21,7 +22,9 @@ export function checkoutRequest(form: CheckoutForm) {
     room_id: form.roomId,
     check_in: form.checkIn,
     check_out: form.checkOut,
-    guests: form.guests,
+    // Capacity counts every guest; LiteAPI prices children apart from adults
+    guests: form.adults + form.children,
+    children: form.children,
     time_zone: form.timeZone,
     payment: {
       card_number: form.cardNumber.replace(/[\s-]/g, ""),

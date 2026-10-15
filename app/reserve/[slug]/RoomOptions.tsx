@@ -25,6 +25,7 @@ export function RoomOptions({
       {rooms.map((r) => {
         const on = r.id === selectedId;
         const off = !!r.soldOut;
+        const line = off ? "Sold out right now" : note(r);
         return (
           <label
             key={r.id}
@@ -55,7 +56,9 @@ export function RoomOptions({
                   </Fragment>
                 ))}
               </p>
-              <p className="text-sm text-slate">{off ? "Sold out right now" : note(r)}</p>
+              {line && <p className="text-sm text-slate">{line}</p>}
+              {/* LiteAPI quotes these for the whole stay, apart from the nightly price */}
+              {!off && !!r.dueAtProperty && <p className="text-sm text-slate">Plus {money(r.dueAtProperty)} in hotel fees at the property</p>}
             </div>
             <div className="shrink-0 text-right">
               <p className={`text-base font-semibold ${off ? "text-slate line-through" : "text-ink"}`}>{money(r.nightly)}</p>

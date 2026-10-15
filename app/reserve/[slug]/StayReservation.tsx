@@ -12,7 +12,7 @@ import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../..
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Card, Field, Stars } from "../../_components/ui";
 import { HotelPhoto } from "../../MyBookings/_components/HotelPhoto";
-import { TAX_RATE, type Stay } from "../../_data/stays";
+import { TAX_RATE, type Room, type Stay } from "../../_data/stays";
 import { checkoutRequest } from "./checkoutRequest";
 import { DateRangePicker } from "./DateRangePicker";
 import { GuestsField, guestLabel } from "./GuestsField";
@@ -93,7 +93,7 @@ export function StayReservation({
   const [booking, setBooking] = useState<Booking | null>(null);
   // Contact details survive going back to the stay (card details aren't kept)
   const [contact, setContact] = useState<Contact>({ firstName: "", lastName: "", email: "", phone: "" });
-  const [livePrices, setLivePrices] = useState<{ key: string; byId: Record<string, { nightly: number; soldOut: boolean }> } | null>(null);
+  const [livePrices, setLivePrices] = useState<{ key: string; byId: Record<string, Partial<Room>> } | null>(null);
   // Without a LiteAPI key the stored prices on the page hold for every date. A LiteAPI outage doesn't turn
   // this off: the refetch caches "unavailable", so checkout charges the same stored price the guest sees.
   const [pricingOff, setPricingOff] = useState(!stay.liteapiConfigured);
@@ -112,9 +112,10 @@ export function StayReservation({
 
   const nights = nightsBetween(checkIn, checkOut);
   const guests = adults + children;
-  // The server already priced the dates and guests in the link, so those need no fetch
-  const initialKey = `${initial.checkIn ?? ""}|${initial.checkOut ?? ""}|${(initial.adults ?? 2) + (initial.children ?? 0)}`;
-  const priceKey = stay.liteapiId && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${guests}` : null;
+  // The server already priced the dates and guests in the link, so those need no fetch. Adults and children
+  // apart: LiteAPI prices children by age.
+  const initialKey = `${initial.checkIn ?? ""}|${initial.checkOut ?? ""}|${initial.adults ?? 2}|${initial.children ?? 0}`;
+  const priceKey = stay.liteapiId && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${adults}|${children}` : null;
   const liveKey = livePrices?.key;
   const rooms = livePrices && livePrices.key === priceKey ? stay.rooms.map((r) => ({ ...r, ...livePrices.byId[r.id] })) : stay.rooms;
   const pricesPending = !!priceKey && priceKey !== initialKey && liveKey !== priceKey;
@@ -124,8 +125,9 @@ export function StayReservation({
   const cleaning = nights ? stay.cleaningFee : 0;
   const taxes = Math.round((subtotal + cleaning) * (stay.taxRate ?? TAX_RATE));
   const total = subtotal + cleaning + taxes;
-  // Free cancellation ends 2 days before check-in; for a stay that starts sooner, it's already over.
-  // Today is "" while rendering on the server, so the server and the browser agree on first render.
+  // Not part of the total: the guest pays these to the hotel
+  const dueAtProperty = nights ? (room.dueAtProperty ?? 0) : 0;
+  // Today is "" while rendering on the server, so the server and the browser agree on first render
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
   const [userBookingBlockedOffsets, setUserBookingBlockedOffsets] = useState<number[]>([]);
 
@@ -153,17 +155,18 @@ export function StayReservation({
 
   useEffect(() => {
     if (!priceKey || priceKey === initialKey || priceKey === liveKey) return;
-    const [ci, co, g] = priceKey.split("|");
+    const [ci, co, a, c] = priceKey.split("|");
     const request = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
-        const query = new URLSearchParams({ checkIn: ci, checkOut: co, guests: g });
+        const query = new URLSearchParams({ checkIn: ci, checkOut: co, adults: a, children: c });
         const res = await fetch(`/api/stays/${stay.slug}/prices?${query}`, { signal: request.signal });
         if (!res.ok) throw new Error(`Prices request failed (${res.status})`);
-        const body = (await res.json()) as { configured?: boolean; rooms?: { id: string; nightly: number; soldOut: boolean }[] };
+        const body = (await res.json()) as { configured?: boolean; rooms?: (Partial<Room> & { id: string })[] };
         if (request.signal.aborted) return;
-        const byId: Record<string, { nightly: number; soldOut: boolean }> = {};
-        for (const r of body.rooms ?? []) if (Number.isFinite(r.nightly)) byId[r.id] = { nightly: r.nightly, soldOut: !!r.soldOut };
+        // The route sets every key (null without a live quote), so an earlier quote's terms and fees don't linger
+        const byId: Record<string, Partial<Room>> = {};
+        for (const { id, ...r } of body.rooms ?? []) if (Number.isFinite(r.nightly)) byId[id] = { ...r, soldOut: !!r.soldOut };
         setLivePrices({ key: priceKey, byId });
         if (body.configured === false) setPricingOff(true);
       } catch {
@@ -181,8 +184,7 @@ export function StayReservation({
     ...new Set([...stay.blockedNights, ...userBookingBlockedOffsets]),
   ];
 
-  const cancelBy = checkIn ? addDays(checkIn, -2) : "";
-  const freeCancel = !checkIn || !today || cancelBy > today;
+  const terms = cancelTerms(stay, room, checkIn, today);
 
   const setDatesOpen = useCallback((open: boolean) => setPopover((p) => (open ? "dates" : p === "dates" ? null : p)), []);
   const setGuestsOpen = useCallback((open: boolean) => setPopover((p) => (open ? "guests" : p === "guests" ? null : p)), []);
@@ -387,7 +389,8 @@ export function StayReservation({
       roomId: room.id,
       checkIn,
       checkOut,
-      guests: adults + children,
+      adults,
+      children,
       cardNumber: text("cardNumber"),
       expiry: text("expiry"),
       cvc: text("cvc"),
@@ -627,13 +630,15 @@ export function StayReservation({
             ) : (
               <p className="mt-5 border-t border-edge pt-5 text-sm text-slate">Add your dates to see the total for your stay.</p>
             )}
+            {dueAtProperty > 0 && <p className="mt-2 text-sm text-slate">{dueAtPropertyText(dueAtProperty)}</p>}
 
-            {checkIn && (
+            {checkIn && terms && (
               <Card tone="tint" padding="none" className="mt-5 p-4 text-sm">
-                <p className="font-semibold text-ink">{freeCancel ? `Free cancellation until ${formatDate(cancelBy)}` : "No free cancellation"}</p>
-                <p className="mt-1 text-slate">
-                  {freeCancel ? "After that, the first night is non-refundable." : "This booking can’t be cancelled for free. The first night is non-refundable."}
-                </p>
+                {cancelText(terms, !!stay.liteapiId).map((text, i) => (
+                  <p key={i} className={i === 0 ? "font-semibold text-ink" : "mt-1 text-slate"}>
+                    {text}
+                  </p>
+                ))}
               </Card>
             )}
 
@@ -716,7 +721,7 @@ export function StayReservation({
               clear("guests");
             }}
             locked={roomsLocked}
-            note={() => (freeCancel ? "Free cancellation" : "No free cancellation")}
+            note={(r) => cancelNote(cancelTerms(stay, r, checkIn, today))}
           />
         </fieldset>
 
@@ -779,15 +784,18 @@ export function StayReservation({
               </div>
 
               {nights > 0 ? (
-                <dl className="space-y-2 text-base">
-                  <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
-                  {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
-                  {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
-                  <div className="flex justify-between border-t border-edge pt-3 text-base font-bold text-ink">
-                    <dt>Total</dt>
-                    <dd>{money(total)}</dd>
-                  </div>
-                </dl>
+                <div>
+                  <dl className="space-y-2 text-base">
+                    <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
+                    {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
+                    {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
+                    <div className="flex justify-between border-t border-edge pt-3 text-base font-bold text-ink">
+                      <dt>Total</dt>
+                      <dd>{money(total)}</dd>
+                    </div>
+                  </dl>
+                  {dueAtProperty > 0 && <p className="mt-2 text-sm text-slate">{dueAtPropertyText(dueAtProperty)}</p>}
+                </div>
               ) : (
                 <p className="text-sm text-slate">Add your dates to see the total for your stay.</p>
               )}
@@ -850,6 +858,41 @@ export function StayReservation({
     </>
   );
 }
+
+type CancelTerms = { refundable: boolean; free: boolean; /** "" when there's no date to show */ until: string };
+
+// Owner hotels and the sample stays follow the site's own rule: free cancellation until 2 days before check-in.
+// A LiteAPI room follows its rate, so it promises nothing (null) until LiteAPI has quoted it.
+function cancelTerms(stay: Stay, room: Room, checkIn: string, today: string): CancelTerms | null {
+  if (stay.liteapiId) {
+    if (room.refundable == null) return null;
+    if (!room.refundable) return { refundable: false, free: false, until: "" };
+  }
+  const until = stay.liteapiId ? (room.cancelBy ?? "") : checkIn ? addDays(checkIn, -2) : "";
+  return { refundable: true, free: !until || !today || until > today, until };
+}
+
+function cancelNote(t: CancelTerms | null) {
+  if (!t) return "";
+  return !t.refundable ? "Non-refundable" : t.free ? "Free cancellation" : "No free cancellation";
+}
+
+/** The heading and the line under it, for the checkout summary */
+function cancelText(t: CancelTerms, liteapi: boolean): [string, string] {
+  if (!t.refundable) return ["Non-refundable", "This rate can’t be refunded if you cancel."];
+  if (!t.free) {
+    return liteapi
+      ? ["No free cancellation", "Free cancellation for this rate has ended, so the hotel charges a fee if you cancel."]
+      : ["No free cancellation", "This booking can’t be cancelled for free. The first night is non-refundable."];
+  }
+  if (!t.until) return ["Free cancellation", "This rate can be cancelled without a fee."];
+  return [
+    `Free cancellation until ${formatDate(t.until)}`,
+    liteapi ? "After that, the hotel charges a cancellation fee." : "After that, the first night is non-refundable.",
+  ];
+}
+
+const dueAtPropertyText = (amount: number) => `Plus ${money(amount)} in hotel fees, paid at the property.`;
 
 function Line({ label, value }: { label: string; value: string }) {
   return (

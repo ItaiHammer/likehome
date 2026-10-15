@@ -236,7 +236,7 @@ export function samplePricesFor(offers: LiteOffer[] | undefined, nights = 1): Sa
   for (const offer of pricedOffers(offers)) {
     const perNight = offerTotal(offer)! / nights
     const first = offer.rates![0]
-    const mappedRoomId = first.mappedRoomId ?? offer.mappedRoomId
+    const mappedRoomId = first.mappedRoomId
     if (mappedRoomId !== undefined && mappedRoomId !== null && String(mappedRoomId) !== '') {
       sample.mapped = true
       keepCheapest(sample.byRoom, String(mappedRoomId), perNight)

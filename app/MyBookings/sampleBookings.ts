@@ -101,6 +101,7 @@ export function getSampleBooking(id: string, today: string): { booking: BookingT
       checkIn: b.checkIn,
       checkOut: b.checkOut,
       guests: b.guests ?? 1,
+      children: 0,
       roomId: "booked",
       total: calculateTotalPrice(b.checkIn, b.checkOut, 189),
       blocker: changeBlocker(b, today),
