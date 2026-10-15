@@ -94,6 +94,8 @@ function chosenBeds(room: LiteRoom): Bed[] {
 
 const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0)
 
+const childLimit = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null)
+
 export function numBedsFor(room: LiteRoom): number {
   return Math.max(1, chosenBeds(room).reduce((sum, bed) => sum + count(bed.quantity), 0))
 }
@@ -128,7 +130,7 @@ type FacilityRule = { tags: Tag[]; ids?: number[]; match?: RegExp; unless?: RegE
 
 const FAMILY_ROOMS = 28
 const ADULT_ONLY = 149
-const KIDS_FACILITIES = [21, 56, 144, 148, 172, 173, 174, 176, 177, 214, 258, 495, 570, 652, 696, 697, 737, 770, 890, 891]
+export const KIDS_FACILITIES = [21, 56, 144, 148, 172, 173, 174, 176, 177, 214, 258, 495, 570, 652, 696, 697, 737, 770, 890, 891]
 
 const FACILITY_RULES: FacilityRule[] = [
   { tags: ['Parking'], match: /parking|garage/, unless: /no parking/ },
@@ -152,15 +154,17 @@ const facilityName = (name: unknown) => (typeof name === 'string' ? name.trim().
 function facilitiesOf(d: LiteHotelDetail): Facility[] {
   const listed = (d.facilities ?? []).map((facility) => ({ id: finiteOrNull(Number(facility?.facilityId)), name: facilityName(facility?.name) }))
   const idByName = new Map(listed.map(({ id, name }) => [name, id]))
-  const named = (d.hotelFacilities ?? []).map(facilityName).map((name) => ({ id: idByName.get(name) ?? null, name }))
-  return [...listed, ...named].filter(({ name }) => name)
+  const named = (d.hotelFacilities ?? []).map(facilityName).filter(Boolean).map((name) => ({ id: idByName.get(name) ?? null, name }))
+  // Rules go by id, so a listed facility with no name still counts
+  return [...listed.filter(({ id, name }) => id !== null || name), ...named]
 }
 
 const rulesFor = ({ id, name }: Facility) => FACILITY_RULES.filter((rule) =>
   (id !== null && rule.ids?.includes(id)) || (rule.match?.test(name) && !rule.unless?.test(name)))
 
 export function unmappedFacilities(d: LiteHotelDetail): string[] {
-  return [...new Set(facilitiesOf(d).filter((facility) => facility.id !== ADULT_ONLY && rulesFor(facility).length === 0).map(({ name }) => name))]
+  const unmapped = facilitiesOf(d).filter((facility) => facility.name && facility.id !== ADULT_ONLY && rulesFor(facility).length === 0)
+  return [...new Set(unmapped.map(({ name }) => name))]
 }
 
 // Some hotels list 149 but have rooms for children (an adults-only area?), so the rooms must agree.
@@ -227,8 +231,8 @@ function allOffersIncludeMeals(offers: LiteOffer[] | undefined): boolean {
   }))
 }
 
-// Couples and Friends describe one bookable room, so only the imported `rooms` count for them;
-// hotel-wide facts (pool, gym, cribs, pets) may come from any room type of the hotel.
+// Couples and Friends describe one bookable room, so only the imported `rooms` count for them (an adults-only
+// hotel is Couples as a whole); hotel-wide facts (pool, gym, cribs, pets) may come from any room type of the hotel.
 export function hotelTagsFor(d: LiteHotelDetail, offers: LiteOffer[] | undefined, rooms: LiteRoom[] = d.rooms ?? []): Tag[] {
   const found = new Set<Tag>(facilitiesOf(d).flatMap((facility) => rulesFor(facility).flatMap((rule) => rule.tags)))
   const allIds = new Set((d.rooms ?? []).flatMap((room) => [...amenityIds(room)]))
@@ -304,7 +308,7 @@ export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices,
     const price = own ?? sample.cheapest
     // A 0/0/N room lists no limits, so its 0 children is unknown too, not a real 0
     const adults = count(room.maxAdults)
-    const children = finiteOrNull(room.maxChildren)
+    const children = adults ? childLimit(room.maxChildren) : null
     candidates.push({
       priced: own !== undefined,
       price,
@@ -313,7 +317,7 @@ export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices,
         room_type: name,
         capacity: capacityFor(room),
         max_adults: adults || null,
-        max_children: adultsOnly ? 0 : adults > 0 && children !== null && Number.isInteger(children) && children >= 0 ? children : null,
+        max_children: adultsOnly ? 0 : children,
         num_beds: numBedsFor(room),
         bed_size: bedSizeFor(chosenBeds(room)),
         price_per_night: Math.round(price),

@@ -83,8 +83,8 @@ test('hotel and room tags only ever use the 17 filter strings', () => {
     petsAllowed: true,
     facilities: [
       'Free WiFi', 'Parking garage', 'Electric vehicle charging station', 'Outdoor swimming pool', 'Fitness center',
-      'Gift shop', 'Laundry facilities', 'Housekeeping', 'Pets allowed', 'Kids club', 'Family rooms', 'Spa', 'Restaurant',
-    ].map((name, i) => ({ facilityId: i, name })),
+      'Gift shop', 'Laundry facilities', 'Housekeeping', 'Pets allowed', 'Spa', 'Restaurant',
+    ].map((name, i) => ({ facilityId: i, name })).concat({ facilityId: 56, name: 'Kids club' }, { facilityId: 28, name: 'Family rooms' }),
     hotelFacilities: ['Free Parking', 'Bar'],
     rooms: [room(1, { maxOccupancy: 6, roomAmenities: amenities(...Array.from({ length: 400 }, (_, i) => i)) })],
   })
@@ -116,9 +116,12 @@ test('Kids and Families come from facility ids, whatever the name', () => {
   const tagsFor = (...facilities) => hotelTagsFor(detail({ facilities: facilities.map(([facilityId, name]) => ({ facilityId, name })) }), [])
   assert.deepEqual(tagsFor([28, 'Family rooms']), ['Families'])
   assert.deepEqual(tagsFor([28, 'Chambres familiales']), ['Families'])
-  assert.deepEqual(tagsFor([176, 'Kid meals']), ['Families', 'Kids'])
-  assert.deepEqual(tagsFor([214, 'Strollers']), ['Families', 'Kids'])
-  assert.deepEqual(tagsFor([174, 'Baby safety gates'], [148, 'Water park']), ['Families', 'Kids'])
+  // Includes water park (148, 696, 697), baby safety gates (174) and strollers (214)
+  for (const id of [21, 56, 144, 148, 172, 173, 174, 176, 177, 214, 258, 495, 570, 652, 696, 697, 737, 770, 890, 891]) {
+    assert.deepEqual(tagsFor([id, `facility ${id}`]), ['Families', 'Kids'], `facility ${id}`)
+  }
+  assert.deepEqual(tagsFor([28, '']), ['Families'], 'a facility with no name still counts')
+  assert.deepEqual(tagsFor([214]), ['Families', 'Kids'], 'or with no name at all')
   assert.deepEqual(hotelTagsFor(detail({ hotelFacilities: ['Family rooms', 'Kid meals'] }), []), [], 'a name with no facilities entry has no id')
 })
 
@@ -137,6 +140,7 @@ test('adults-only needs facility 149 and rooms that take no children', () => {
   assert.equal(isAdultsOnly(takesChildren), false, '149 can mean an adults-only area')
   assert.deepEqual(hotelTagsFor(takesChildren, []), ['Cribs', 'Families', 'Kids'])
 
+  assert.equal(isAdultsOnly(detail({ facilities: [{ facilityId: 149 }], rooms: [adultRoom] })), true, '149 with no name')
   assert.equal(isAdultsOnly(hotel(room(1, { maxAdults: 0, maxChildren: 0 }), room(2))), false, 'no room with known limits')
   assert.equal(isAdultsOnly(detail({ facilities: [{ facilityId: 1, name: 'Adults only' }], rooms: [adultRoom] })), false, 'the name alone')
   assert.equal(isAdultsOnly(detail({ rooms: [adultRoom] })), false, 'rooms alone')
@@ -149,8 +153,11 @@ test('"Pets allowed" still gives Pets when petsAllowed is false', () => {
   assert.ok(!hotelTagsFor(detail({ petsAllowed: false }), []).includes('Pets'))
 })
 
-test('room amenities give hotel-wide pool, gym, cribs, kids and families', () => {
-  const tagsFor = (...ids) => hotelTagsFor(detail({ rooms: [room(1), room(2, { roomAmenities: amenities(...ids) })] }), [])
+test('room amenities give hotel-wide pool, gym, cribs, kids and families, even from a room type not imported', () => {
+  const tagsFor = (...ids) => {
+    const d = detail({ rooms: [room(1), room(2, { roomAmenities: amenities(...ids) })] })
+    return hotelTagsFor(d, [], [d.rooms[0]])
+  }
   assert.deepEqual(tagsFor(155), ['Pool'])
   assert.deepEqual(tagsFor(123), ['Gym'])
   assert.deepEqual(tagsFor(168), ['Families', 'Kids'])
@@ -298,8 +305,11 @@ test('roomRowsFor keeps the room limits, treating a room with 0 max adults as un
 })
 
 test('unmappedFacilities lists the names no rule matched, leaving out adults-only', () => {
-  const d = detail({ facilities: [{ facilityId: 1, name: 'Spa' }, { facilityId: 2, name: 'Fitness center' }], hotelFacilities: ['Restaurant', 'spa'] })
-  assert.deepEqual(unmappedFacilities(d), ['spa', 'restaurant'])
+  const d = detail({
+    facilities: [{ facilityId: 1, name: 'Spa' }, { facilityId: 2, name: 'Fitness center' }, { facilityId: 3 }],
+    hotelFacilities: ['Restaurant', 'spa', ' '],
+  })
+  assert.deepEqual(unmappedFacilities(d), ['spa', 'restaurant'], 'no empty names')
   const family = detail({
     facilities: [{ facilityId: 28, name: 'Family rooms' }, { facilityId: 149, name: 'Adult only' }],
     hotelFacilities: ['Family Rooms', 'Adult only', 'Kids club'],
