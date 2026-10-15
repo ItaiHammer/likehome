@@ -172,6 +172,7 @@ export function isAdultsOnly(d: LiteHotelDetail): boolean {
 const POOL_AMENITIES = [155, 174, 287, 294, 257, 306, 254, 255, 109]
 const GYM_AMENITIES = [123, 390, 334, 363, 128]
 const PET_AMENITIES = [250]
+const CRIB_AMENITIES = [74, 121, 362]
 const KID_AMENITIES = [17, 18, 19, 36, 48, 50, 51, 52, 53, 54, 55, 159, 170, 241, 168]
 const PRIVATE_SPA_AMENITIES = [160, 172, 173, 238, 242, 243, 273, 274, 275, 333, 2, 253, 271, 272]
 const GROUP_AMENITIES = [183, 186, 84, 85, 298, 302, 303, 304, 305, 328, 9, 10, 299]
@@ -235,6 +236,7 @@ export function hotelTagsFor(d: LiteHotelDetail, offers: LiteOffer[] | undefined
   if (d.parking === true) found.add('Parking')
   if (hasAny(allIds, POOL_AMENITIES)) found.add('Pool')
   if (hasAny(allIds, GYM_AMENITIES)) found.add('Gym')
+  if (hasAny(allIds, CRIB_AMENITIES)) found.add('Cribs')
   if (hasAny(allIds, KID_AMENITIES)) found.add('Kids').add('Families')
   if (allOffersIncludeMeals(offers)) found.add('Free Meals')
   if (rooms.some((room) => hasAny(amenityIds(room), PRIVATE_SPA_AMENITIES))) found.add('Couples')
@@ -243,6 +245,7 @@ export function hotelTagsFor(d: LiteHotelDetail, offers: LiteOffer[] | undefined
   if (isAdultsOnly(d)) {
     found.delete('Kids')
     found.delete('Families')
+    found.delete('Cribs')
     found.add('Couples')
   }
   return inTagOrder(found)

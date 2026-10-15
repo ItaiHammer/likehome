@@ -77,7 +77,7 @@ test('room tags come from room amenity ids and are never null', () => {
   assert.deepEqual(roomTagsFor(room(1, { roomAmenities: amenities(158, 194, 193) })), [], 'paid wifi, laundry service and detergent alone')
 })
 
-test('hotel and room tags only ever use the 16 filter strings', () => {
+test('hotel and room tags only ever use the 17 filter strings', () => {
   const everything = detail({
     parking: true,
     petsAllowed: true,
@@ -123,7 +123,7 @@ test('Kids and Families come from facility ids, whatever the name', () => {
 })
 
 test('adults-only needs facility 149 and rooms that take no children', () => {
-  const adultRoom = room(1, { maxAdults: 2, maxChildren: 0, roomAmenities: amenities(168) })
+  const adultRoom = room(1, { maxAdults: 2, maxChildren: 0, roomAmenities: amenities(168, 74) })
   const hotel = (...rooms) => detail({
     facilities: [{ facilityId: 149, name: 'Adult only' }, { facilityId: 28, name: 'Family rooms' }, { facilityId: 21, name: 'Babysitting/child services' }],
     rooms,
@@ -131,11 +131,11 @@ test('adults-only needs facility 149 and rooms that take no children', () => {
 
   const adultsOnly = hotel(adultRoom, room(2, { maxAdults: 0, maxChildren: 0 }), room(3))
   assert.equal(isAdultsOnly(adultsOnly), true, 'rooms with no adult limit are unknown and ignored')
-  assert.deepEqual(hotelTagsFor(adultsOnly, []), ['Couples'], 'never for kids or families')
+  assert.deepEqual(hotelTagsFor(adultsOnly, []), ['Couples'], 'never for kids, families or cribs')
 
   const takesChildren = hotel(adultRoom, room(2, { maxAdults: 2, maxChildren: 2 }))
   assert.equal(isAdultsOnly(takesChildren), false, '149 can mean an adults-only area')
-  assert.deepEqual(hotelTagsFor(takesChildren, []), ['Families', 'Kids'])
+  assert.deepEqual(hotelTagsFor(takesChildren, []), ['Cribs', 'Families', 'Kids'])
 
   assert.equal(isAdultsOnly(hotel(room(1, { maxAdults: 0, maxChildren: 0 }), room(2))), false, 'no room with known limits')
   assert.equal(isAdultsOnly(detail({ facilities: [{ facilityId: 1, name: 'Adults only' }], rooms: [adultRoom] })), false, 'the name alone')
@@ -149,14 +149,14 @@ test('"Pets allowed" still gives Pets when petsAllowed is false', () => {
   assert.ok(!hotelTagsFor(detail({ petsAllowed: false }), []).includes('Pets'))
 })
 
-test('room amenities give hotel-wide pool, gym, kids and families', () => {
+test('room amenities give hotel-wide pool, gym, cribs, kids and families', () => {
   const tagsFor = (...ids) => hotelTagsFor(detail({ rooms: [room(1), room(2, { roomAmenities: amenities(...ids) })] }), [])
   assert.deepEqual(tagsFor(155), ['Pool'])
   assert.deepEqual(tagsFor(123), ['Gym'])
   assert.deepEqual(tagsFor(168), ['Families', 'Kids'])
   assert.deepEqual(tagsFor(72, 176), [], 'connecting rooms: one room per booking')
   assert.deepEqual(tagsFor(73), [], 'cots: a baby bed in the UK, a camp bed in the US')
-  assert.deepEqual(tagsFor(74, 121, 362), [], 'cribs')
+  for (const id of [74, 121, 362]) assert.deepEqual(tagsFor(id), ['Cribs'], `crib ${id}: its own tag, not Kids`)
   assert.deepEqual(tagsFor(256), [], 'pool view')
 })
 

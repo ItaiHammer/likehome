@@ -108,6 +108,7 @@ export const propertyAmenities = [
     "Pool",
     "Gym",
     "Gift Shops",
+    "Cribs",
 ] as const;
 export type ProperyAmenity = typeof propertyAmenities[number];
 
