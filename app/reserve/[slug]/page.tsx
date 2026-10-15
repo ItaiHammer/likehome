@@ -46,7 +46,7 @@ function readChoices(params: Record<string, string | string[] | undefined>, stay
   // Without a picked room, the cheapest one that passes the search's filters, as the search matched it
   const room =
     stay.rooms.find((r) => r.id === one("room") && !r.soldOut) ??
-    matchingRoom(stay.rooms, stay.tags, readRoomFilters(params, (adults ?? 2) + (children ?? 0)));
+    matchingRoom(stay.rooms, stay.tags, readRoomFilters(params, (adults ?? 2) + (children ?? 0), { adults, children }));
 
   return {
     ...(datesOk ? { checkIn, checkOut } : {}),

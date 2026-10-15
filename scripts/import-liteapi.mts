@@ -8,7 +8,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { LITEAPI_BASE } from '../lib/liteapi/types.ts'
 import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRatesRequest, LiteRatesResponse } from '../lib/liteapi/types.ts'
-import { hotelRowFor, hotelSql, roomRowsFor, samplePricesFor, unmappedFacilities } from '../lib/liteapi/import-mapping.ts'
+import { hotelRowFor, hotelSql, isAdultsOnly, roomRowsFor, samplePricesFor, unmappedFacilities } from '../lib/liteapi/import-mapping.ts'
 import type { HotelRow, RoomRow, Target } from '../lib/liteapi/import-mapping.ts'
 
 const TARGETS = {
@@ -269,7 +269,7 @@ async function importCity(apiKey: string, cityKey: CityKey, options: Options, se
     if (d === undefined) return skip(report, s, 'details request failed')
     if (d === null) return skip(report, s, 'no details')
     if (d.deletedAt) return skip(report, s, 'deleted at LiteAPI')
-    const rooms = roomRowsFor(d.rooms, sample, options.maxRooms)
+    const rooms = roomRowsFor(d.rooms, sample, options.maxRooms, isAdultsOnly(d))
     if (!rooms.length) return skip(report, s, 'no rooms')
     const kept = new Set(rooms.map((room) => room.liteapi_room_id))
     const keptRooms = (d.rooms ?? []).filter((room) => kept.has(String(room.id)))

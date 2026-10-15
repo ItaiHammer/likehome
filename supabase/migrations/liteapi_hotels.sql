@@ -11,8 +11,12 @@ alter table public.hotels
 alter table public.hotels drop constraint if exists hotels_liteapi_unowned;
 alter table public.hotels add constraint hotels_liteapi_unowned check (liteapi_id is null or owner_id is null);
 
+-- max_adults / max_children: the room type's own limits. NULL (owner rooms, and LiteAPI rooms listed as 0/0) means
+-- only capacity applies.
 alter table public.rooms
-  add column if not exists liteapi_room_id text;            -- GET /data/hotel rooms[].id (integer, stored as text) = rates mappedRoomId
+  add column if not exists liteapi_room_id text,            -- GET /data/hotel rooms[].id (integer, stored as text) = rates mappedRoomId
+  add column if not exists max_adults   integer check (max_adults is null or max_adults >= 1),
+  add column if not exists max_children integer check (max_children is null or max_children >= 0);
 
 -- One row per LiteAPI room type per hotel, and the upsert target (on_conflict=hotel_id,liteapi_room_id).
 -- Owner rooms have NULL here and are unaffected.

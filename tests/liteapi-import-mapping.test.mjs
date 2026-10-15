@@ -264,7 +264,8 @@ test('roomRowsFor keeps priced rooms first, then the cheapest, up to --max-rooms
   assert.deepEqual(rows[0].tags, ['Free Wi-Fi'])
   assert.ok(rows.every((r) => Array.isArray(r.tags)))
   assert.deepEqual(rows[2], {
-    liteapi_room_id: '1', room_type: 'Standard King Room', capacity: 2, num_beds: 1, bed_size: 'Queen', price_per_night: 100, tags: [],
+    liteapi_room_id: '1', room_type: 'Standard King Room', capacity: 2, max_adults: null, max_children: null, num_beds: 1, bed_size: 'Queen',
+    price_per_night: 100, tags: [],
   })
   assert.equal(roomRowsFor(rooms, sample, 10).length, 4)
 })
@@ -282,6 +283,20 @@ test('roomRowsFor matches by rate name only when the hotel is not mapped', () =>
   assert.deepEqual(rows.map((r) => [r.liteapi_room_id, r.price_per_night]), [['1', 300], ['2', 100]])
 })
 
+test('roomRowsFor keeps the room limits, treating a room with 0 max adults as unknown', () => {
+  const sample = samplePricesFor([offer(100)])
+  const limits = (rooms, adultsOnly) => roomRowsFor(rooms, sample, 10, adultsOnly).map((r) => [r.liteapi_room_id, r.max_adults, r.max_children])
+  const rooms = [
+    room(1, { maxAdults: 0, maxChildren: 0, maxOccupancy: 4 }),
+    room(2, { maxAdults: 2, maxChildren: 0, maxOccupancy: 2 }),
+    room(3, { maxAdults: 4, maxChildren: 3, maxOccupancy: 4 }),
+    room(4, { maxAdults: 2 }),
+    room(5, { maxAdults: 2, maxChildren: 1.5 }),
+  ]
+  assert.deepEqual(limits(rooms), [['1', null, null], ['2', 2, 0], ['3', 4, 3], ['4', 2, null], ['5', 2, null]])
+  assert.deepEqual(limits(rooms, true), [['1', null, 0], ['2', 2, 0], ['3', 4, 0], ['4', 2, 0], ['5', 2, 0]], 'adults-only rooms take no children')
+})
+
 test('unmappedFacilities lists the names no rule matched, leaving out adults-only', () => {
   const d = detail({ facilities: [{ facilityId: 1, name: 'Spa' }, { facilityId: 2, name: 'Fitness center' }], hotelFacilities: ['Restaurant', 'spa'] })
   assert.deepEqual(unmappedFacilities(d), ['spa', 'restaurant'])
@@ -294,14 +309,17 @@ test('unmappedFacilities lists the names no rule matched, leaving out adults-onl
 
 test('hotelSql writes idempotent upserts with escaped strings and text arrays', () => {
   const hotel = hotelRowFor(SF, summary({ stars: 4 }), detail({ name: "Tom's Inn", facilities: [{ facilityId: 1, name: 'Free WiFi' }] }))
-  const rooms = roomRowsFor([room(7, { roomName: "King's Room" }), room(8, { bedTypes: [] })], samplePricesFor([offer(120)]))
+  const rooms = roomRowsFor([room(7, { roomName: "King's Room" }), room(8, { bedTypes: [], maxAdults: 2, maxChildren: 1 })], samplePricesFor([offer(120)]))
   const sql = hotelSql(hotel, rooms)
   assert.match(sql, /insert into public\.hotels \(liteapi_id, name, description, address, city, region, country, photo_urls, rating, latitude, longitude, tags\)/)
   assert.match(sql, /values \('lp1', 'Tom''s Inn', '', '', 'San Francisco', 'California', 'USA', array\[\]::text\[\], 4, 37\.78, -122\.41, array\['Free Wi-Fi'\]::text\[\]\)/)
   assert.match(sql, /on conflict \(liteapi_id\) do update set name = excluded\.name, .*tags = excluded\.tags;/)
   assert.ok(!/excluded\.liteapi_id|owner_id|delete/i.test(sql))
-  assert.match(sql, /\('7', 'King''s Room', 2, 1, 'Queen', 120, array\[\]::text\[\]\)/)
-  assert.match(sql, /\('8', 'Room 8', 2, 1, null, 120, array\[\]::text\[\]\)/)
-  assert.match(sql, /join public\.hotels h on h\.liteapi_id = 'lp1'\non conflict \(hotel_id, liteapi_room_id\) do update set room_type = excluded\.room_type/)
+  assert.match(sql, /insert into public\.rooms \(hotel_id, liteapi_room_id, room_type, capacity, max_adults, max_children, num_beds, bed_size, price_per_night, tags\)/)
+  // An all-null VALUES column is typed text, so the limits are cast for their integer columns
+  assert.match(sql, /select h\.id, v\.liteapi_room_id, v\.room_type, v\.capacity, v\.max_adults::integer, v\.max_children::integer, v\.num_beds, v\.bed_size, /)
+  assert.match(sql, /\('7', 'King''s Room', 2, null, null, 1, 'Queen', 120, array\[\]::text\[\]\)/)
+  assert.match(sql, /\('8', 'Room 8', 2, 2, 1, 1, null, 120, array\[\]::text\[\]\)/)
+  assert.match(sql, /join public\.hotels h on h\.liteapi_id = 'lp1'\non conflict \(hotel_id, liteapi_room_id\) do update set room_type = excluded\.room_type, capacity = excluded\.capacity, max_adults = excluded\.max_adults, max_children = excluded\.max_children/)
   assert.ok(!hotelSql(hotel, []).includes('public.rooms'))
 })

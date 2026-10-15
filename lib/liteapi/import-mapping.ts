@@ -25,6 +25,8 @@ export type RoomRow = {
   liteapi_room_id: string
   room_type: string
   capacity: number
+  max_adults: number | null
+  max_children: number | null
   num_beds: number
   bed_size: BedSize | null
   price_per_night: number
@@ -289,7 +291,7 @@ export function hotelRowFor(target: Target, s: LiteHotelSummary, d: LiteHotelDet
 type Candidate = { priced: boolean; price: number; row: RoomRow }
 
 // A repeated room id keeps its first room: one upsert can't touch the same (hotel_id, liteapi_room_id) twice
-export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices, maxRooms = 10): RoomRow[] {
+export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices, maxRooms = 10, adultsOnly = false): RoomRow[] {
   const seen = new Set<string>()
   const candidates: Candidate[] = []
   for (const room of rooms ?? []) {
@@ -300,6 +302,9 @@ export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices,
     // Unmapped hotels fall back to the rate's room name, as live prices do
     const own = sample.byRoom.get(id) ?? (sample.mapped ? undefined : sample.byName.get(normalizeName(name)))
     const price = own ?? sample.cheapest
+    // A 0/0/N room lists no limits, so its 0 children is unknown too, not a real 0
+    const adults = count(room.maxAdults)
+    const children = finiteOrNull(room.maxChildren)
     candidates.push({
       priced: own !== undefined,
       price,
@@ -307,6 +312,8 @@ export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices,
         liteapi_room_id: id,
         room_type: name,
         capacity: capacityFor(room),
+        max_adults: adults || null,
+        max_children: adultsOnly ? 0 : adults > 0 && children !== null && Number.isInteger(children) && children >= 0 ? children : null,
         num_beds: numBedsFor(room),
         bed_size: bedSizeFor(chosenBeds(room)),
         price_per_night: Math.round(price),
@@ -321,7 +328,9 @@ export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices,
 }
 
 const HOTEL_COLUMNS = ['liteapi_id', 'name', 'description', 'address', 'city', 'region', 'country', 'photo_urls', 'rating', 'latitude', 'longitude', 'tags'] as const
-const ROOM_COLUMNS = ['liteapi_room_id', 'room_type', 'capacity', 'num_beds', 'bed_size', 'price_per_night', 'tags'] as const
+const ROOM_COLUMNS = ['liteapi_room_id', 'room_type', 'capacity', 'max_adults', 'max_children', 'num_beds', 'bed_size', 'price_per_night', 'tags'] as const
+// Postgres types an all-null VALUES column as text, which an integer column won't take
+const ROOM_SELECT = ROOM_COLUMNS.map((column) => (column === 'max_adults' || column === 'max_children' ? `v.${column}::integer` : `v.${column}`)).join(', ')
 
 // Postgres text can't hold NUL. standard_conforming_strings is on, so only quotes need escaping.
 const sqlString = (value: string) => `'${value.replaceAll('\u0000', '').replaceAll("'", "''")}'`
@@ -345,7 +354,7 @@ export function hotelSql(hotel: HotelRow, rooms: RoomRow[]): string {
     `on conflict (liteapi_id) do update set ${updateSet(HOTEL_COLUMNS.filter((column) => column !== 'liteapi_id'))};\n`
   if (rooms.length) {
     sql += `insert into public.rooms (hotel_id, ${ROOM_COLUMNS.join(', ')})\n` +
-      'select h.id, v.* from (values\n' +
+      `select h.id, ${ROOM_SELECT} from (values\n` +
       rooms.map((room) => `  (${ROOM_COLUMNS.map((column) => sqlValue(room[column])).join(', ')})`).join(',\n') +
       `\n) v(${ROOM_COLUMNS.join(', ')})\n` +
       `join public.hotels h on h.liteapi_id = ${sqlString(hotel.liteapi_id)}\n` +

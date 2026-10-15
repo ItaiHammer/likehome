@@ -35,6 +35,8 @@ export async function search(searchParams: SearchRequest, pageOptions?: PageOpti
         check_in: standardizedParams?.dates?.checkIn,
         check_out: standardizedParams?.dates?.checkOut,
         guests: standardizedParams?.guests?.total,
+        adults: standardizedParams?.guests?.adults,
+        children: standardizedParams?.guests?.children,
         min_price: standardizedParams?.price?.min,
         max_price: standardizedParams?.price?.max,
         min_rating: standardizedParams?.rating?.minStars,

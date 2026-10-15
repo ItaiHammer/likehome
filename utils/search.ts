@@ -9,6 +9,8 @@ export async function searchAvailableHotels(filters: {
   check_in?: string; // YYYY-MM-DD
   check_out?: string; // YYYY-MM-DD
   guests?: number;
+  adults?: number;
+  children?: number;
   min_price?: number;
   max_price?: number;
   min_rating?: number;
@@ -33,6 +35,8 @@ export async function searchAvailableHotels(filters: {
     p_check_in: filters.check_in ?? null,
     p_check_out: filters.check_out ?? null,
     p_guests: filters.guests ?? null,
+    p_adults: filters.adults ?? null,
+    p_children: filters.children ?? null,
     p_min_price: filters.min_price ?? null,
     p_max_price: filters.max_price ?? null,
     p_min_rating: filters.min_rating ?? null,

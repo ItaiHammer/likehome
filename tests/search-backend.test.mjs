@@ -119,6 +119,8 @@ describe('Search Module Integration', () => {
                 check_in: getDateFromToday(0),
                 check_out: getDateFromToday(1),
                 guests: 4, // 2 adults + 2 children total
+                adults: 2,
+                children: 2,
                 min_price: 150,
                 max_price: 400,
                 min_rating: 4,
@@ -159,6 +161,8 @@ describe('Search Module Integration', () => {
                 check_in: undefined,
                 check_out: undefined,
                 guests: undefined,
+                adults: undefined,
+                children: undefined,
                 min_price: undefined,
                 max_price: undefined,
                 min_rating: undefined,

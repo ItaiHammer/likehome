@@ -1,7 +1,13 @@
-DROP FUNCTION IF EXISTS public.search_hotels(text, text, text, date, date, integer, numeric, numeric, text, integer, integer);
+begin;
 
-CREATE OR REPLACE FUNCTION public.search_hotels(p_query text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_region text DEFAULT NULL::text, p_country text DEFAULT NULL::text, p_check_in date DEFAULT NULL::date, p_check_out date DEFAULT NULL::date, p_guests integer DEFAULT NULL::integer, p_min_price numeric DEFAULT NULL::numeric, p_max_price numeric DEFAULT NULL::numeric, p_min_rating numeric DEFAULT NULL::numeric, p_num_beds integer DEFAULT NULL::integer, p_bed_size text DEFAULT NULL::text, p_tags text[] DEFAULT NULL::text[], p_sort text DEFAULT 'recommended'::text, p_limit integer DEFAULT 21, p_offset integer DEFAULT 0)
- RETURNS TABLE(id uuid, name text, description text, address text, city text, region text, country text, photo_urls text[], min_price numeric, max_capacity bigint, available_rooms bigint, total_count bigint)
+-- Every earlier signature, and this one so the file can be pasted twice. If an old one stayed next to the new
+-- one, PostgREST couldn't choose between them.
+DROP FUNCTION IF EXISTS public.search_hotels(text, text, text, date, date, integer, numeric, numeric, text, integer, integer);
+DROP FUNCTION IF EXISTS public.search_hotels(text, text, text, text, date, date, integer, numeric, numeric, numeric, integer, text, text[], text, integer, integer);
+DROP FUNCTION IF EXISTS public.search_hotels(text, text, text, text, date, date, integer, integer, integer, numeric, numeric, numeric, integer, text, text[], text, integer, integer);
+
+CREATE FUNCTION public.search_hotels(p_query text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_region text DEFAULT NULL::text, p_country text DEFAULT NULL::text, p_check_in date DEFAULT NULL::date, p_check_out date DEFAULT NULL::date, p_guests integer DEFAULT NULL::integer, p_adults integer DEFAULT NULL::integer, p_children integer DEFAULT NULL::integer, p_min_price numeric DEFAULT NULL::numeric, p_max_price numeric DEFAULT NULL::numeric, p_min_rating numeric DEFAULT NULL::numeric, p_num_beds integer DEFAULT NULL::integer, p_bed_size text DEFAULT NULL::text, p_tags text[] DEFAULT NULL::text[], p_sort text DEFAULT 'recommended'::text, p_limit integer DEFAULT 21, p_offset integer DEFAULT 0)
+ RETURNS TABLE(id uuid, name text, description text, address text, city text, region text, country text, photo_urls text[], min_price numeric, max_capacity bigint, available_rooms bigint, total_count bigint, liteapi_id text)
  LANGUAGE sql
  STABLE SECURITY DEFINER
  SET search_path TO ''
@@ -11,6 +17,9 @@ AS $function$
     from public.rooms rm
     join public.hotels h on h.id = rm.hotel_id
     where (p_guests is null    or rm.capacity >= p_guests)
+      -- NULL limits (owner and seeded rooms, and LiteAPI rooms listed as 0/0) leave only the capacity
+      and (p_adults is null    or rm.max_adults is null   or rm.max_adults >= p_adults)
+      and (p_children is null  or rm.max_children is null or rm.max_children >= p_children)
       and (p_min_price is null or rm.price_per_night >= p_min_price)
       and (p_max_price is null or rm.price_per_night <= p_max_price)
       and (p_num_beds is null  or rm.num_beds >= p_num_beds)
@@ -34,7 +43,7 @@ AS $function$
   )
   select h.id, h.name, h.description, h.address, h.city, h.region, h.country,
          h.photo_urls, ph.min_price, ph.max_capacity, ph.available_rooms,
-         count(*) over () as total_count
+         count(*) over () as total_count, h.liteapi_id
   from public.hotels h
   join per_hotel ph on ph.hotel_id = h.id
   where (p_query is null
@@ -51,4 +60,9 @@ AS $function$
     case when p_sort = 'price-high' then ph.min_price end desc,
     h.created_at desc
   limit least(p_limit, 100) offset p_offset;
-$function$
+$function$;
+
+GRANT EXECUTE ON FUNCTION public.search_hotels(text, text, text, text, date, date, integer, integer, integer, numeric, numeric, numeric, integer, text, text[], text, integer, integer) TO anon, authenticated;
+
+commit;
+notify pgrst, 'reload schema';

@@ -11,6 +11,8 @@ export type Room = {
   nightly: number;
   soldOut?: boolean;
   /** Database rooms only: what the search filters check per room */
+  maxAdults?: number | null;
+  maxChildren?: number | null;
   beds?: number;
   bedSize?: string | null;
   tags?: string[];
