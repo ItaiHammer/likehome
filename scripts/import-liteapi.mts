@@ -347,7 +347,9 @@ async function main(options: Options) {
     for (const item of report.imported.slice(0, 2)) console.log(JSON.stringify(item, null, 2))
   } else if (sqlOut !== null) {
     const header = `-- LiteAPI import for ${options.cities.join(', ')}, generated ${new Date().toISOString()}.\n` +
-      '-- Run supabase/migrations/liteapi_hotels.sql first. Safe to re-run: rows are updated in place and rooms are never deleted.\n'
+      '-- Run supabase/migrations/liteapi_hotels.sql first. Safe to re-run: rows are updated in place and rooms are never deleted.\n' +
+      '-- Do not paste it over newer data (a later import or sync): its hotels would go back to this copy, and any LiteAPI\n' +
+      '-- removed since would show in search again.\n'
     const sql = `${header}begin;\n\n${report.imported.map((item) => hotelSql(item.hotel, item.rooms)).join('\n')}\ncommit;\n`
     fs.mkdirSync(path.dirname(sqlOut), { recursive: true })
     fs.writeFileSync(sqlOut, sql)

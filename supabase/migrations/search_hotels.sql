@@ -1,5 +1,6 @@
--- Paste after liteapi_hotels.sql (this reads rooms.max_adults, rooms.max_children and hotels.liteapi_id), and before
--- the code that sends p_adults / p_children deploys: PostgREST finds the function by its argument names.
+-- Paste after liteapi_hotels.sql (this reads rooms.max_adults, rooms.max_children, hotels.liteapi_id and
+-- hotels.liteapi_deleted_at), and before the code that sends p_adults / p_children deploys: PostgREST finds the
+-- function by its argument names.
 begin;
 
 -- Every earlier signature, and this one so the file can be pasted twice. If an old one stayed next to the new
