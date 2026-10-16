@@ -24,7 +24,7 @@ const fetchMock = mock.method(globalThis, 'fetch', async () => json({ data: [] }
 const warn = mock.method(console, 'warn', () => {})
 const urlOf = (call = 0) => new URL(fetchMock.mock.calls[call].arguments[0])
 
-const PARIS = { placeId: 'ChIJparis', displayName: 'Paris', formattedAddress: 'France', types: ['locality'] }
+const PARIS = { placeId: 'ChIJparis', displayName: 'Paris', formattedAddress: 'France', types: ['political', 'geocode', 'locality'] }
 
 beforeEach(() => {
   __clearCatalogCache()
@@ -46,6 +46,21 @@ test('placeSuggestions asks /data/places once per text and skips one-letter text
 
   assert.deepEqual(await placeSuggestions('P'), [])
   assert.equal(fetchMock.mock.callCount(), 1)
+})
+
+test('streets, buildings and businesses are not suggested', async () => {
+  fetchMock.mock.mockImplementation(async () => json({
+    data: [
+      { placeId: 'street', displayName: 'Benderson Drive', types: ['geocode', 'route'] },
+      { placeId: 'shop', displayName: 'Benderson Co', types: ['point_of_interest', 'establishment'] },
+      { placeId: 'bend', displayName: 'Bend', types: ['geocode', 'locality', 'political'] },
+      { placeId: 'jfk', displayName: 'JFK', types: ['establishment', 'airport'] },
+      { placeId: 'terminal', displayName: 'JFK Terminal 5', types: ['geocode', 'premise'] },
+      { placeId: 'untyped', displayName: 'Somewhere' },
+    ],
+  }))
+  assert.deepEqual((await placeSuggestions('bend')).map((p) => p.placeId), ['bend', 'jfk', 'untyped'])
+  assert.equal((await findPlace('bend')).placeId, 'bend')
 })
 
 test('a failed call is not remembered', async () => {

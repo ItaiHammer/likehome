@@ -171,6 +171,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               initialMode={aiPrompt ? "ai" : "standard"}
               initialValues={{
                 where: params.where,
+                place: params.place,
                 checkIn: params.checkIn,
                 checkOut: params.checkOut,
                 adults: positiveInt(params.adults, 2),

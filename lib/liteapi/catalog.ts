@@ -56,12 +56,18 @@ async function get<T>(path: string): Promise<T | null> {
 
 export const catalogEnabled = () => Boolean(process.env.LITEAPI_KEY)
 
+// Towns, regions, countries, airports and sights are destinations; streets, buildings and businesses aren't
+const DESTINATION_TYPES = ['political', 'airport', 'tourist_attraction', 'natural_feature', 'park']
+const isDestination = (place: LitePlace) => !place.types?.length || place.types.some((type) => DESTINATION_TYPES.includes(type))
+
 export async function placeSuggestions(text: string): Promise<LitePlace[]> {
   const query = text.trim().replace(/\s+/g, ' ').slice(0, 100)
   if (query.length < 2) return []
   const places = await remember(`places|${query.toLowerCase()}`, DAY, async () => {
     const body = await get<{ data?: LitePlace[] }>(`/data/places?${new URLSearchParams({ textQuery: query })}`)
-    return Array.isArray(body?.data) ? body.data.filter((place) => typeof place?.placeId === 'string' && place.placeId !== '') : null
+    return Array.isArray(body?.data)
+      ? body.data.filter((place) => typeof place?.placeId === 'string' && place.placeId !== '' && isDestination(place))
+      : null
   })
   return places ?? []
 }
