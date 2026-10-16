@@ -61,10 +61,13 @@ export function RoomOptions({
               {/* LiteAPI quotes these for the whole stay, apart from the nightly price */}
               {!off && !!r.dueAtProperty && <p className="text-sm text-slate">Plus {money(r.dueAtProperty)} in hotel fees at the property</p>}
             </div>
-            <div className="shrink-0 text-right">
-              <p className={`text-base font-semibold ${off ? "text-slate line-through" : "text-ink"}`}>{money(r.nightly)}</p>
-              <p className="text-sm text-slate">per night</p>
-            </div>
+            {/* A sold-out LiteAPI room has no live quote, and its stored price is only a sample */}
+            {!(off && r.liteapiRoomId) && (
+              <div className="shrink-0 text-right">
+                <p className={`text-base font-semibold ${off ? "text-slate line-through" : "text-ink"}`}>{money(r.nightly)}</p>
+                <p className="text-sm text-slate">per night</p>
+              </div>
+            )}
             <span
               aria-hidden
               className={`hidden h-[46px] w-28 shrink-0 items-center justify-center rounded-control text-base font-semibold sm:inline-flex ${
