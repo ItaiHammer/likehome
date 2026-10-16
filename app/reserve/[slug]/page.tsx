@@ -1,7 +1,9 @@
 import { cookies } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { partyOf } from "@/lib/liteapi/party";
+import { isLiteapiId, saveLiteapiHotel } from "@/lib/liteapi/save";
+import { savedHotelId } from "@/utils/liteapi-hotels";
 import { getOtherStays } from "@/lib/other-stays";
 import { matchingRoom, originalSearch, readRoomFilters } from "@/lib/stay-filters";
 import { countNights, MAX_NIGHTS, parseDate, todayUTC } from "@/utils/reservation-logic";
@@ -53,6 +55,15 @@ function readStayDates(params: SearchParams): StayDates {
   };
 }
 
+function queryOf(params: SearchParams): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    for (const item of [value ?? []].flat()) query.append(key, item);
+  }
+  const text = query.toString();
+  return text ? `?${text}` : "";
+}
+
 function readChoices(params: SearchParams, stay: Stay, dates: StayDates): StayChoices {
   const { adults, children } = dates;
   // Without a picked room, the cheapest one that passes the search's filters, as the search matched it
@@ -65,17 +76,26 @@ function readChoices(params: SearchParams, stay: Stay, dates: StayDates): StayCh
 
 export async function generateMetadata(props: PageProps<"/reserve/[slug]">) {
   const { slug } = await props.params;
+  // The page saves this one and moves on to its own id, so there's no stay to name yet
+  if (isLiteapiId(slug)) return { title: "Opening stay… — LikeHome" };
   const stay = await findStay(slug);
   return { title: stay ? `Reserve ${stay.name} — LikeHome` : "Stay not found — LikeHome" };
 }
 
 export default async function ReservePage(props: PageProps<"/reserve/[slug]">) {
   const { slug } = await props.params;
-  const stay = await findStay(slug);
-  if (!stay) notFound();
-
   const params = await props.searchParams;
   const d = readStayDates(params);
+  // A search result LiteAPI listed but nobody had opened yet: save it, then show it under its own id
+  if (isLiteapiId(slug)) {
+    const stay = d.checkIn && d.checkOut ? { checkIn: d.checkIn, checkOut: d.checkOut } : undefined;
+    const id = (await savedHotelId(slug)) ?? (await saveLiteapiHotel(slug, stay));
+    if (!id) notFound();
+    redirect(`/reserve/${id}${queryOf(params)}`);
+  }
+
+  const stay = await findStay(slug);
+  if (!stay) notFound();
   const priced =
     d.checkIn && d.checkOut && stay.liteapiId
       ? await withLiveRoomPrices(stay, { checkIn: d.checkIn, checkOut: d.checkOut, ...partyOf(d.adults ?? 2, d.children ?? 0) })

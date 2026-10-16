@@ -1,8 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  autoSince, bedSizeFor, capacityFor, hotelListQuery, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, parseSince, planSync,
-  removedAt, rfc3339, roomRowsFor, roomTagsFor, sameCity, samplePricesFor, savedTarget, stripHtml, typicalPrices, unmappedFacilities,
+  autoSince, bedSizeFor, capacityFor, countryName, hotelListQuery, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, parseSince,
+  planSync, removedAt, rfc3339, roomRowsFor, roomTagsFor, sameCity, samplePricesFor, savedTarget, stripHtml, summaryOf, targetFor,
+  typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import { tags as filterTags } from '../app/search/types.ts'
 
@@ -590,4 +591,23 @@ test('a saved hotel refreshed by id keeps the location it was saved with', () =>
   assert.deepEqual([row.city, row.region, row.country], ['Paris', null, 'France'])
   assert.deepEqual(savedTarget({ liteapi_id: 'lp9', city: null, region: null, country: null }),
     { countryCode: '', cityName: '', city: '', region: null, country: '' })
+})
+
+test('targetFor stores the US as USA with the state from the zip, and other countries by name', () => {
+  assert.deepEqual(targetFor(detail({ city: 'Bend', country: 'US', zip: 'OR 97701' })),
+    { countryCode: 'US', cityName: 'Bend', city: 'Bend', region: 'Oregon', country: 'USA' })
+  assert.equal(targetFor(detail({ city: 'Bend', country: 'us', zip: '97701' })).region, null, 'no state in the zip')
+  assert.equal(targetFor(detail({ city: 'X', country: 'US', zip: 'ZZ 1' })).region, null, 'not a state')
+  assert.deepEqual(targetFor(detail({ city: ' Paris ', country: 'FR', zip: '75006' })),
+    { countryCode: 'FR', cityName: 'Paris', city: 'Paris', region: null, country: 'France' })
+  assert.deepEqual(targetFor(detail()), { countryCode: '', cityName: '', city: '', region: null, country: '' })
+  assert.equal(countryName('jp'), 'Japan')
+})
+
+test('summaryOf fills the summary hotelRowFor reads from the details', () => {
+  const s = summaryOf(detail({ city: 'Paris', country: 'FR', location: { latitude: 48.8, longitude: 2.3 }, starRating: 4, main_photo: 'p.jpg' }))
+  assert.equal(hotelRowFor(targetFor(detail({ city: 'Paris', country: 'FR' })), s, detail()).latitude, 48.8)
+  assert.deepEqual([s.id, s.city, s.country, s.stars, s.main_photo], ['lp1', 'Paris', 'FR', 4, 'p.jpg'])
+  assert.ok(Number.isNaN(summaryOf(detail()).latitude), 'no location is NaN, which hotelRowFor stores as null')
+  assert.equal(hotelRowFor(targetFor(detail()), summaryOf(detail()), detail()).latitude, null)
 })

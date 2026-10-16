@@ -346,6 +346,55 @@ function photosFor(s: LiteHotelSummary, d: LiteHotelDetail): string[] {
   return [d.main_photo, s.main_photo].map((url) => (url ?? '').trim()).filter(Boolean).slice(0, 1)
 }
 
+const US_STATES: Record<string, string> = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut',
+  DE: 'Delaware', DC: 'District of Columbia', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois',
+  IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana',
+  NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York',
+  NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania',
+  RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah',
+  VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+}
+
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' })
+
+/** English name for a 2-letter country code ("FR" → "France"), or the code itself when there's none */
+export function countryName(code: string): string {
+  try {
+    return regionNames.of(code.toUpperCase()) ?? code
+  } catch {
+    return code
+  }
+}
+
+// A hotel saved from a live search is stored the way the import stores its cities and search_hotels matches them:
+// the US as "USA" with the full state name (LiteAPI gives the state only at the front of the zip), others by name
+export function targetFor(d: LiteHotelDetail): Target {
+  const code = (d.country ?? '').trim().toUpperCase()
+  const city = (d.city ?? '').trim()
+  if (code === 'US') {
+    const state = /^([A-Z]{2})\b/.exec((d.zip ?? '').trim())?.[1]
+    return { countryCode: code, cityName: city, city, region: (state && US_STATES[state]) || null, country: 'USA' }
+  }
+  return { countryCode: code, cityName: city, city, region: null, country: code ? countryName(code) : '' }
+}
+
+export function summaryOf(d: LiteHotelDetail): LiteHotelSummary {
+  return {
+    id: d.id,
+    name: d.name,
+    country: d.country ?? '',
+    city: d.city ?? '',
+    latitude: Number(d.location?.latitude),
+    longitude: Number(d.location?.longitude),
+    hotelDescription: d.hotelDescription,
+    address: d.address,
+    main_photo: d.main_photo,
+    stars: d.starRating,
+  }
+}
+
 export function hotelRowFor(
   target: Target, s: LiteHotelSummary, d: LiteHotelDetail, offers?: LiteOffer[], rooms?: LiteRoom[], syncedAt = new Date().toISOString(),
 ): HotelRow {

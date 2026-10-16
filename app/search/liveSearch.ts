@@ -1,21 +1,8 @@
-import { listingTagsFor, listsAdultsOnly, stripHtml } from '../../lib/liteapi/import-mapping.ts';
+import { countryName, listingTagsFor, listsAdultsOnly, stripHtml } from '../../lib/liteapi/import-mapping.ts';
 import type { LiteHotelListing } from '../../lib/liteapi/types.ts';
 import { sortByPrice } from './livePrices.ts';
 import type { HotelSearchResult } from './components/SearchResultCard';
 import type { PropertyFilter } from './types.ts';
-
-const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
-
-function countryName(code: string | undefined): string | null {
-    if (!code) {
-        return null;
-    }
-    try {
-        return regionNames.of(code.toUpperCase()) ?? code;
-    } catch {
-        return code;
-    }
-}
 
 export function listingRow(hotel: LiteHotelListing, names: Map<number, string>): HotelSearchResult {
     return {
@@ -24,7 +11,7 @@ export function listingRow(hotel: LiteHotelListing, names: Map<number, string>):
         description: stripHtml(hotel.hotelDescription ?? ''),
         address: hotel.address ?? null,
         city: hotel.city || null,
-        country: countryName(hotel.country),
+        country: hotel.country ? countryName(hotel.country) : null,
         photo_urls: hotel.main_photo ? [hotel.main_photo] : [],
         rating: typeof hotel.stars === 'number' && hotel.stars > 0 ? hotel.stars : null,
         tags: listingTagsFor(hotel.facilityIds, names),
