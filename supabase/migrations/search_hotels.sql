@@ -5,8 +5,9 @@ begin;
 DROP FUNCTION IF EXISTS public.search_hotels(text, text, text, date, date, integer, numeric, numeric, text, integer, integer);
 DROP FUNCTION IF EXISTS public.search_hotels(text, text, text, text, date, date, integer, numeric, numeric, numeric, integer, text, text[], text, integer, integer);
 DROP FUNCTION IF EXISTS public.search_hotels(text, text, text, text, date, date, integer, integer, integer, numeric, numeric, numeric, integer, text, text[], text, integer, integer);
+DROP FUNCTION IF EXISTS public.search_hotels(text, text, text, text, date, date, integer, integer, integer, numeric, numeric, numeric, integer, text, text[], text, integer, integer, text[]);
 
-CREATE FUNCTION public.search_hotels(p_query text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_region text DEFAULT NULL::text, p_country text DEFAULT NULL::text, p_check_in date DEFAULT NULL::date, p_check_out date DEFAULT NULL::date, p_guests integer DEFAULT NULL::integer, p_adults integer DEFAULT NULL::integer, p_children integer DEFAULT NULL::integer, p_min_price numeric DEFAULT NULL::numeric, p_max_price numeric DEFAULT NULL::numeric, p_min_rating numeric DEFAULT NULL::numeric, p_num_beds integer DEFAULT NULL::integer, p_bed_size text DEFAULT NULL::text, p_tags text[] DEFAULT NULL::text[], p_sort text DEFAULT 'recommended'::text, p_limit integer DEFAULT 21, p_offset integer DEFAULT 0)
+CREATE FUNCTION public.search_hotels(p_query text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_region text DEFAULT NULL::text, p_country text DEFAULT NULL::text, p_check_in date DEFAULT NULL::date, p_check_out date DEFAULT NULL::date, p_guests integer DEFAULT NULL::integer, p_adults integer DEFAULT NULL::integer, p_children integer DEFAULT NULL::integer, p_min_price numeric DEFAULT NULL::numeric, p_max_price numeric DEFAULT NULL::numeric, p_min_rating numeric DEFAULT NULL::numeric, p_num_beds integer DEFAULT NULL::integer, p_bed_size text DEFAULT NULL::text, p_tags text[] DEFAULT NULL::text[], p_sort text DEFAULT 'recommended'::text, p_limit integer DEFAULT 21, p_offset integer DEFAULT 0, p_liteapi_ids text[] DEFAULT NULL::text[])
  RETURNS TABLE(id uuid, name text, description text, address text, city text, region text, country text, photo_urls text[], min_price numeric, max_capacity bigint, available_rooms bigint, total_count bigint, liteapi_id text)
  LANGUAGE sql
  STABLE SECURITY DEFINER
@@ -52,14 +53,16 @@ AS $function$
          count(*) over () as total_count, h.liteapi_id
   from public.hotels h
   join per_hotel ph on ph.hotel_id = h.id
-  where (p_query is null
-         or h.name        ilike '%' || p_query || '%'
-         or h.city        ilike '%' || p_query || '%'
-         or h.region      ilike '%' || p_query || '%'
-         or h.description ilike '%' || p_query || '%')
-    and (p_city is null       or h.city    ilike p_city)
-    and (p_region is null     or h.region  ilike p_region)
-    and (p_country is null    or h.country ilike p_country)
+  -- p_liteapi_ids: hotels LiteAPI lists for the searched place, which may be saved under another city name
+  where ((p_liteapi_ids is not null and h.liteapi_id = any(p_liteapi_ids))
+         or ((p_query is null
+              or h.name        ilike '%' || p_query || '%'
+              or h.city        ilike '%' || p_query || '%'
+              or h.region      ilike '%' || p_query || '%'
+              or h.description ilike '%' || p_query || '%')
+             and (p_city is null    or h.city    ilike p_city)
+             and (p_region is null  or h.region  ilike p_region)
+             and (p_country is null or h.country ilike p_country)))
     and (p_min_rating is null or h.rating >= p_min_rating)
     and h.liteapi_deleted_at is null
   order by
@@ -70,7 +73,7 @@ AS $function$
   limit least(p_limit, 100) offset p_offset;
 $function$;
 
-GRANT EXECUTE ON FUNCTION public.search_hotels(text, text, text, text, date, date, integer, integer, integer, numeric, numeric, numeric, integer, text, text[], text, integer, integer) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.search_hotels(text, text, text, text, date, date, integer, integer, integer, numeric, numeric, numeric, integer, text, text[], text, integer, integer, text[]) TO anon, authenticated;
 
 commit;
 notify pgrst, 'reload schema';

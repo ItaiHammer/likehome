@@ -6,7 +6,7 @@ import { bedSizes, propertyAmenities, roomAmenities, tags as filterTags, travele
 import type { Offer } from '../app/_data/stays.ts'
 
 // The search's own keys, carried from a search result to the stay page and back to the same search
-const SEARCH_KEYS = ['where', 'checkIn', 'checkOut', 'adults', 'children', 'minPrice', 'maxPrice', 'minRating', 'numBeds', 'bedSize', 'tags', 'sort', 'page']
+const SEARCH_KEYS = ['where', 'place', 'checkIn', 'checkOut', 'adults', 'children', 'minPrice', 'maxPrice', 'minRating', 'numBeds', 'bedSize', 'tags', 'sort', 'page']
 
 type Params = Record<string, string | string[] | undefined>
 

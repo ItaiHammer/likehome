@@ -314,6 +314,20 @@ export function hotelTagsFor(d: LiteHotelDetail, offers: LiteOffer[] | undefined
   return inTagOrder(found)
 }
 
+export const listsAdultsOnly = (facilityIds: number[] | undefined) => (facilityIds ?? []).includes(ADULT_ONLY)
+
+// The hotel list has facility ids and no rooms, so 149 alone marks a hotel adults-only there
+export function listingTagsFor(facilityIds: number[] | undefined, names: Map<number, string>): Tag[] {
+  const ids = facilityIds ?? []
+  const found = new Set(hotelTagsFor({ id: '', name: '', facilities: ids.map((id) => ({ facilityId: id, name: names.get(id) ?? '' })) }, undefined, []))
+  if (listsAdultsOnly(ids)) {
+    found.delete('Kids')
+    found.delete('Families')
+    found.add('Couples')
+  }
+  return inTagOrder(found)
+}
+
 const finiteOrNull = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null)
 
 // Star class, never the 0-10 review score: hotels.rating is a 0..5 star rating

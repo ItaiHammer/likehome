@@ -23,12 +23,14 @@ export type PageOptions = {
     pageSize?: number;
 };
 
-export async function search(searchParams: SearchRequest, pageOptions?: PageOptions): Promise<SearchResponse> {
+// liteapiIds: the hotels LiteAPI lists for the searched place, matched whatever city they're saved under
+export async function search(searchParams: SearchRequest, pageOptions?: PageOptions, liteapiIds?: string[]): Promise<SearchResponse> {
     const standardizedParams = getSearchParams(searchParams);
 
     const result = await searchAvailableHotels({
         ...(pageOptions?.page !== undefined && { page: pageOptions.page }),
         ...(pageOptions?.pageSize !== undefined && { page_size: pageOptions.pageSize }),
+        ...(liteapiIds?.length && { liteapi_ids: liteapiIds }),
         city: standardizedParams?.location?.city,
         region: standardizedParams?.location?.region,
         country: toStoredCountry(standardizedParams?.location?.country),

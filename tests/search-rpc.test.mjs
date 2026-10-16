@@ -48,3 +48,12 @@ test('adults and children reach search_hotels as p_adults and p_children', async
   await searchAvailableHotels({ guests: 2, adults: 2, children: 0 })
   assert.equal(argsOfCall().p_children, 0, 'no children is a real 0, not null')
 })
+
+test('LiteAPI ids are sent only when there are some', async () => {
+  await searchAvailableHotels({ liteapi_ids: ['lp1', 'lp2'] })
+  assert.deepEqual(argsOfCall().p_liteapi_ids, ['lp1', 'lp2'])
+
+  rpc.mock.resetCalls()
+  await searchAvailableHotels({ liteapi_ids: [] })
+  assert.equal('p_liteapi_ids' in argsOfCall(), false)
+})
