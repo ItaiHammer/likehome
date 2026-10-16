@@ -283,6 +283,28 @@ test('samplePricesFor keeps the cheapest priced offer per mapped room and skips 
   assert.equal(samplePricesFor([{ offerId: 'o', rates: [{ retailRate: { total: usd(240) } }] }], 2).cheapest, 120, 'money as an object')
 })
 
+test('the stored price is never below the suggested selling price', () => {
+  const ssp = (total, suggested, rate = {}) => offer(total, {}, { retailRate: { total: [usd(total)], suggestedSellingPrice: [{ ...usd(suggested), source: '' }] }, ...rate })
+  const sample = samplePricesFor([
+    // The sandbox probe: retail 289.05, SSP 332.41
+    ssp(289.05, 332.41, { mappedRoomId: 1 }),
+    ssp(300, 250, { mappedRoomId: 2 }),
+    offer(280, {}, { mappedRoomId: 3 }),
+    offer(270, {}, { mappedRoomId: 4, retailRate: { total: [usd(270)], suggestedSellingPrice: [{ amount: 400, currency: 'EUR' }] } }),
+    offer(260, {}, { mappedRoomId: 5, retailRate: { total: [usd(260)], suggestedSellingPrice: usd(310) } }),
+  ], 2)
+  assert.deepEqual([...sample.byRoom], [['1', 332.41 / 2], ['2', 150], ['3', 140], ['4', 135], ['5', 155]])
+  // The cheapest is picked on the price stored, so the SSP can reorder offers
+  assert.equal(sample.cheapest, 135)
+  const raised = samplePricesFor([ssp(200, 320, { name: 'Twin Room' }), offer(300, {}, { name: 'Twin Room' })])
+  assert.equal(raised.cheapest, 300)
+  assert.equal(raised.byName.get('twinroom'), 300)
+  const twoRooms = { offerId: 'two', rates: [ssp(100, 120).rates[0], ssp(100, 90).rates[0]] }
+  assert.equal(samplePricesFor([twoRooms]).cheapest, 220, 'each rate is raised on its own')
+  const rows = roomRowsFor([room(1)], samplePricesFor([ssp(289.05, 332.41, { mappedRoomId: 1 })]))
+  assert.deepEqual(rows.map((r) => r.price_per_night), [332])
+})
+
 test('hotelRowFor takes the location from the target and stars for the rating', () => {
   const row = hotelRowFor(SF, summary({ stars: 4.5, hotelDescription: '<p>Summary</p>' }), detail({
     hotelDescription: '<p>Great <b>views</b></p><p>Tom&#39;s pick</p>', address: '1 Main St', starRating: 3, rating: 9.1,

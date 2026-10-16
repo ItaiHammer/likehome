@@ -205,16 +205,20 @@ function refusesPets(d: LiteHotelDetail): boolean {
     policy.description.toLowerCase().split(/[.!\n]/).some((sentence) => NO_PETS.test(sentence.replace(/\s+/g, ' ').trim())))
 }
 
-const moneyOf = (total: unknown) => (Array.isArray(total) ? total[0] : total) as { amount?: unknown; currency?: unknown } | null | undefined
+function usdAmount(value: unknown): number | null {
+  const money = (Array.isArray(value) ? value[0] : value) as { amount?: unknown; currency?: unknown } | null | undefined
+  return money?.currency === 'USD' && typeof money.amount === 'number' && Number.isFinite(money.amount) ? money.amount : null
+}
 
-// Placeholder and package offers come with a null total; those, and non-USD ones, are not prices
+// Placeholder and package offers come with a null total; those, and non-USD ones, are not prices.
+// LiteAPI's terms: a public page may not sell below the suggested selling price (SSP), so each rate is the higher of the two.
 function offerTotal(offer: LiteOffer): number | null {
   if (!offer?.offerId || !Array.isArray(offer.rates) || offer.rates.length === 0) return null
   let total = 0
   for (const rate of offer.rates) {
-    const money = moneyOf(rate?.retailRate?.total)
-    if (!money || money.currency !== 'USD' || typeof money.amount !== 'number' || !Number.isFinite(money.amount)) return null
-    total += money.amount
+    const amount = usdAmount(rate?.retailRate?.total)
+    if (amount === null) return null
+    total += Math.max(amount, usdAmount(rate.retailRate?.suggestedSellingPrice) ?? 0)
   }
   return total > 0 ? total : null
 }

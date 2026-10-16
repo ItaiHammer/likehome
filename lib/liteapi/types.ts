@@ -67,6 +67,8 @@ export interface LiteRate {
   mappedRoomId?: number | string
   retailRate?: {
     total?: LiteMoney[] | LiteMoney | null
+    /** The lowest price the offer may be shown at publicly */
+    suggestedSellingPrice?: LiteMoney[] | LiteMoney | null
     taxesAndFees?: { included: boolean; amount: number; currency: string; description?: string }[] | null
   }
   cancellationPolicies?: { refundableTag?: 'RFN' | 'NRFN' } | null
