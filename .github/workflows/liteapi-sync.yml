@@ -1,10 +1,10 @@
-# Nightly LiteAPI refresh of the shared Supabase hotels: updates changed hotels, hides deleted ones, adds a few new ones.
+# LiteAPI refresh of the shared Supabase hotels every 3 hours: updates changed hotels, hides deleted ones, adds a few new ones.
 name: LiteAPI sync
 
 on:
   schedule:
-    # 10:17 UTC = 3:17am PDT / 2:17am PST, off the hour when scheduled runs pile up
-    - cron: '17 10 * * *'
+    # At :17 past every third hour (UTC), off the hour when scheduled runs pile up
+    - cron: '17 */3 * * *'
   workflow_dispatch:
     inputs:
       since:
