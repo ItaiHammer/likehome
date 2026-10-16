@@ -4,7 +4,9 @@ begin;
 alter table public.hotels
   add column if not exists liteapi_id text unique,          -- e.g. 'lp1897'; creates constraint hotels_liteapi_id_key (NULLs never collide)
   add column if not exists latitude  double precision,
-  add column if not exists longitude double precision;
+  add column if not exists longitude double precision,
+  add column if not exists liteapi_deleted_at timestamptz,  -- set when LiteAPI reports the hotel deleted; search_hotels hides it
+  add column if not exists liteapi_synced_at  timestamptz;  -- when an import run last wrote this hotel
 
 -- Listings are written with the owner's own session, so an owner could otherwise set liteapi_id, and the
 -- import's upsert would then merge a LiteAPI hotel into their row and leave them as its owner.

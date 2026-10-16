@@ -310,6 +310,15 @@ test('hotelRowFor takes the location from the target and stars for the rating', 
   assert.deepEqual([fallback.latitude, fallback.longitude, fallback.address, fallback.description], [1.5, 2.5, '2 Side St', ''])
 })
 
+test('hotelRowFor marks the hotel listed again and synced at the given time, or now', () => {
+  const row = hotelRowFor(SF, summary(), detail(), [], undefined, '2026-10-15T08:00:00.000Z')
+  assert.equal(row.liteapi_deleted_at, null)
+  assert.equal(row.liteapi_synced_at, '2026-10-15T08:00:00.000Z')
+  const before = Date.now()
+  const synced = Date.parse(hotelRowFor(SF, summary(), detail()).liteapi_synced_at)
+  assert.ok(synced >= before && synced <= Date.now())
+})
+
 test('hotelRowFor puts the default image first, prefers HD, removes duplicates and keeps 12', () => {
   const hotelImages = [
     { url: 'a.jpg', order: 2 },
@@ -388,13 +397,14 @@ test('unmappedFacilities lists the names no rule matched, leaving out adults-onl
 })
 
 test('hotelSql writes idempotent upserts with escaped strings and text arrays', () => {
-  const hotel = hotelRowFor(SF, summary({ stars: 4 }), detail({ name: "Tom's Inn", facilities: [{ facilityId: 1, name: 'Free WiFi' }] }))
+  const hotel = hotelRowFor(SF, summary({ stars: 4 }), detail({ name: "Tom's Inn", facilities: [{ facilityId: 1, name: 'Free WiFi' }] }), [], undefined,
+    '2026-10-15T08:00:00.000Z')
   const rooms = roomRowsFor([room(7, { roomName: "King's Room" }), room(8, { bedTypes: [], maxAdults: 2, maxChildren: 1 })], samplePricesFor([offer(120)]))
   const sql = hotelSql(hotel, rooms)
-  assert.match(sql, /insert into public\.hotels \(liteapi_id, name, description, address, city, region, country, photo_urls, rating, latitude, longitude, tags\)/)
-  assert.match(sql, /values \('lp1', 'Tom''s Inn', '', '', 'San Francisco', 'California', 'USA', array\[\]::text\[\], 4, 37\.78, -122\.41, array\['Free Wi-Fi'\]::text\[\]\)/)
-  assert.match(sql, /on conflict \(liteapi_id\) do update set name = excluded\.name, .*tags = excluded\.tags;/)
-  assert.ok(!/excluded\.liteapi_id|owner_id|delete/i.test(sql))
+  assert.match(sql, /insert into public\.hotels \(liteapi_id, name, description, address, city, region, country, photo_urls, rating, latitude, longitude, tags, liteapi_deleted_at, liteapi_synced_at\)/)
+  assert.match(sql, /values \('lp1', 'Tom''s Inn', '', '', 'San Francisco', 'California', 'USA', array\[\]::text\[\], 4, 37\.78, -122\.41, array\['Free Wi-Fi'\]::text\[\], null, '2026-10-15T08:00:00\.000Z'\)/)
+  assert.match(sql, /on conflict \(liteapi_id\) do update set name = excluded\.name, .*tags = excluded\.tags, liteapi_deleted_at = excluded\.liteapi_deleted_at, liteapi_synced_at = excluded\.liteapi_synced_at;/)
+  assert.ok(!/excluded\.liteapi_id|owner_id|\bdelete\b/i.test(sql))
   assert.match(sql, /insert into public\.rooms \(hotel_id, liteapi_room_id, room_type, capacity, max_adults, max_children, num_beds, bed_size, price_per_night, tags\)/)
   // An all-null VALUES column is typed text, so the limits are cast for their integer columns
   assert.match(sql, /select h\.id, v\.liteapi_room_id, v\.room_type, v\.capacity, v\.max_adults::integer, v\.max_children::integer, v\.num_beds, v\.bed_size, /)

@@ -57,6 +57,7 @@ AS $function$
     and (p_region is null     or h.region  ilike p_region)
     and (p_country is null    or h.country ilike p_country)
     and (p_min_rating is null or h.rating >= p_min_rating)
+    and h.liteapi_deleted_at is null
   order by
     case when p_sort = 'price-low'  then ph.min_price end asc,
     case when p_sort = 'price-high' then ph.min_price end desc,

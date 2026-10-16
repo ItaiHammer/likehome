@@ -19,6 +19,8 @@ export type HotelRow = {
   latitude: number | null
   longitude: number | null
   tags: Tag[]
+  liteapi_deleted_at: null
+  liteapi_synced_at: string
 }
 
 export type RoomRow = {
@@ -299,7 +301,9 @@ function photosFor(s: LiteHotelSummary, d: LiteHotelDetail): string[] {
   return [d.main_photo, s.main_photo].map((url) => (url ?? '').trim()).filter(Boolean).slice(0, 1)
 }
 
-export function hotelRowFor(target: Target, s: LiteHotelSummary, d: LiteHotelDetail, offers?: LiteOffer[], rooms?: LiteRoom[]): HotelRow {
+export function hotelRowFor(
+  target: Target, s: LiteHotelSummary, d: LiteHotelDetail, offers?: LiteOffer[], rooms?: LiteRoom[], syncedAt = new Date().toISOString(),
+): HotelRow {
   return {
     liteapi_id: s.id,
     name: (d.name || s.name || '').trim(),
@@ -313,6 +317,9 @@ export function hotelRowFor(target: Target, s: LiteHotelSummary, d: LiteHotelDet
     latitude: finiteOrNull(s.latitude) ?? finiteOrNull(d.location?.latitude),
     longitude: finiteOrNull(s.longitude) ?? finiteOrNull(d.location?.longitude),
     tags: hotelTagsFor(d, offers, rooms),
+    // A hotel LiteAPI lists again shows up in search again
+    liteapi_deleted_at: null,
+    liteapi_synced_at: syncedAt,
   }
 }
 
@@ -355,7 +362,8 @@ export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices,
     .map((candidate) => candidate.row)
 }
 
-const HOTEL_COLUMNS = ['liteapi_id', 'name', 'description', 'address', 'city', 'region', 'country', 'photo_urls', 'rating', 'latitude', 'longitude', 'tags'] as const
+const HOTEL_COLUMNS = ['liteapi_id', 'name', 'description', 'address', 'city', 'region', 'country', 'photo_urls', 'rating', 'latitude', 'longitude', 'tags',
+  'liteapi_deleted_at', 'liteapi_synced_at'] as const
 const ROOM_COLUMNS = ['liteapi_room_id', 'room_type', 'capacity', 'max_adults', 'max_children', 'num_beds', 'bed_size', 'price_per_night', 'tags'] as const
 // Postgres types an all-null VALUES column as text, which an integer column won't take
 const ROOM_SELECT = ROOM_COLUMNS.map((column) => (column === 'max_adults' || column === 'max_children' ? `v.${column}::integer` : `v.${column}`)).join(', ')
