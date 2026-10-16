@@ -443,7 +443,7 @@ test('hotelSql writes idempotent upserts with escaped strings and text arrays', 
   assert.match(sql, /insert into public\.hotels \(liteapi_id, name, description, address, city, region, country, photo_urls, rating, latitude, longitude, tags, liteapi_deleted_at, liteapi_synced_at\)/)
   assert.match(sql, /values \('lp1', 'Tom''s Inn', '', '', 'San Francisco', 'California', 'USA', array\[\]::text\[\], 4, 37\.78, -122\.41, array\['Free Wi-Fi'\]::text\[\], null, '2026-10-15T08:00:00\.000Z'\)/)
   assert.match(sql, /on conflict \(liteapi_id\) do update set name = excluded\.name, .*tags = excluded\.tags, liteapi_deleted_at = excluded\.liteapi_deleted_at, liteapi_synced_at = excluded\.liteapi_synced_at;/)
-  assert.ok(!/excluded\.liteapi_id|owner_id|\bdelete\b/i.test(sql))
+  assert.ok(!/excluded\.liteapi_id|owner_id/i.test(sql))
   assert.match(sql, /insert into public\.rooms \(hotel_id, liteapi_room_id, room_type, capacity, max_adults, max_children, num_beds, bed_size, price_per_night, tags\)/)
   // An all-null VALUES column is typed text, so the limits are cast for their integer columns
   assert.match(sql, /select h\.id, v\.liteapi_room_id, v\.room_type, v\.capacity, v\.max_adults::integer, v\.max_children::integer, v\.num_beds, v\.bed_size, /)
@@ -451,4 +451,15 @@ test('hotelSql writes idempotent upserts with escaped strings and text arrays', 
   assert.match(sql, /\('8', 'Room 8', 2, 2, 1, 1, null, 120, array\[\]::text\[\]\)/)
   assert.match(sql, /join public\.hotels h on h\.liteapi_id = 'lp1'\non conflict \(hotel_id, liteapi_room_id\) do update set room_type = excluded\.room_type, capacity = excluded\.capacity, max_adults = excluded\.max_adults, max_children = excluded\.max_children/)
   assert.ok(!hotelSql(hotel, []).includes('public.rooms'))
+})
+
+test('hotelSql removes room types this run left out, unless a reservation needs them, which get the cheapest price', () => {
+  const hotel = hotelRowFor(SF, summary(), detail(), [], undefined, '2026-10-15T08:00:00.000Z')
+  const rooms = roomRowsFor([room(7), room(8)], samplePricesFor([offer(300, {}, { mappedRoomId: 7 }), offer(120, {}, { mappedRoomId: 8 })]))
+  const sql = hotelSql(hotel, rooms)
+  const stale = "r.hotel_id = h.id and h.liteapi_id = 'lp1' and r.liteapi_room_id is not null\n  and r.liteapi_room_id not in ('8', '7')"
+  assert.ok(sql.includes(`delete from public.rooms r using public.hotels h\nwhere ${stale}\n  and not exists (select 1 from public.reservations res where res.room_id = r.id);`))
+  assert.ok(sql.includes(`update public.rooms r set price_per_night = 120 from public.hotels h\nwhere ${stale};`))
+  assert.ok(sql.indexOf('delete from') > sql.indexOf('insert into public.rooms'), 'the new rooms are written first')
+  assert.ok(!hotelSql(hotel, []).includes('delete from'), 'no rooms imported: nothing is removed')
 })

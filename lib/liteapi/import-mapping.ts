@@ -424,6 +424,12 @@ export function hotelSql(hotel: HotelRow, rooms: RoomRow[]): string {
       `\n) v(${ROOM_COLUMNS.join(', ')})\n` +
       `join public.hotels h on h.liteapi_id = ${sqlString(hotel.liteapi_id)}\n` +
       `on conflict (hotel_id, liteapi_room_id) do update set ${updateSet(ROOM_COLUMNS.filter((column) => column !== 'liteapi_room_id'))};\n`
+    // Room types this run didn't import keep their old sample price: removed, or repriced when a reservation needs them
+    const stale = `r.hotel_id = h.id and h.liteapi_id = ${sqlString(hotel.liteapi_id)} and r.liteapi_room_id is not null\n` +
+      `  and r.liteapi_room_id not in (${rooms.map((room) => sqlString(room.liteapi_room_id)).join(', ')})`
+    sql += `delete from public.rooms r using public.hotels h\nwhere ${stale}\n` +
+      `  and not exists (select 1 from public.reservations res where res.room_id = r.id);\n` +
+      `update public.rooms r set price_per_night = ${Math.min(...rooms.map((room) => room.price_per_night))} from public.hotels h\nwhere ${stale};\n`
   }
   return sql
 }

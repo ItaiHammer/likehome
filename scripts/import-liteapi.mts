@@ -317,13 +317,47 @@ async function writeToSupabase(db: SupabaseClient, imported: Imported[], report:
       continue
     }
     written++
-    // Never deleted: reservations.room_id points at rooms
-    const { data: existing } = await db.from('rooms').select('liteapi_room_id, room_type').eq('hotel_id', h.id)
-    const kept = new Set(rooms.map((room) => room.liteapi_room_id))
-    const stale = (existing ?? []).filter((room) => !kept.has(room.liteapi_room_id))
-    if (stale.length) console.log(`  ${hotel.liteapi_id}: kept ${stale.length} room(s) this run didn't import: ${stale.map((room) => room.room_type).join('; ')}`)
+    await dropStaleRooms(db, h.id, hotel.liteapi_id, rooms, report)
   }
   console.log(`  ${written} of ${imported.length} hotels written`)
+}
+
+// A room type a run didn't import keeps its old sample price (once $3 a night), so it goes. One a reservation points
+// at has to stay, and takes the hotel's cheapest current price instead.
+async function dropStaleRooms(db: SupabaseClient, hotelId: string, liteapiId: string, rooms: RoomRow[], report: Report) {
+  const kept = new Set(rooms.map((room) => room.liteapi_room_id))
+  const { data: existing, error } = await db.from('rooms').select('id, liteapi_room_id').eq('hotel_id', hotelId)
+  if (error) {
+    report.failures++
+    console.error(`  ! ${liteapiId}: reading its rooms failed: ${error.message}`)
+    return
+  }
+  const stale = (existing ?? []).filter((room) => room.liteapi_room_id && !kept.has(room.liteapi_room_id)).map((room) => room.id as string)
+  if (!stale.length) return
+  const { data: booked, error: bookedError } = await db.from('reservations').select('room_id').in('room_id', stale)
+  if (bookedError) {
+    report.failures++
+    console.error(`  ! ${liteapiId}: reading reservations failed: ${bookedError.message}`)
+    return
+  }
+  const keep = [...new Set((booked ?? []).map((reservation) => reservation.room_id as string))]
+  const remove = stale.filter((id) => !keep.includes(id))
+  if (remove.length) {
+    const { error: deleteError } = await db.from('rooms').delete().in('id', remove)
+    if (deleteError) {
+      report.failures++
+      console.error(`  ! ${liteapiId}: removing old room types failed: ${deleteError.message}`)
+    }
+  }
+  if (keep.length) {
+    const cheapest = Math.min(...rooms.map((room) => room.price_per_night))
+    const { error: updateError } = await db.from('rooms').update({ price_per_night: cheapest }).in('id', keep)
+    if (updateError) {
+      report.failures++
+      console.error(`  ! ${liteapiId}: repricing booked old room types failed: ${updateError.message}`)
+    }
+  }
+  console.log(`  ${liteapiId}: removed ${remove.length} old room type(s)${keep.length ? `, repriced ${keep.length} with bookings` : ''}`)
 }
 
 function printSummary(options: Options, report: Report) {
