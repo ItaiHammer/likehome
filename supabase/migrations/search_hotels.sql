@@ -1,10 +1,7 @@
--- Paste after liteapi_hotels.sql (this reads rooms.max_adults, rooms.max_children, hotels.liteapi_id and
--- hotels.liteapi_deleted_at), and before the code that sends p_adults / p_children deploys: PostgREST finds the
--- function by its argument names.
+-- Run after liteapi_hotels.sql, and before deploying code that sends p_adults / p_children.
 begin;
 
--- Every earlier signature, and this one so the file can be pasted twice. If an old one stayed next to the new
--- one, PostgREST couldn't choose between them.
+-- Old signatures must go: PostgREST can't choose between overloads.
 DROP FUNCTION IF EXISTS public.search_hotels(text, text, text, date, date, integer, numeric, numeric, text, integer, integer);
 DROP FUNCTION IF EXISTS public.search_hotels(text, text, text, text, date, date, integer, numeric, numeric, numeric, integer, text, text[], text, integer, integer);
 DROP FUNCTION IF EXISTS public.search_hotels(text, text, text, text, date, date, integer, integer, integer, numeric, numeric, numeric, integer, text, text[], text, integer, integer);
@@ -20,7 +17,6 @@ AS $function$
     from public.rooms rm
     join public.hotels h on h.id = rm.hotel_id
     where (p_guests is null    or rm.capacity >= p_guests)
-      -- NULL limits (owner and seeded rooms, and LiteAPI rooms listed as 0/0) leave only the capacity
       and (p_adults is null    or rm.max_adults is null   or rm.max_adults >= p_adults)
       and (p_children is null  or rm.max_children is null or rm.max_children >= p_children)
       and (p_min_price is null or rm.price_per_night >= p_min_price)
@@ -62,7 +58,7 @@ AS $function$
   order by
     case when p_sort = 'price-low'  then ph.min_price end asc,
     case when p_sort = 'price-high' then ph.min_price end desc,
-    -- An import saves its hotels in one transaction, so they share created_at: id keeps pages from overlapping
+    -- id breaks created_at ties: an import saves its hotels in one transaction
     h.created_at desc, h.id
   limit least(p_limit, 100) offset p_offset;
 $function$;
