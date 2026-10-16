@@ -240,9 +240,17 @@ async function importCity(apiKey: string, cityKey: CityKey, options: Options, se
       limit: batch.length,
     }
     try {
-      const rates = await liteapi<LiteRatesResponse>(apiKey, '/hotels/rates', ratesRequest)
-      if (rates?.error && rates.error.code !== 2001) throw new Error(`LiteAPI error ${rates.error.code}: ${rates.error.message}`)
-      for (const entry of rates?.data ?? []) offersByHotel.set(entry.hotelId, entry.roomTypes ?? [])
+      // The sandbox sometimes answers a whole batch with "no availability"; asking again usually prices it
+      for (let attempt = 0; ; attempt++) {
+        const rates = await liteapi<LiteRatesResponse>(apiKey, '/hotels/rates', ratesRequest)
+        if (rates?.error && rates.error.code !== 2001) throw new Error(`LiteAPI error ${rates.error.code}: ${rates.error.message}`)
+        if (rates?.data?.length || attempt === 1) {
+          for (const entry of rates?.data ?? []) offersByHotel.set(entry.hotelId, entry.roomTypes ?? [])
+          break
+        }
+        console.log(`  no prices for a batch of ${batch.length}, asking again`)
+        await sleep(BACKOFF_MS[0])
+      }
     } catch (err) {
       report.failures++
       console.error(`  ! sample rates failed for ${batch.length} ${target.city} hotels: ${(err as Error).message}`)
