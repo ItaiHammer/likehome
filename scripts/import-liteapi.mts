@@ -26,13 +26,15 @@ const MAX_LIMIT = 200
 const MIN_GAP_MS = 250
 const BACKOFF_MS = [1000, 2000, 4000]
 const DETAIL_CONCURRENCY = 4
+// One rates request for 100 New York hotels came back "no availability" for all of them; 25 at a time price normally
+const RATES_BATCH = 25
 
 const USAGE = `Usage: npm run import:liteapi -- [options]
        node --env-file=.env.local scripts/import-liteapi.mts [options]
 
   --dry-run           fetch and map everything, print a summary, write nothing
   --cities sf,nyc     cities to import (default: ${Object.keys(TARGETS).join(',')})
-  --limit 15          hotels listed per city (1-${MAX_LIMIT})
+  --limit 100         hotels listed per city (1-${MAX_LIMIT})
   --max-rooms 10      room types kept per hotel
   --sql-out [path]    write an idempotent .sql file to paste into the SQL Editor instead of
                       writing to Supabase (default: the OS temp folder; paths inside the repo are refused)
@@ -50,7 +52,7 @@ function positiveInt(flag: string, raw: string | undefined, max: number): number
 }
 
 function parseOptions(argv: string[]): Options {
-  const options: Options = { dryRun: false, cities: Object.keys(TARGETS) as CityKey[], limit: 15, maxRooms: 10, sqlOut: null, help: false }
+  const options: Options = { dryRun: false, cities: Object.keys(TARGETS) as CityKey[], limit: 100, maxRooms: 10, sqlOut: null, help: false }
   for (let i = 0; i < argv.length; i++) {
     const eq = argv[i].indexOf('=')
     const flag = eq === -1 ? argv[i] : argv[i].slice(0, eq)
@@ -222,32 +224,36 @@ async function importCity(apiKey: string, cityKey: CityKey, options: Options, se
   }
   if (!candidates.length) return
 
-  const ratesRequest: LiteRatesRequest = {
-    hotelIds: candidates.map((s) => s.id),
-    occupancies: [{ adults: 2 }],
-    currency: 'USD',
-    guestNationality: 'US',
-    checkin: isoDay(30),
-    checkout: isoDay(31),
-    timeout: 12,
-    roomMapping: true,
-    limit: candidates.length,
-  }
   const offersByHotel = new Map<string, LiteOffer[]>()
-  try {
-    const rates = await liteapi<LiteRatesResponse>(apiKey, '/hotels/rates', ratesRequest)
-    if (rates?.error && rates.error.code !== 2001) throw new Error(`LiteAPI error ${rates.error.code}: ${rates.error.message}`)
-    for (const entry of rates?.data ?? []) offersByHotel.set(entry.hotelId, entry.roomTypes ?? [])
-  } catch (err) {
-    report.failures++
-    console.error(`  ! sample rates failed, skipping ${target.city}: ${(err as Error).message}`)
-    return
+  const unpriced = new Set<string>()
+  for (let i = 0; i < candidates.length; i += RATES_BATCH) {
+    const batch = candidates.slice(i, i + RATES_BATCH)
+    const ratesRequest: LiteRatesRequest = {
+      hotelIds: batch.map((s) => s.id),
+      occupancies: [{ adults: 2 }],
+      currency: 'USD',
+      guestNationality: 'US',
+      checkin: isoDay(30),
+      checkout: isoDay(31),
+      timeout: 12,
+      roomMapping: true,
+      limit: batch.length,
+    }
+    try {
+      const rates = await liteapi<LiteRatesResponse>(apiKey, '/hotels/rates', ratesRequest)
+      if (rates?.error && rates.error.code !== 2001) throw new Error(`LiteAPI error ${rates.error.code}: ${rates.error.message}`)
+      for (const entry of rates?.data ?? []) offersByHotel.set(entry.hotelId, entry.roomTypes ?? [])
+    } catch (err) {
+      report.failures++
+      console.error(`  ! sample rates failed for ${batch.length} ${target.city} hotels: ${(err as Error).message}`)
+      for (const s of batch) unpriced.add(s.id)
+    }
   }
 
   const priced = candidates.flatMap((s) => {
     const sample = samplePricesFor(offersByHotel.get(s.id))
     if (!sample) {
-      skip(report, s, 'no priced sample rate')
+      skip(report, s, unpriced.has(s.id) ? 'sample rates request failed' : 'no priced sample rate')
       return []
     }
     return [{ s, sample }]
