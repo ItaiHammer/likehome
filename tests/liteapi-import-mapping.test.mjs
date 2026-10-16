@@ -315,11 +315,21 @@ test('typicalPrices takes each room median over the sampled nights', () => {
     night(offer(260, {}, { mappedRoomId: 1 }), offer(110, {}, { mappedRoomId: 2 })),
   ])
   assert.equal(week.mapped, true)
-  assert.deepEqual([...week.byRoom], [['1', 245], ['2', 110]], 'a $3 or $2,203 night does not set the price')
   assert.equal(week.cheapest, 175, 'the median of each night’s cheapest: 3, 110, 240, 250')
+  assert.deepEqual([...week.byRoom], [['1', 245], ['2', 175]], 'a $3 or $2,203 night does not set the price, and no room is below 175')
   assert.equal(typicalPrices([night(offer(120, {}, { name: 'Twin Room' }))]).byName.get('twinroom'), 120)
   assert.equal(typicalPrices([null, null]), null)
   assert.equal(typicalPrices([]), null)
+})
+
+test('typicalPrices holds a room offered on one junk night up to the hotel’s typical cheapest night', () => {
+  // Flamingo, Nov 15-21: the Fab Room was offered only on the 17th, at $5.64 with an SSP of $6.48
+  const night = (cheapest, more = []) => samplePricesFor([offer(cheapest, {}, { mappedRoomId: 'arrival' }), ...more])
+  const fab = offer(5.64, {}, { mappedRoomId: 'fab', retailRate: { total: [usd(5.64)], suggestedSellingPrice: [usd(6.48)] } })
+  const week = typicalPrices([night(70.87), night(70.56), night(4.47, [fab]), night(62.39), night(95.02), night(194.01), night(250.66)])
+  assert.equal(week.cheapest, 70.87)
+  assert.equal(week.byRoom.get('fab'), 70.87)
+  assert.equal(week.byRoom.get('arrival'), 70.87)
 })
 
 test('hotelRowFor takes the location from the target and stars for the rating', () => {

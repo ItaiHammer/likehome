@@ -254,22 +254,24 @@ function median(values: number[]): number {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
-function medians(maps: Map<string, number>[]): Map<string, number> {
+function medians(maps: Map<string, number>[], floor: number): Map<string, number> {
   const all = new Map<string, number[]>()
   for (const map of maps) for (const [key, price] of map) all.set(key, [...(all.get(key) ?? []), price])
-  return new Map([...all].map(([key, prices]) => [key, median(prices)]))
+  return new Map([...all].map(([key, prices]) => [key, Math.max(median(prices), floor)]))
 }
 
 // One night can be far off (the sandbox has Las Vegas weeknights at $3 and Hilton SF jumping to $2,203),
-// so each room takes its median over the sampled nights that priced it
+// so each room takes its median over the sampled nights that priced it. A room offered on a single junk night
+// (Flamingo's Fab Room: $5.64 on 1 of 7) is held up to the hotel's typical cheapest night.
 export function typicalPrices(nights: (SamplePrices | null)[]): SamplePrices | null {
   const priced = nights.filter((night): night is SamplePrices => night !== null)
   if (!priced.length) return null
+  const cheapest = median(priced.map((night) => night.cheapest))
   return {
     mapped: priced.some((night) => night.mapped),
-    byRoom: medians(priced.map((night) => night.byRoom)),
-    byName: medians(priced.map((night) => night.byName)),
-    cheapest: median(priced.map((night) => night.cheapest)),
+    byRoom: medians(priced.map((night) => night.byRoom), cheapest),
+    byName: medians(priced.map((night) => night.byName), cheapest),
+    cheapest,
   }
 }
 
