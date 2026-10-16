@@ -8,7 +8,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { LITEAPI_BASE } from '../lib/liteapi/types.ts'
 import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRatesRequest, LiteRatesResponse } from '../lib/liteapi/types.ts'
-import { hotelRowFor, hotelSql, isAdultsOnly, roomRowsFor, samplePricesFor, unmappedFacilities } from '../lib/liteapi/import-mapping.ts'
+import { hotelRowFor, hotelSql, isAdultsOnly, roomRowsFor, samplePricesFor, typicalPrices, unmappedFacilities } from '../lib/liteapi/import-mapping.ts'
 import type { HotelRow, RoomRow, Target } from '../lib/liteapi/import-mapping.ts'
 
 const TARGETS = {
@@ -28,6 +28,8 @@ const BACKOFF_MS = [1000, 2000, 4000]
 const DETAIL_CONCURRENCY = 4
 // One rates request for 100 New York hotels came back "no availability" for all of them; 25 at a time price normally
 const RATES_BATCH = 25
+// One-night samples starting 30 days out; a week counts every weekday once
+const SAMPLE_NIGHTS = 7
 
 const USAGE = `Usage: npm run import:liteapi -- [options]
        node --env-file=.env.local scripts/import-liteapi.mts [options]
@@ -224,42 +226,44 @@ async function importCity(apiKey: string, cityKey: CityKey, options: Options, se
   }
   if (!candidates.length) return
 
-  const offersByHotel = new Map<string, LiteOffer[]>()
+  const offersByHotel = new Map<string, LiteOffer[][]>()
   const unpriced = new Set<string>()
   for (let i = 0; i < candidates.length; i += RATES_BATCH) {
     const batch = candidates.slice(i, i + RATES_BATCH)
-    const ratesRequest: LiteRatesRequest = {
-      hotelIds: batch.map((s) => s.id),
-      occupancies: [{ adults: 2 }],
-      currency: 'USD',
-      guestNationality: 'US',
-      checkin: isoDay(30),
-      checkout: isoDay(31),
-      timeout: 12,
-      roomMapping: true,
-      limit: batch.length,
-    }
-    try {
-      // The sandbox sometimes answers a whole batch with "no availability"; asking again usually prices it
-      for (let attempt = 0; ; attempt++) {
-        const rates = await liteapi<LiteRatesResponse>(apiKey, '/hotels/rates', ratesRequest)
-        if (rates?.error && rates.error.code !== 2001) throw new Error(`LiteAPI error ${rates.error.code}: ${rates.error.message}`)
-        if (rates?.data?.length || attempt === 1) {
-          for (const entry of rates?.data ?? []) offersByHotel.set(entry.hotelId, entry.roomTypes ?? [])
-          break
-        }
-        console.log(`  no prices for a batch of ${batch.length}, asking again`)
-        await sleep(BACKOFF_MS[0])
+    for (let night = 0; night < SAMPLE_NIGHTS; night++) {
+      const ratesRequest: LiteRatesRequest = {
+        hotelIds: batch.map((s) => s.id),
+        occupancies: [{ adults: 2 }],
+        currency: 'USD',
+        guestNationality: 'US',
+        checkin: isoDay(30 + night),
+        checkout: isoDay(31 + night),
+        timeout: 12,
+        roomMapping: true,
+        limit: batch.length,
       }
-    } catch (err) {
-      report.failures++
-      console.error(`  ! sample rates failed for ${batch.length} ${target.city} hotels: ${(err as Error).message}`)
-      for (const s of batch) unpriced.add(s.id)
+      try {
+        // The sandbox sometimes answers a whole batch with "no availability"; asking again usually prices it
+        for (let attempt = 0; ; attempt++) {
+          const rates = await liteapi<LiteRatesResponse>(apiKey, '/hotels/rates', ratesRequest)
+          if (rates?.error && rates.error.code !== 2001) throw new Error(`LiteAPI error ${rates.error.code}: ${rates.error.message}`)
+          if (rates?.data?.length || attempt === 1) {
+            for (const entry of rates?.data ?? []) offersByHotel.set(entry.hotelId, [...(offersByHotel.get(entry.hotelId) ?? []), entry.roomTypes ?? []])
+            break
+          }
+          console.log(`  no prices for a batch of ${batch.length} on ${ratesRequest.checkin}, asking again`)
+          await sleep(BACKOFF_MS[0])
+        }
+      } catch (err) {
+        report.failures++
+        console.error(`  ! sample rates for ${ratesRequest.checkin} failed for ${batch.length} ${target.city} hotels: ${(err as Error).message}`)
+        for (const s of batch) unpriced.add(s.id)
+      }
     }
   }
 
   const priced = candidates.flatMap((s) => {
-    const sample = samplePricesFor(offersByHotel.get(s.id))
+    const sample = typicalPrices((offersByHotel.get(s.id) ?? []).map((offers) => samplePricesFor(offers)))
     if (!sample) {
       skip(report, s, unpriced.has(s.id) ? 'sample rates request failed' : 'no priced sample rate')
       return []
@@ -288,7 +292,7 @@ async function importCity(apiKey: string, cityKey: CityKey, options: Options, se
     const kept = new Set(rooms.map((room) => room.liteapi_room_id))
     const keptRooms = (d.rooms ?? []).filter((room) => kept.has(String(room.id)))
     report.droppedRooms += Math.max(0, (d.rooms ?? []).length - rooms.length)
-    const hotel = hotelRowFor(target, s, d, offersByHotel.get(s.id), keptRooms)
+    const hotel = hotelRowFor(target, s, d, offersByHotel.get(s.id)?.flat(), keptRooms)
     for (const name of unmappedFacilities(d)) report.unmapped.set(name, (report.unmapped.get(name) ?? 0) + 1)
     report.imported.push({ cityKey, hotel, rooms })
     console.log(`  ok   ${label(s)}: ${rooms.length} room types, tags [${hotel.tags.join(', ')}]`)

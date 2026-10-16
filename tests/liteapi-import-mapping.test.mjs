@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   bedSizeFor, capacityFor, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, roomRowsFor, roomTagsFor,
-  samplePricesFor, stripHtml, unmappedFacilities,
+  samplePricesFor, stripHtml, typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import { tags as filterTags } from '../app/search/types.ts'
 
@@ -303,6 +303,23 @@ test('the stored price is never below the suggested selling price', () => {
   assert.equal(samplePricesFor([twoRooms]).cheapest, 220, 'each rate is raised on its own')
   const rows = roomRowsFor([room(1)], samplePricesFor([ssp(289.05, 332.41, { mappedRoomId: 1 })]))
   assert.deepEqual(rows.map((r) => r.price_per_night), [332])
+})
+
+test('typicalPrices takes each room median over the sampled nights', () => {
+  const night = (...offers) => samplePricesFor(offers)
+  const week = typicalPrices([
+    night(offer(3, {}, { mappedRoomId: 1 }), offer(90, {}, { mappedRoomId: 2 })),
+    night(offer(250, {}, { mappedRoomId: 1 }), offer(2203, {}, { mappedRoomId: 2 })),
+    night(offer(240, {}, { mappedRoomId: 1 })),
+    null,
+    night(offer(260, {}, { mappedRoomId: 1 }), offer(110, {}, { mappedRoomId: 2 })),
+  ])
+  assert.equal(week.mapped, true)
+  assert.deepEqual([...week.byRoom], [['1', 245], ['2', 110]], 'a $3 or $2,203 night does not set the price')
+  assert.equal(week.cheapest, 175, 'the median of each night’s cheapest: 3, 110, 240, 250')
+  assert.equal(typicalPrices([night(offer(120, {}, { name: 'Twin Room' }))]).byName.get('twinroom'), 120)
+  assert.equal(typicalPrices([null, null]), null)
+  assert.equal(typicalPrices([]), null)
 })
 
 test('hotelRowFor takes the location from the target and stars for the rating', () => {

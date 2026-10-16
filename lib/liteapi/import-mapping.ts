@@ -248,6 +248,31 @@ export function samplePricesFor(offers: LiteOffer[] | undefined, nights = 1): Sa
   return Number.isFinite(sample.cheapest) ? sample : null
 }
 
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+function medians(maps: Map<string, number>[]): Map<string, number> {
+  const all = new Map<string, number[]>()
+  for (const map of maps) for (const [key, price] of map) all.set(key, [...(all.get(key) ?? []), price])
+  return new Map([...all].map(([key, prices]) => [key, median(prices)]))
+}
+
+// One night can be far off (the sandbox has Las Vegas weeknights at $3 and Hilton SF jumping to $2,203),
+// so each room takes its median over the sampled nights that priced it
+export function typicalPrices(nights: (SamplePrices | null)[]): SamplePrices | null {
+  const priced = nights.filter((night): night is SamplePrices => night !== null)
+  if (!priced.length) return null
+  return {
+    mapped: priced.some((night) => night.mapped),
+    byRoom: medians(priced.map((night) => night.byRoom)),
+    byName: medians(priced.map((night) => night.byName)),
+    cheapest: median(priced.map((night) => night.cheapest)),
+  }
+}
+
 // Only when every priced offer has a meal plan, so the cheapest live rate will include meals too
 function allOffersIncludeMeals(offers: LiteOffer[] | undefined): boolean {
   const priced = pricedOffers(offers)
