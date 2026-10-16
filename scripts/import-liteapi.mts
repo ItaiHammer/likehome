@@ -8,8 +8,11 @@ import { createClient } from '@supabase/supabase-js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { LITEAPI_BASE } from '../lib/liteapi/types.ts'
 import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRatesRequest, LiteRatesResponse } from '../lib/liteapi/types.ts'
-import { hotelRowFor, hotelSql, isAdultsOnly, roomRowsFor, samplePricesFor, typicalPrices, unmappedFacilities } from '../lib/liteapi/import-mapping.ts'
-import type { HotelRow, RoomRow, Target } from '../lib/liteapi/import-mapping.ts'
+import {
+  autoSince, hotelListQuery, hotelRowFor, hotelSql, isAdultsOnly, parseSince, planSync, removedAt, rfc3339, roomRowsFor, samplePricesFor,
+  typicalPrices, unmappedFacilities,
+} from '../lib/liteapi/import-mapping.ts'
+import type { Existing, HotelRow, RoomRow, Target } from '../lib/liteapi/import-mapping.ts'
 
 const TARGETS = {
   sf:  { countryCode: 'US', cityName: 'San Francisco', city: 'San Francisco', region: 'California', country: 'USA' },
@@ -30,6 +33,11 @@ const DETAIL_CONCURRENCY = 4
 const RATES_BATCH = 25
 // One-night samples starting 30 days out; a week counts every weekday once
 const SAMPLE_NIGHTS = 7
+// /data/hotels takes up to 5000 per request; --since pages through every hotel updated in the window, up to this cap
+const SYNC_PAGE_SIZE = 1000
+const SYNC_MAX_PAGES = 5
+// Supabase returns at most 1000 rows per request by default
+const DB_PAGE = 1000
 
 const USAGE = `Usage: npm run import:liteapi -- [options]
        node --env-file=.env.local scripts/import-liteapi.mts [options]
@@ -40,32 +48,50 @@ const USAGE = `Usage: npm run import:liteapi -- [options]
   --max-rooms 10      room types kept per hotel
   --sql-out [path]    write an idempotent .sql file to paste into the SQL Editor instead of
                       writing to Supabase (default: the OS temp folder; paths inside the repo are refused)
+  --since auto        refresh instead: list only hotels LiteAPI updated since an ISO timestamp, 48h, 7d,
+                      or auto (each city's last sync minus 1h; 48h if none). Updates hotels already imported,
+                      hides ones LiteAPI deleted, and adds up to --max-new new hotels per city
+  --max-new 5         with --since, new hotels added per city (0-100)
 
-Env (.env.local): LITEAPI_KEY, plus NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY unless --dry-run or --sql-out.`
+Env (.env.local): LITEAPI_KEY, plus NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY unless --dry-run or --sql-out.
+A --since --dry-run reads (never writes) Supabase when both are set, to tell imported hotels from new ones.`
 
 class CliError extends Error {}
 
-type Options = { dryRun: boolean; cities: CityKey[]; limit: number; maxRooms: number; sqlOut: string | null; help: boolean }
+type Options = {
+  dryRun: boolean; cities: CityKey[]; limit: number; maxRooms: number; sqlOut: string | null; help: boolean
+  since: Date | 'auto' | null; maxNew: number
+}
 
-function positiveInt(flag: string, raw: string | undefined, max: number): number {
+function wholeNumber(flag: string, raw: string | undefined, max: number, min = 1): number {
   const value = Number(raw)
-  if (!raw || !Number.isInteger(value) || value < 1 || value > max) throw new CliError(`${flag} needs a whole number from 1 to ${max}.`)
+  if (!raw || !Number.isInteger(value) || value < min || value > max) throw new CliError(`${flag} needs a whole number from ${min} to ${max}.`)
   return value
 }
 
 function parseOptions(argv: string[]): Options {
-  const options: Options = { dryRun: false, cities: Object.keys(TARGETS) as CityKey[], limit: 100, maxRooms: 10, sqlOut: null, help: false }
+  const options: Options = {
+    dryRun: false, cities: Object.keys(TARGETS) as CityKey[], limit: 100, maxRooms: 10, sqlOut: null, help: false, since: null, maxNew: 5,
+  }
+  const given = new Set<string>()
   for (let i = 0; i < argv.length; i++) {
     const eq = argv[i].indexOf('=')
     const flag = eq === -1 ? argv[i] : argv[i].slice(0, eq)
     const inline = eq === -1 ? undefined : argv[i].slice(eq + 1)
     const value = () => inline ?? (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') ? argv[++i] : undefined)
+    given.add(flag)
     switch (flag) {
       case '--dry-run': options.dryRun = true; break
-      case '--limit': options.limit = positiveInt(flag, value(), MAX_LIMIT); break
-      case '--max-rooms': options.maxRooms = positiveInt(flag, value(), 100); break
+      case '--limit': options.limit = wholeNumber(flag, value(), MAX_LIMIT); break
+      case '--max-rooms': options.maxRooms = wholeNumber(flag, value(), 100); break
       case '--sql-out': options.sqlOut = value() ?? ''; break
       case '--help': case '-h': options.help = true; break
+      case '--max-new': options.maxNew = wholeNumber(flag, value(), 100, 0); break
+      case '--since': {
+        options.since = parseSince(value())
+        if (options.since === null) throw new CliError('--since takes auto, a number of hours or days (48h, 7d) or a past ISO timestamp such as 2026-10-08T00:00:00Z.')
+        break
+      }
       case '--cities': {
         const keys = (value() ?? '').split(',').map((key) => key.trim().toLowerCase()).filter(Boolean)
         const unknown = keys.filter((key) => !(key in TARGETS))
@@ -75,6 +101,13 @@ function parseOptions(argv: string[]): Options {
       }
       default: throw new CliError(`Unknown option ${argv[i]}\n\n${USAGE}`)
     }
+  }
+  if (options.since === null && given.has('--max-new')) throw new CliError('--max-new only applies with --since.')
+  if (options.since !== null && given.has('--limit')) {
+    throw new CliError('--limit does not apply with --since, which lists every hotel updated in the window. Use --max-new to cap new hotels.')
+  }
+  if (options.since !== null && options.sqlOut !== null) {
+    throw new CliError('--since needs Supabase to tell imported hotels from new ones, so it cannot write --sql-out. Use --dry-run to preview it.')
   }
   return options
 }
@@ -184,30 +217,45 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 
 type Imported = { cityKey: CityKey; hotel: HotelRow; rooms: RoomRow[] }
 
+type Removed = { liteapi_id: string; at: string }
+
 type Report = {
   imported: Imported[]
+  removed: Removed[]
   skipped: Map<string, number>
   failures: number
   droppedRooms: number
   unmapped: Map<string, number>
 }
 
+// at: when the run started, every row's liteapi_synced_at, so --since auto never skips what changed during a run.
+// existing: with --since, the hotels already imported (null without a database).
+type Run = { at: string; existing: Existing | null }
+
 const label = (s: { id: string; name?: string }) => `${s.id} "${s.name ?? ''}"`
 
+const tally = (report: Report, reason: string, n = 1) => report.skipped.set(reason, (report.skipped.get(reason) ?? 0) + n)
+
 function skip(report: Report, s: { id: string; name?: string }, reason: string) {
-  report.skipped.set(reason, (report.skipped.get(reason) ?? 0) + 1)
+  tally(report, reason)
   console.log(`  skip ${label(s)}: ${reason}`)
 }
 
-async function importCity(apiKey: string, cityKey: CityKey, options: Options, seen: Set<string>, report: Report) {
+function hide(report: Report, s: { id: string; name?: string }, at: string) {
+  report.removed.push({ liteapi_id: s.id, at })
+  console.log(`  hide ${label(s)}: deleted at LiteAPI ${at}`)
+}
+
+const hasId = (s: LiteHotelSummary) => typeof s?.id === 'string' && s.id !== ''
+
+async function importCity(apiKey: string, cityKey: CityKey, options: Options, seen: Set<string>, report: Report, run: Run) {
   const target: Target = TARGETS[cityKey]
   console.log(`\n${target.city} (${cityKey})`)
 
-  const query = new URLSearchParams({ countryCode: target.countryCode, cityName: target.cityName, limit: String(options.limit) })
   let listed: LiteHotelSummary[]
   try {
-    const list = await liteapi<{ data?: LiteHotelSummary[] }>(apiKey, `/data/hotels?${query}`)
-    listed = (list?.data ?? []).filter((s) => typeof s?.id === 'string' && s.id !== '')
+    const list = await liteapi<{ data?: LiteHotelSummary[] }>(apiKey, `/data/hotels?${hotelListQuery(target, options.limit)}`)
+    listed = (list?.data ?? []).filter(hasId)
   } catch (err) {
     report.failures++
     console.error(`  ! listing hotels failed, skipping ${target.city}: ${(err as Error).message}`)
@@ -224,7 +272,83 @@ async function importCity(apiKey: string, cityKey: CityKey, options: Options, se
       candidates.push(s)
     }
   }
+  await importHotels(apiKey, cityKey, candidates, options, report, run)
+}
+
+async function sinceFor(db: SupabaseClient | null, target: Target, since: Date | 'auto'): Promise<Date> {
+  if (since !== 'auto') return since
+  let last: string | null = null
+  if (db) {
+    const { data, error } = await db.from('hotels').select('liteapi_synced_at').eq('city', target.city).not('liteapi_synced_at', 'is', null)
+      .order('liteapi_synced_at', { ascending: false }).limit(1)
+    if (error) throw new CliError(`Reading hotels.liteapi_synced_at failed: ${error.message}. Has supabase/migrations/liteapi_hotels.sql been run?`)
+    last = data?.[0]?.liteapi_synced_at ?? null
+  }
+  const at = autoSince(last)
+  console.log(`  --since auto: ${last ? `last sync ${last} minus 1h` : `${db ? 'no earlier sync' : 'no database'}, so the last 48h`}`)
+  return at
+}
+
+// null when listing failed. Offset paging can shift while LiteAPI updates hotels, so ids are de-duplicated.
+async function listUpdated(apiKey: string, target: Target, since: Date, report: Report): Promise<LiteHotelSummary[] | null> {
+  const byId = new Map<string, LiteHotelSummary>()
+  let total: number | undefined
+  for (let page = 0; page < SYNC_MAX_PAGES; page++) {
+    let data: LiteHotelSummary[]
+    try {
+      const list = await liteapi<{ data?: LiteHotelSummary[]; total?: number }>(apiKey,
+        `/data/hotels?${hotelListQuery(target, SYNC_PAGE_SIZE, since, page * SYNC_PAGE_SIZE)}`)
+      data = list?.data ?? []
+      total ??= list?.total
+    } catch (err) {
+      report.failures++
+      console.error(`  ! listing hotels failed, skipping ${target.city}: ${(err as Error).message}`)
+      return null
+    }
+    for (const s of data) if (hasId(s) && !byId.has(s.id)) byId.set(s.id, s)
+    if (data.length < SYNC_PAGE_SIZE) {
+      console.log(`  ${byId.size} hotels updated since ${rfc3339(since)}${total === undefined ? '' : ` (LiteAPI total ${total})`}`)
+      return [...byId.values()]
+    }
+  }
+  // Counted as a failure: the next run's window starts later, so hotels past the cap could be missed for good
+  report.failures++
+  console.error(`  ! stopped after ${SYNC_MAX_PAGES} pages of ${SYNC_PAGE_SIZE} (LiteAPI total ${total ?? 'unknown'}); run again with an earlier --since`)
+  return [...byId.values()]
+}
+
+async function syncCity(
+  apiKey: string, db: SupabaseClient | null, cityKey: CityKey, options: Options, seen: Set<string>, report: Report, run: Run,
+) {
+  const target: Target = TARGETS[cityKey]
+  console.log(`\n${target.city} (${cityKey})`)
+  const listed = await listUpdated(apiKey, target, await sinceFor(db, target, options.since!), report)
+  if (!listed) return
+
+  const fresh: LiteHotelSummary[] = []
+  for (const s of listed) {
+    if (seen.has(s.id)) skip(report, s, 'already imported in this run')
+    else {
+      seen.add(s.id)
+      fresh.push(s)
+    }
+  }
+  const plan = planSync(fresh, run.existing, options.maxNew, run.at)
+  for (const { s, at } of plan.remove) hide(report, s, at)
+  // Hundreds of hotels can be over the cap, so skips are one line per reason here
+  const reasons = new Map<string, number>()
+  for (const { reason } of plan.skip) reasons.set(reason, (reasons.get(reason) ?? 0) + 1)
+  for (const [reason, n] of reasons) {
+    tally(report, reason, n)
+    console.log(`  skip ${n}: ${reason}`)
+  }
+  console.log(`  ${plan.update.length} to update, ${plan.add.length} new`)
+  await importHotels(apiKey, cityKey, [...plan.update, ...plan.add], options, report, run)
+}
+
+async function importHotels(apiKey: string, cityKey: CityKey, candidates: LiteHotelSummary[], options: Options, report: Report, run: Run) {
   if (!candidates.length) return
+  const target: Target = TARGETS[cityKey]
 
   const offersByHotel = new Map<string, LiteOffer[][]>()
   const unpriced = new Set<string>()
@@ -286,20 +410,23 @@ async function importCity(apiKey: string, cityKey: CityKey, options: Options, se
     const d = details[i]
     if (d === undefined) return skip(report, s, 'details request failed')
     if (d === null) return skip(report, s, 'no details')
-    if (d.deletedAt) return skip(report, s, 'deleted at LiteAPI')
+    if (d.deletedAt) {
+      if (run.existing?.has(s.id) && !run.existing.get(s.id)) return hide(report, s, removedAt(d.deletedAt, run.at))
+      return skip(report, s, 'deleted at LiteAPI')
+    }
     const rooms = roomRowsFor(d.rooms, sample, options.maxRooms, isAdultsOnly(d))
     if (!rooms.length) return skip(report, s, 'no rooms')
     const kept = new Set(rooms.map((room) => room.liteapi_room_id))
     const keptRooms = (d.rooms ?? []).filter((room) => kept.has(String(room.id)))
     report.droppedRooms += Math.max(0, (d.rooms ?? []).length - rooms.length)
-    const hotel = hotelRowFor(target, s, d, offersByHotel.get(s.id)?.flat(), keptRooms)
+    const hotel = hotelRowFor(target, s, d, offersByHotel.get(s.id)?.flat(), keptRooms, run.at)
     for (const name of unmappedFacilities(d)) report.unmapped.set(name, (report.unmapped.get(name) ?? 0) + 1)
     report.imported.push({ cityKey, hotel, rooms })
     console.log(`  ok   ${label(s)}: ${rooms.length} room types, tags [${hotel.tags.join(', ')}]`)
   })
 }
 
-async function writeToSupabase(db: SupabaseClient, imported: Imported[], report: Report) {
+async function writeToSupabase(db: SupabaseClient, imported: Imported[], report: Report, run: Run) {
   console.log('\nWriting to Supabase')
   let written = 0
   for (const { hotel, rooms } of imported) {
@@ -320,6 +447,20 @@ async function writeToSupabase(db: SupabaseClient, imported: Imported[], report:
     await dropStaleRooms(db, h.id, hotel.liteapi_id, rooms, report)
   }
   console.log(`  ${written} of ${imported.length} hotels written`)
+
+  if (!report.removed.length) return
+  let hidden = 0
+  for (const { liteapi_id, at } of report.removed) {
+    const { error } = await db.from('hotels').update({ liteapi_deleted_at: at, liteapi_synced_at: run.at })
+      .eq('liteapi_id', liteapi_id).is('liteapi_deleted_at', null)
+    if (error) {
+      report.failures++
+      console.error(`  ! ${liteapi_id}: marking removed failed: ${error.message}`)
+      continue
+    }
+    hidden++
+  }
+  console.log(`  ${hidden} of ${report.removed.length} removed hotels hidden from search`)
 }
 
 // A room type a run didn't import keeps its old sample price (once $3 a night), so it goes. One a reservation points
@@ -360,9 +501,28 @@ async function dropStaleRooms(db: SupabaseClient, hotelId: string, liteapiId: st
   console.log(`  ${liteapiId}: removed ${remove.length} old room type(s)${keep.length ? `, repriced ${keep.length} with bookings` : ''}`)
 }
 
-function printSummary(options: Options, report: Report) {
+async function existingHotels(db: SupabaseClient): Promise<Existing> {
+  const existing: Existing = new Map()
+  // Pages until an empty one, so a lower max-rows setting can't cut the list short
+  for (let from = 0; ; from += DB_PAGE) {
+    const { data, error } = await db.from('hotels').select('liteapi_id, liteapi_deleted_at').not('liteapi_id', 'is', null)
+      .order('liteapi_id').range(from, from + DB_PAGE - 1)
+    if (error) throw new CliError(`Reading imported hotels failed: ${error.message}. Has supabase/migrations/liteapi_hotels.sql been run?`)
+    if (!data?.length) return existing
+    for (const row of data) existing.set(row.liteapi_id, row.liteapi_deleted_at)
+  }
+}
+
+function printSummary(options: Options, report: Report, run: Run) {
   const roomCount = report.imported.reduce((sum, item) => sum + item.rooms.length, 0)
-  console.log(`\nSummary: ${report.imported.length} hotels, ${roomCount} room types mapped, ${requestCount} LiteAPI requests`)
+  if (options.since === null) {
+    console.log(`\nSummary: ${report.imported.length} hotels, ${roomCount} room types mapped, ${requestCount} LiteAPI requests`)
+  } else {
+    const added = report.imported.filter((item) => !run.existing?.has(item.hotel.liteapi_id)).length
+    const skipped = [...report.skipped.values()].reduce((sum, n) => sum + n, 0)
+    console.log(`\nSummary${options.dryRun ? ' (dry run, nothing written)' : ''}: ${report.imported.length - added} updated, ${added} added, ` +
+      `${report.removed.length} marked removed, ${skipped} skipped; ${roomCount} room types mapped, ${requestCount} LiteAPI requests`)
+  }
   for (const [reason, n] of report.skipped) console.log(`  skipped ${n}: ${reason}`)
   if (report.droppedRooms) console.log(`  ${report.droppedRooms} room types left out by --max-rooms ${options.maxRooms} or missing an id/name`)
   if (report.unmapped.size) {
@@ -381,18 +541,28 @@ async function main(options: Options) {
   if (options.dryRun && options.sqlOut !== null) console.log('--dry-run writes nothing, so --sql-out is ignored.')
   const sqlOut = !options.dryRun && options.sqlOut !== null ? sqlOutPath(options.sqlOut) : null
 
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const secret = process.env.SUPABASE_SECRET_KEY?.trim()
   let db: SupabaseClient | null = null
   if (!options.dryRun && sqlOut === null) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
-    const secret = process.env.SUPABASE_SECRET_KEY?.trim()
     if (!secret) throw new CliError('SUPABASE_SECRET_KEY is not set, so nothing can be written. Add it to .env.local, or use --dry-run or --sql-out.')
     if (!url) throw new CliError('NEXT_PUBLIC_SUPABASE_URL is not set. Add it to .env.local.')
     db = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } })
+  } else if (options.since !== null && url && secret) {
+    // Only read from: a dry run writes nothing
+    db = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } })
   }
 
-  const report: Report = { imported: [], skipped: new Map(), failures: 0, droppedRooms: 0, unmapped: new Map() }
+  const run: Run = { at: new Date().toISOString(), existing: null }
+  const report: Report = { imported: [], removed: [], skipped: new Map(), failures: 0, droppedRooms: 0, unmapped: new Map() }
   const seen = new Set<string>()
-  for (const cityKey of options.cities) await importCity(apiKey, cityKey, options, seen, report)
+  if (options.since === null) {
+    for (const cityKey of options.cities) await importCity(apiKey, cityKey, options, seen, report, run)
+  } else {
+    if (db) run.existing = await existingHotels(db)
+    else console.log('No Supabase credentials (NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY), so every listed hotel counts as new and --since auto means the last 48h.')
+    for (const cityKey of options.cities) await syncCity(apiKey, db, cityKey, options, seen, report, run)
+  }
 
   if (options.dryRun) {
     console.log('\nFirst mapped rows (dry run, nothing written):')
@@ -407,10 +577,10 @@ async function main(options: Options) {
     fs.writeFileSync(sqlOut, sql)
     console.log(`\nWrote ${report.imported.length} hotels to ${sqlOut}`)
   } else if (db) {
-    await writeToSupabase(db, report.imported, report)
+    await writeToSupabase(db, report.imported, report, run)
   }
 
-  printSummary(options, report)
+  printSummary(options, report, run)
   if (report.failures) {
     console.error(`\n${report.failures} request(s) or write(s) failed; see the log above.`)
     process.exitCode = 1

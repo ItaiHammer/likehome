@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  bedSizeFor, capacityFor, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, roomRowsFor, roomTagsFor,
-  samplePricesFor, stripHtml, typicalPrices, unmappedFacilities,
+  autoSince, bedSizeFor, capacityFor, hotelListQuery, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, parseSince, planSync,
+  removedAt, rfc3339, roomRowsFor, roomTagsFor, samplePricesFor, stripHtml, typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import { tags as filterTags } from '../app/search/types.ts'
 
@@ -472,4 +472,78 @@ test('hotelSql removes room types this run left out, unless a reservation needs 
   assert.ok(sql.includes(`update public.rooms r set price_per_night = 120 from public.hotels h\nwhere ${stale};`))
   assert.ok(sql.indexOf('delete from') > sql.indexOf('insert into public.rooms'), 'the new rooms are written first')
   assert.ok(!hotelSql(hotel, []).includes('delete from'), 'no rooms imported: nothing is removed')
+})
+
+const NOW = new Date('2026-10-15T10:17:00.000Z')
+
+test('parseSince takes auto, hours or days back from now, or a past ISO timestamp with a zone', () => {
+  const since = (raw) => {
+    const value = parseSince(raw, NOW)
+    return value instanceof Date ? value.toISOString() : value
+  }
+  assert.equal(since('auto'), 'auto')
+  assert.equal(since(' 48h '), '2026-10-13T10:17:00.000Z')
+  assert.equal(since('1h'), '2026-10-15T09:17:00.000Z')
+  assert.equal(since('7d'), '2026-10-08T10:17:00.000Z')
+  assert.equal(since('2026-10-08T00:00:00Z'), '2026-10-08T00:00:00.000Z')
+  assert.equal(since('2026-10-08T00:00:00.5Z'), '2026-10-08T00:00:00.500Z')
+  assert.equal(since('2026-10-08T00:00-07:00'), '2026-10-08T07:00:00.000Z')
+  assert.equal(since('2026-10-08'), '2026-10-08T00:00:00.000Z', 'a date alone is midnight UTC')
+  assert.equal(since('2026-10-15T10:17:00Z'), '2026-10-15T10:17:00.000Z', 'now itself is fine')
+  for (const bad of [undefined, '', 'Auto', 'yesterday', '0h', '05d', '-1d', '1w', '1.5h', '2026-10-08T00:00:00', '2026-13-01',
+    '2026-10-15T10:18:00Z', '99999999999d', '1700000000']) {
+    assert.equal(since(bad), null, String(bad))
+  }
+})
+
+test('autoSince goes back an hour from the last sync, or 48h without one', () => {
+  assert.equal(autoSince('2026-10-14T10:17:03.120Z', NOW).toISOString(), '2026-10-14T09:17:03.120Z')
+  assert.equal(autoSince('2026-10-14T10:17:03+00:00', NOW).toISOString(), '2026-10-14T09:17:03.000Z', 'Postgres timestamptz text')
+  assert.equal(autoSince(null, NOW).toISOString(), '2026-10-13T10:17:00.000Z')
+  assert.equal(autoSince(undefined, NOW).toISOString(), '2026-10-13T10:17:00.000Z')
+  assert.equal(autoSince('not a date', NOW).toISOString(), '2026-10-13T10:17:00.000Z')
+  assert.equal(autoSince('2026-10-16T00:00:00Z', NOW).toISOString(), '2026-10-15T09:17:00.000Z', 'a sync in the future counts as now')
+})
+
+test('hotelListQuery adds offset and an RFC3339 lastUpdatedAt only with --since', () => {
+  assert.equal(rfc3339(new Date('2026-10-08T07:05:09.999Z')), '2026-10-08T07:05:09Z')
+  assert.equal(hotelListQuery(SF, 15).toString(), 'countryCode=US&cityName=San+Francisco&limit=15', 'a normal run lists as before')
+  const query = hotelListQuery(SF, 1000, new Date('2026-10-08T07:05:09.999Z'), 2000)
+  assert.equal(query.toString(), 'countryCode=US&cityName=San+Francisco&limit=1000&offset=2000&lastUpdatedAt=2026-10-08T07%3A05%3A09Z')
+  assert.equal(hotelListQuery(SF, 1000, new Date('2026-10-08T00:00:00Z')).get('offset'), '0')
+})
+
+test('planSync updates imported hotels, hides deleted ones and caps new ones', () => {
+  const at = NOW.toISOString()
+  const listed = [
+    summary({ id: 'kept' }),
+    summary({ id: 'relisted' }),
+    summary({ id: 'gone', deletedAt: '2026-10-14T03:00:00Z' }),
+    summary({ id: 'gone-again', deletedAt: '2026-10-01T00:00:00Z' }),
+    summary({ id: 'gone-odd', deletedAt: 'sometime' }),
+    summary({ id: 'never-ours', deletedAt: '2026-10-14T03:00:00Z' }),
+    summary({ id: 'new1' }), summary({ id: 'new2' }), summary({ id: 'new3' }),
+  ]
+  const existing = new Map([
+    ['kept', null], ['relisted', '2026-09-01T00:00:00+00:00'], ['gone', null], ['gone-again', '2026-10-02T00:00:00+00:00'], ['gone-odd', null],
+    ['elsewhere', null],
+  ])
+  const plan = planSync(listed, existing, 2, at)
+  const ids = (list) => list.map((item) => item.id ?? item.s.id)
+  assert.deepEqual(ids(plan.update), ['kept', 'relisted'], 'a hotel listed again is updated, which clears liteapi_deleted_at')
+  assert.deepEqual(ids(plan.add), ['new1', 'new2'])
+  assert.deepEqual(plan.remove.map(({ s, at }) => [s.id, at]), [['gone', '2026-10-14T03:00:00.000Z'], ['gone-odd', at]])
+  assert.deepEqual(plan.skip.map(({ s, reason }) => [s.id, reason]), [
+    ['gone-again', 'already marked removed'],
+    ['never-ours', 'deleted at LiteAPI'],
+    ['new3', 'new, over --max-new 2'],
+  ])
+
+  assert.deepEqual(ids(planSync(listed, existing, 0, at).add), [], '--max-new 0 only refreshes')
+  const blind = planSync(listed, null, 3, at)
+  assert.deepEqual([ids(blind.update), ids(blind.add), blind.remove], [[], ['kept', 'relisted', 'new1'], []], 'no database: all new')
+  assert.equal(blind.skip.filter(({ reason }) => reason === 'deleted at LiteAPI').length, 4)
+
+  assert.equal(removedAt('2026-10-14T03:00:00+02:00', at), '2026-10-14T01:00:00.000Z')
+  assert.equal(removedAt('', at), at)
 })

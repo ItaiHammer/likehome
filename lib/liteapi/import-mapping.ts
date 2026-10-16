@@ -393,6 +393,71 @@ export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices,
     .map((candidate) => candidate.row)
 }
 
+const HOUR_MS = 60 * 60 * 1000
+
+// An ISO timestamp needs a zone when it has a time, so it means the same on any machine
+const ISO_SINCE = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/
+
+// --since: an ISO timestamp, Nh or Nd before now, or 'auto' (worked out per city from the database). null if invalid.
+export function parseSince(raw: string | undefined, now = new Date()): Date | 'auto' | null {
+  const value = (raw ?? '').trim()
+  if (value === 'auto') return 'auto'
+  const ago = /^([1-9]\d*)([hd])$/.exec(value)
+  const at = new Date(ago ? now.getTime() - Number(ago[1]) * (ago[2] === 'd' ? 24 : 1) * HOUR_MS : ISO_SINCE.test(value) ? Date.parse(value) : NaN)
+  return Number.isFinite(at.getTime()) && at <= now ? at : null
+}
+
+// The last sync minus an hour, so a hotel LiteAPI changed while that run was going is listed again
+export function autoSince(lastSyncedAt: string | null | undefined, now = new Date()): Date {
+  const last = Date.parse(lastSyncedAt ?? '')
+  if (!Number.isFinite(last)) return new Date(now.getTime() - 48 * HOUR_MS)
+  return new Date(Math.min(last, now.getTime()) - HOUR_MS)
+}
+
+// RFC3339 with whole seconds, like the docs' example 2026-07-05T15:00:00Z. Dropping the milliseconds only widens the window.
+export const rfc3339 = (date: Date) => date.toISOString().replace(/\.\d{3}Z$/, 'Z')
+
+export function hotelListQuery(target: Target, limit: number, since?: Date, offset = 0): URLSearchParams {
+  const query = new URLSearchParams({ countryCode: target.countryCode, cityName: target.cityName, limit: String(limit) })
+  if (since) {
+    query.set('offset', String(offset))
+    query.set('lastUpdatedAt', rfc3339(since))
+  }
+  return query
+}
+
+// liteapi_id -> liteapi_deleted_at of the LiteAPI hotels already in the database
+export type Existing = Map<string, string | null>
+
+export type SyncPlan = {
+  update: LiteHotelSummary[]
+  add: LiteHotelSummary[]
+  remove: { s: LiteHotelSummary; at: string }[]
+  skip: { s: LiteHotelSummary; reason: string }[]
+}
+
+export function removedAt(deletedAt: string, fallback: string): string {
+  const at = Date.parse(deletedAt)
+  return Number.isFinite(at) ? new Date(at).toISOString() : fallback
+}
+
+// Without a database (existing null) every hotel counts as new. Deleted hotels are only hidden, never deleted:
+// reservations point at their rooms.
+export function planSync(listed: LiteHotelSummary[], existing: Existing | null, maxNew: number, now: string): SyncPlan {
+  const plan: SyncPlan = { update: [], add: [], remove: [], skip: [] }
+  for (const s of listed) {
+    const known = existing?.has(s.id) ?? false
+    if (s.deletedAt) {
+      if (!known) plan.skip.push({ s, reason: 'deleted at LiteAPI' })
+      else if (existing!.get(s.id)) plan.skip.push({ s, reason: 'already marked removed' })
+      else plan.remove.push({ s, at: removedAt(s.deletedAt, now) })
+    } else if (known) plan.update.push(s)
+    else if (plan.add.length < maxNew) plan.add.push(s)
+    else plan.skip.push({ s, reason: `new, over --max-new ${maxNew}` })
+  }
+  return plan
+}
+
 const HOTEL_COLUMNS = ['liteapi_id', 'name', 'description', 'address', 'city', 'region', 'country', 'photo_urls', 'rating', 'latitude', 'longitude', 'tags',
   'liteapi_deleted_at', 'liteapi_synced_at'] as const
 const ROOM_COLUMNS = ['liteapi_room_id', 'room_type', 'capacity', 'max_adults', 'max_children', 'num_beds', 'bed_size', 'price_per_night', 'tags'] as const
