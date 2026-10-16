@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   autoSince, bedSizeFor, capacityFor, hotelListQuery, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, parseSince, planSync,
-  removedAt, rfc3339, roomRowsFor, roomTagsFor, samplePricesFor, stripHtml, typicalPrices, unmappedFacilities,
+  removedAt, rfc3339, roomRowsFor, roomTagsFor, sameCity, samplePricesFor, stripHtml, typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import { tags as filterTags } from '../app/search/types.ts'
 
@@ -496,13 +496,13 @@ test('parseSince takes auto, hours or days back from now, or a past ISO timestam
   }
 })
 
-test('autoSince goes back an hour from the last sync, or 48h without one', () => {
-  assert.equal(autoSince('2026-10-14T10:17:03.120Z', NOW).toISOString(), '2026-10-14T09:17:03.120Z')
-  assert.equal(autoSince('2026-10-14T10:17:03+00:00', NOW).toISOString(), '2026-10-14T09:17:03.000Z', 'Postgres timestamptz text')
-  assert.equal(autoSince(null, NOW).toISOString(), '2026-10-13T10:17:00.000Z')
-  assert.equal(autoSince(undefined, NOW).toISOString(), '2026-10-13T10:17:00.000Z')
-  assert.equal(autoSince('not a date', NOW).toISOString(), '2026-10-13T10:17:00.000Z')
-  assert.equal(autoSince('2026-10-16T00:00:00Z', NOW).toISOString(), '2026-10-15T09:17:00.000Z', 'a sync in the future counts as now')
+test('autoSince goes back a week from the last sync, or from now without one', () => {
+  assert.equal(autoSince('2026-10-14T10:17:03.120Z', NOW).toISOString(), '2026-10-07T10:17:03.120Z')
+  assert.equal(autoSince('2026-10-14T10:17:03+00:00', NOW).toISOString(), '2026-10-07T10:17:03.000Z', 'Postgres timestamptz text')
+  assert.equal(autoSince(null, NOW).toISOString(), '2026-10-08T10:17:00.000Z')
+  assert.equal(autoSince(undefined, NOW).toISOString(), '2026-10-08T10:17:00.000Z')
+  assert.equal(autoSince('not a date', NOW).toISOString(), '2026-10-08T10:17:00.000Z')
+  assert.equal(autoSince('2026-10-16T00:00:00Z', NOW).toISOString(), '2026-10-08T10:17:00.000Z', 'a sync in the future counts as now')
 })
 
 test('hotelListQuery adds offset and an RFC3339 lastUpdatedAt only with --since', () => {
@@ -546,4 +546,37 @@ test('planSync updates imported hotels, hides deleted ones and caps new ones', (
 
   assert.equal(removedAt('2026-10-14T03:00:00+02:00', at), '2026-10-14T01:00:00.000Z')
   assert.equal(removedAt('', at), at)
+})
+
+test('planSync adds the hotel one of ours was merged into, even over --max-new', () => {
+  const at = NOW.toISOString()
+  const merged = (id, primaryHotelId) => summary({ id, deletedAt: '2026-10-14T03:00:00Z', primaryHotelId })
+  const listed = [
+    summary({ id: 'new1' }),
+    summary({ id: 'survivor', primaryHotelId: null }),
+    merged('ours', 'survivor'),
+    merged('ours-hidden', 'elsewhere'),
+    merged('ours-into-ours', 'kept'),
+    merged('ours-into-itself', 'ours-into-itself'),
+    merged('not-ours', 'stranger'),
+  ]
+  const existing = new Map([['ours', null], ['ours-hidden', '2026-10-14T03:00:00+00:00'], ['ours-into-ours', null], ['ours-into-itself', null], ['kept', null]])
+  const plan = planSync(listed, existing, 0, at)
+  assert.deepEqual(plan.add.map((s) => s.id), ['survivor'])
+  assert.deepEqual(plan.remove.map(({ s }) => s.id), ['ours', 'ours-into-ours', 'ours-into-itself'])
+  assert.deepEqual(plan.unlisted.map((s) => [s.id, s.primaryHotelId]), [['ours-hidden', 'elsewhere']],
+    'an already hidden hotel still looks for its replacement, so a failed add is retried')
+
+  const found = summary({ id: 'elsewhere' })
+  const again = planSync([...listed, found], existing, 0, at)
+  assert.deepEqual([again.add.map((s) => s.id), again.unlisted], [['survivor', 'elsewhere'], []])
+  assert.deepEqual(planSync(listed, null, 0, at).unlisted, [], 'no database: nothing is ours')
+})
+
+test('sameCity compares country and city, ignoring case and spaces', () => {
+  const sf = summary({ country: 'US', city: 'San Francisco' })
+  assert.equal(sameCity(summary({ country: 'us', city: ' san francisco ' }), sf), true)
+  assert.equal(sameCity(summary({ country: 'US', city: 'Oakland' }), sf), false)
+  assert.equal(sameCity(summary({ country: 'CA', city: 'San Francisco' }), sf), false)
+  assert.equal(sameCity(summary({ city: undefined, country: undefined }), summary({ city: undefined, country: undefined })), false)
 })

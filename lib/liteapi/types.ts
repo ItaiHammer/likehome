@@ -14,6 +14,8 @@ export interface LiteHotelSummary {
   main_photo?: string
   stars?: number
   deletedAt?: string | null
+  // Not in the docs: on a deleted hotel, the hotel LiteAPI merged it into (null on live ones)
+  primaryHotelId?: string | null
 }
 
 export interface LiteRoom {

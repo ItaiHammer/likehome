@@ -9,8 +9,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { LITEAPI_BASE } from '../lib/liteapi/types.ts'
 import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRatesRequest, LiteRatesResponse } from '../lib/liteapi/types.ts'
 import {
-  autoSince, hotelListQuery, hotelRowFor, hotelSql, isAdultsOnly, parseSince, planSync, removedAt, rfc3339, roomRowsFor, samplePricesFor,
-  typicalPrices, unmappedFacilities,
+  AUTO_OVERLAP_DAYS, autoSince, hotelListQuery, hotelRowFor, hotelSql, isAdultsOnly, parseSince, planSync, removedAt, rfc3339, roomRowsFor,
+  sameCity, samplePricesFor, typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import type { Existing, HotelRow, RoomRow, Target } from '../lib/liteapi/import-mapping.ts'
 
@@ -48,10 +48,11 @@ const USAGE = `Usage: npm run import:liteapi -- [options]
   --max-rooms 10      room types kept per hotel
   --sql-out [path]    write an idempotent .sql file to paste into the SQL Editor instead of
                       writing to Supabase (default: the OS temp folder; paths inside the repo are refused)
-  --since auto        refresh instead: list only hotels LiteAPI updated since an ISO timestamp, 48h, 7d,
-                      or auto (each city's last sync minus 1h; 48h if none). Updates hotels already imported,
-                      hides ones LiteAPI deleted, and adds up to --max-new new hotels per city
-  --max-new 5         with --since, new hotels added per city (0-100)
+  --since auto        refresh instead: list only hotels LiteAPI updated since an ISO timestamp, 48h, 7d, or auto
+                      (each city's last sync minus ${AUTO_OVERLAP_DAYS} days, so later nights retry what a run missed).
+                      Updates hotels already imported, hides ones LiteAPI deleted (adding the hotel one was merged
+                      into), and adds up to --max-new other new hotels per city
+  --max-new 5         with --since, new hotels added per city (0-100), not counting merged-into ones
 
 Env (.env.local): LITEAPI_KEY, plus NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY unless --dry-run or --sql-out.
 A --since --dry-run reads (never writes) Supabase when both are set, to tell imported hotels from new ones.`
@@ -106,7 +107,7 @@ function parseOptions(argv: string[]): Options {
   if (options.since !== null && given.has('--limit')) {
     throw new CliError('--limit does not apply with --since, which lists every hotel updated in the window. Use --max-new to cap new hotels.')
   }
-  if (options.since !== null && options.sqlOut !== null) {
+  if (options.since !== null && options.sqlOut !== null && !options.dryRun) {
     throw new CliError('--since needs Supabase to tell imported hotels from new ones, so it cannot write --sql-out. Use --dry-run to preview it.')
   }
   return options
@@ -241,9 +242,9 @@ function skip(report: Report, s: { id: string; name?: string }, reason: string) 
   console.log(`  skip ${label(s)}: ${reason}`)
 }
 
-function hide(report: Report, s: { id: string; name?: string }, at: string) {
+function hide(report: Report, s: LiteHotelSummary, at: string) {
   report.removed.push({ liteapi_id: s.id, at })
-  console.log(`  hide ${label(s)}: deleted at LiteAPI ${at}`)
+  console.log(`  hide ${label(s)}: deleted at LiteAPI ${at}${s.primaryHotelId ? `, merged into ${s.primaryHotelId}` : ''}`)
 }
 
 const hasId = (s: LiteHotelSummary) => typeof s?.id === 'string' && s.id !== ''
@@ -279,13 +280,14 @@ async function sinceFor(db: SupabaseClient | null, target: Target, since: Date |
   if (since !== 'auto') return since
   let last: string | null = null
   if (db) {
-    const { data, error } = await db.from('hotels').select('liteapi_synced_at').eq('city', target.city).not('liteapi_synced_at', 'is', null)
-      .order('liteapi_synced_at', { ascending: false }).limit(1)
+    // Only LiteAPI rows: owners can edit every column of their own listings
+    const { data, error } = await db.from('hotels').select('liteapi_synced_at').eq('city', target.city).not('liteapi_id', 'is', null)
+      .not('liteapi_synced_at', 'is', null).order('liteapi_synced_at', { ascending: false }).limit(1)
     if (error) throw new CliError(`Reading hotels.liteapi_synced_at failed: ${error.message}. Has supabase/migrations/liteapi_hotels.sql been run?`)
     last = data?.[0]?.liteapi_synced_at ?? null
   }
   const at = autoSince(last)
-  console.log(`  --since auto: ${last ? `last sync ${last} minus 1h` : `${db ? 'no earlier sync' : 'no database'}, so the last 48h`}`)
+  console.log(`  --since auto: ${last ? `last sync ${last}` : `${db ? 'no earlier sync' : 'no database'}, so now`} minus ${AUTO_OVERLAP_DAYS} days`)
   return at
 }
 
@@ -308,6 +310,10 @@ async function listUpdated(apiKey: string, target: Target, since: Date, report: 
     for (const s of data) if (hasId(s) && !byId.has(s.id)) byId.set(s.id, s)
     if (data.length < SYNC_PAGE_SIZE) {
       console.log(`  ${byId.size} hotels updated since ${rfc3339(since)}${total === undefined ? '' : ` (LiteAPI total ${total})`}`)
+      if (total !== undefined && byId.size < total) {
+        report.failures++
+        console.error(`  ! LiteAPI counted ${total} but listed ${byId.size}; the next nights list this window again`)
+      }
       return [...byId.values()]
     }
   }
@@ -325,15 +331,16 @@ async function syncCity(
   const listed = await listUpdated(apiKey, target, await sinceFor(db, target, options.since!), report)
   if (!listed) return
 
-  const fresh: LiteHotelSummary[] = []
-  for (const s of listed) {
-    if (seen.has(s.id)) skip(report, s, 'already imported in this run')
-    else {
-      seen.add(s.id)
-      fresh.push(s)
-    }
+  const fresh = unseen(listed, seen, report)
+  let plan = planSync(fresh, run.existing, options.maxNew, run.at)
+  if (plan.unlisted.length) {
+    fresh.push(...unseen(await mergedInto(apiKey, plan.unlisted, report), seen, report))
+    plan = planSync(fresh, run.existing, options.maxNew, run.at)
   }
-  const plan = planSync(fresh, run.existing, options.maxNew, run.at)
+  for (const s of plan.unlisted) {
+    tally(report, 'merged into a hotel LiteAPI does not list in the same city')
+    console.log(`  skip ${s.primaryHotelId}: ${label(s)} was merged into it, but LiteAPI does not list it in the same city`)
+  }
   for (const { s, at } of plan.remove) hide(report, s, at)
   // Hundreds of hotels can be over the cap, so skips are one line per reason here
   const reasons = new Map<string, number>()
@@ -344,6 +351,31 @@ async function syncCity(
   }
   console.log(`  ${plan.update.length} to update, ${plan.add.length} new`)
   await importHotels(apiKey, cityKey, [...plan.update, ...plan.add], options, report, run)
+}
+
+function unseen(listed: LiteHotelSummary[], seen: Set<string>, report: Report): LiteHotelSummary[] {
+  return listed.filter((s) => {
+    if (seen.has(s.id)) {
+      skip(report, s, 'already imported in this run')
+      return false
+    }
+    seen.add(s.id)
+    return true
+  })
+}
+
+// Looked up by id. One in another city than the hotel merged into it is left out: its row would get this city's name.
+async function mergedInto(apiKey: string, merged: LiteHotelSummary[], report: Report): Promise<LiteHotelSummary[]> {
+  const from = new Map(merged.map((s) => [s.primaryHotelId!, s]))
+  try {
+    const list = await liteapi<{ data?: LiteHotelSummary[] }>(apiKey,
+      `/data/hotels?${new URLSearchParams({ hotelIds: [...from.keys()].join(','), limit: String(from.size) })}`)
+    return (list?.data ?? []).filter((s) => hasId(s) && from.has(s.id) && sameCity(s, from.get(s.id)!))
+  } catch (err) {
+    report.failures++
+    console.error(`  ! looking up the hotels ours were merged into failed: ${(err as Error).message}`)
+    return []
+  }
 }
 
 async function importHotels(apiKey: string, cityKey: CityKey, candidates: LiteHotelSummary[], options: Options, report: Report, run: Run) {
@@ -426,7 +458,7 @@ async function importHotels(apiKey: string, cityKey: CityKey, candidates: LiteHo
   })
 }
 
-async function writeToSupabase(db: SupabaseClient, imported: Imported[], report: Report, run: Run) {
+async function writeToSupabase(db: SupabaseClient, imported: Imported[], report: Report) {
   console.log('\nWriting to Supabase')
   let written = 0
   for (const { hotel, rooms } of imported) {
@@ -451,7 +483,8 @@ async function writeToSupabase(db: SupabaseClient, imported: Imported[], report:
   if (!report.removed.length) return
   let hidden = 0
   for (const { liteapi_id, at } of report.removed) {
-    const { error } = await db.from('hotels').update({ liteapi_deleted_at: at, liteapi_synced_at: run.at })
+    // Not liteapi_synced_at: only imported hotels move a city's --since auto window, so failed imports aren't skipped over
+    const { error } = await db.from('hotels').update({ liteapi_deleted_at: at })
       .eq('liteapi_id', liteapi_id).is('liteapi_deleted_at', null)
     if (error) {
       report.failures++
@@ -503,13 +536,14 @@ async function dropStaleRooms(db: SupabaseClient, hotelId: string, liteapiId: st
 
 async function existingHotels(db: SupabaseClient): Promise<Existing> {
   const existing: Existing = new Map()
-  // Pages until an empty one, so a lower max-rows setting can't cut the list short
-  for (let from = 0; ; from += DB_PAGE) {
+  // Moves on by the rows each page returned and stops at an empty one, so a lower max-rows setting can't skip any
+  for (let from = 0; ;) {
     const { data, error } = await db.from('hotels').select('liteapi_id, liteapi_deleted_at').not('liteapi_id', 'is', null)
       .order('liteapi_id').range(from, from + DB_PAGE - 1)
     if (error) throw new CliError(`Reading imported hotels failed: ${error.message}. Has supabase/migrations/liteapi_hotels.sql been run?`)
     if (!data?.length) return existing
     for (const row of data) existing.set(row.liteapi_id, row.liteapi_deleted_at)
+    from += data.length
   }
 }
 
@@ -560,7 +594,10 @@ async function main(options: Options) {
     for (const cityKey of options.cities) await importCity(apiKey, cityKey, options, seen, report, run)
   } else {
     if (db) run.existing = await existingHotels(db)
-    else console.log('No Supabase credentials (NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY), so every listed hotel counts as new and --since auto means the last 48h.')
+    else {
+      console.log('No Supabase credentials (NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY), so every listed hotel counts as new' +
+        `${options.since === 'auto' ? ` and --since auto means the last ${AUTO_OVERLAP_DAYS} days` : ''}.`)
+    }
     for (const cityKey of options.cities) await syncCity(apiKey, db, cityKey, options, seen, report, run)
   }
 
@@ -577,7 +614,7 @@ async function main(options: Options) {
     fs.writeFileSync(sqlOut, sql)
     console.log(`\nWrote ${report.imported.length} hotels to ${sqlOut}`)
   } else if (db) {
-    await writeToSupabase(db, report.imported, report, run)
+    await writeToSupabase(db, report.imported, report)
   }
 
   printSummary(options, report, run)

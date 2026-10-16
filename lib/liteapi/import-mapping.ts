@@ -394,6 +394,7 @@ export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices,
 }
 
 const HOUR_MS = 60 * 60 * 1000
+export const AUTO_OVERLAP_DAYS = 7
 
 // An ISO timestamp needs a zone when it has a time, so it means the same on any machine
 const ISO_SINCE = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/
@@ -407,12 +408,17 @@ export function parseSince(raw: string | undefined, now = new Date()): Date | 'a
   return Number.isFinite(at.getTime()) && at <= now ? at : null
 }
 
-// The last sync minus an hour, so a hotel LiteAPI changed while that run was going is listed again
+// A week before the last sync (or now, without one): a hotel a failed or skipped request missed, or one over
+// --max-new, is listed again on the next nights instead of falling out of the window.
 export function autoSince(lastSyncedAt: string | null | undefined, now = new Date()): Date {
   const last = Date.parse(lastSyncedAt ?? '')
-  if (!Number.isFinite(last)) return new Date(now.getTime() - 48 * HOUR_MS)
-  return new Date(Math.min(last, now.getTime()) - HOUR_MS)
+  const from = Number.isFinite(last) ? Math.min(last, now.getTime()) : now.getTime()
+  return new Date(from - AUTO_OVERLAP_DAYS * 24 * HOUR_MS)
 }
+
+const placeOf = (s: LiteHotelSummary) => [s.country, s.city].map((part) => String(part ?? '').trim().toLowerCase()).join('|')
+
+export const sameCity = (a: LiteHotelSummary, b: LiteHotelSummary) => Boolean(a.city) && placeOf(a) === placeOf(b)
 
 // RFC3339 with whole seconds, like the docs' example 2026-07-05T15:00:00Z. Dropping the milliseconds only widens the window.
 export const rfc3339 = (date: Date) => date.toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -434,6 +440,8 @@ export type SyncPlan = {
   add: LiteHotelSummary[]
   remove: { s: LiteHotelSummary; at: string }[]
   skip: { s: LiteHotelSummary; reason: string }[]
+  // Hotels of ours merged into one the listing left out, to look that one up by id
+  unlisted: LiteHotelSummary[]
 }
 
 export function removedAt(deletedAt: string, fallback: string): string {
@@ -442,19 +450,29 @@ export function removedAt(deletedAt: string, fallback: string): string {
 }
 
 // Without a database (existing null) every hotel counts as new. Deleted hotels are only hidden, never deleted:
-// reservations point at their rooms.
+// reservations point at their rooms. Most deletions are merges, so the hotel one of ours was merged into is added
+// even over --max-new, or the hotel would drop out of search.
 export function planSync(listed: LiteHotelSummary[], existing: Existing | null, maxNew: number, now: string): SyncPlan {
-  const plan: SyncPlan = { update: [], add: [], remove: [], skip: [] }
+  const plan: SyncPlan = { update: [], add: [], remove: [], skip: [], unlisted: [] }
+  const known = (id: string) => existing?.has(id) ?? false
+  const merged = listed.filter(({ id, deletedAt, primaryHotelId: primary }) =>
+    deletedAt && known(id) && typeof primary === 'string' && primary !== '' && !known(primary))
+  const primaries = new Set(merged.map((s) => s.primaryHotelId))
+  let added = 0
   for (const s of listed) {
-    const known = existing?.has(s.id) ?? false
     if (s.deletedAt) {
-      if (!known) plan.skip.push({ s, reason: 'deleted at LiteAPI' })
+      if (!known(s.id)) plan.skip.push({ s, reason: 'deleted at LiteAPI' })
       else if (existing!.get(s.id)) plan.skip.push({ s, reason: 'already marked removed' })
       else plan.remove.push({ s, at: removedAt(s.deletedAt, now) })
-    } else if (known) plan.update.push(s)
-    else if (plan.add.length < maxNew) plan.add.push(s)
-    else plan.skip.push({ s, reason: `new, over --max-new ${maxNew}` })
+    } else if (known(s.id)) plan.update.push(s)
+    else if (primaries.has(s.id)) plan.add.push(s)
+    else if (added < maxNew) {
+      added++
+      plan.add.push(s)
+    } else plan.skip.push({ s, reason: `new, over --max-new ${maxNew}` })
   }
+  const ids = new Set(listed.map((s) => s.id))
+  plan.unlisted = merged.filter((s) => !ids.has(s.primaryHotelId!))
   return plan
 }
 
