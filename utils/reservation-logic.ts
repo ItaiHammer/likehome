@@ -6,6 +6,8 @@ export type ReservationInput = {
   check_in: string // YYYY-MM-DD
   check_out: string // YYYY-MM-DD
   guests?: number
+  /** How many of the guests are children */
+  children?: number
 }
 
 export type RoomForBooking = {
@@ -13,6 +15,9 @@ export type RoomForBooking = {
   hotel_id: string
   price_per_night: number | string
   capacity: number | null
+  room_type?: string
+  liteapi_room_id?: string | null
+  hotels?: { liteapi_id: string | null } | null
 }
 
 export type ValidationResult =
@@ -133,10 +138,34 @@ export function validateReservationInput(
     guests = b.guests
   }
 
+  // null too: a booking change merges in the saved reservation
+  let children: number | undefined
+  if (b.children != null) {
+    if (typeof b.children !== 'number' || !Number.isInteger(b.children) || b.children < 0) {
+      return { ok: false, error: 'children must be a whole number of at least 0.' }
+    }
+    if (b.children > 0 && (guests === undefined || b.children >= guests)) {
+      return { ok: false, error: 'children are counted in guests, and every booking needs an adult.' }
+    }
+    children = b.children
+  }
+
   return {
     ok: true,
-    value: { room_id: b.room_id.trim(), check_in: checkIn, check_out: checkOut, guests },
+    value: {
+      room_id: b.room_id.trim(),
+      check_in: checkIn,
+      check_out: checkOut,
+      guests,
+      ...(children !== undefined ? { children } : {}),
+    },
   }
+}
+
+/** The adults and children a booking is priced for. Without a guest count, 2 adults, like the stay page. */
+export function bookingParty(input: Pick<ReservationInput, 'guests' | 'children'>): { adults: number; children: number } {
+  const children = input.children ?? 0
+  return { adults: (input.guests ?? 2) - children, children }
 }
 
 /** Checks the requested guest count against the room's capacity. Returns an error message or null. */

@@ -1,8 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  bedSizeFor, capacityFor, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, roomRowsFor, roomTagsFor,
-  samplePricesFor, stripHtml, typicalPrices, unmappedFacilities,
+  autoSince, bedSizeFor, capacityFor, countryName, hotelListQuery, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, parseSince,
+  outsideTargets, planSync, removedAt, rfc3339, roomRowsFor, roomTagsFor, sameCity, samplePricesFor, savedTarget, stripHtml, summaryOf, targetFor,
+  typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import { tags as filterTags } from '../app/search/types.ts'
 
@@ -269,14 +270,16 @@ test('samplePricesFor keeps the cheapest priced offer per mapped room and skips 
   const sample = samplePricesFor([
     offer(200, {}, { mappedRoomId: 11 }),
     offer(150, {}, { mappedRoomId: '11' }),
-    offer(90, { mappedRoomId: 12 }, { name: 'Twin Room' }),
+    offer(90, {}, { mappedRoomId: 12, name: 'Twin Room' }),
+    // LiteAPI puts mappedRoomId on the rate only; one on the offer is ignored
+    offer(80, { mappedRoomId: 13 }, { name: 'Suite' }),
     { rates: [{ retailRate: { total: [usd(10)] } }] },
     offer(5, {}, { retailRate: { total: [{ amount: 5, currency: 'EUR' }] } }),
     offer(0),
   ])
   assert.equal(sample.mapped, true)
   assert.deepEqual([...sample.byRoom], [['11', 150], ['12', 90]])
-  assert.equal(sample.cheapest, 90)
+  assert.equal(sample.cheapest, 80)
   assert.equal(sample.byName.get('twinroom'), 90)
   assert.equal(samplePricesFor([{ offerId: 'p', rates: [{ retailRate: { total: null } }] }]), null)
   assert.equal(samplePricesFor(undefined), null)
@@ -385,24 +388,32 @@ test('hotelRowFor puts the default image first, prefers HD, removes duplicates a
   assert.deepEqual(hotelRowFor(SF, summary(), detail()).photo_urls, [])
 })
 
-test('roomRowsFor keeps priced rooms first, then the cheapest, up to --max-rooms', () => {
+test('roomRowsFor keeps only a mapped hotel’s priced rooms, cheapest first, up to --max-rooms', () => {
   const sample = samplePricesFor([offer(180.4, {}, { mappedRoomId: 3 }), offer(99.6, {}, { mappedRoomId: 2 })])
+  const rooms = [room(1), room(2, { roomAmenities: amenities(118) }), room(3), room(4)]
+  const rows = roomRowsFor(rooms, sample, 10)
+  assert.deepEqual(rows.map((r) => r.liteapi_room_id), ['2', '3'], 'no offer named rooms 1 and 4, so they would open sold out')
+  assert.deepEqual(rows.map((r) => r.price_per_night), [100, 180])
+  assert.deepEqual(rows[0].tags, ['Free Wi-Fi'])
+  assert.deepEqual(roomRowsFor(rooms, sample, 1).map((r) => r.liteapi_room_id), ['2'])
+})
+
+test('roomRowsFor fills up with rooms at the hotel cheapest when offers can’t name rooms by id', () => {
+  const unmapped = samplePricesFor([offer(180.4, {}, { name: 'Room 3' }), offer(99.6, {}, { name: 'Suite' })])
   const rooms = [
     room(1, { roomName: '  Standard King Room ', bedTypes: [{ id: 10, quantity: 1, bedType: 'King bed', bedSize: '151-180 cm wide' }] }),
-    room(2, { roomAmenities: amenities(118) }),
     room(3),
     room(4),
   ]
-  const rows = roomRowsFor(rooms, sample, 3)
-  assert.deepEqual(rows.map((r) => r.liteapi_room_id), ['2', '3', '1'])
-  assert.deepEqual(rows.map((r) => r.price_per_night), [100, 180, 100], 'unpriced rooms get the hotel cheapest')
-  assert.deepEqual(rows[0].tags, ['Free Wi-Fi'])
+  const rows = roomRowsFor(rooms, unmapped, 2)
+  assert.deepEqual(rows.map((r) => [r.liteapi_room_id, r.price_per_night]), [['3', 180], ['1', 100]])
   assert.ok(rows.every((r) => Array.isArray(r.tags)))
-  assert.deepEqual(rows[2], {
+  assert.deepEqual(rows[1], {
     liteapi_room_id: '1', room_type: 'Standard King Room', capacity: 2, max_adults: null, max_children: null, num_beds: 1, bed_size: 'King',
     price_per_night: 100, tags: [],
   })
-  assert.equal(roomRowsFor(rooms, sample, 10).length, 4)
+  const elsewhere = samplePricesFor([offer(99.6, {}, { mappedRoomId: 9 })])
+  assert.deepEqual(roomRowsFor(rooms, elsewhere).map((r) => r.liteapi_room_id), ['1', '3', '4'], 'a mapped hotel whose offers name none of its rooms')
 })
 
 test('roomRowsFor drops rooms without an id or name and repeated ids', () => {
@@ -472,4 +483,156 @@ test('hotelSql removes room types this run left out, unless a reservation needs 
   assert.ok(sql.includes(`update public.rooms r set price_per_night = 120 from public.hotels h\nwhere ${stale};`))
   assert.ok(sql.indexOf('delete from') > sql.indexOf('insert into public.rooms'), 'the new rooms are written first')
   assert.ok(!hotelSql(hotel, []).includes('delete from'), 'no rooms imported: nothing is removed')
+})
+
+const NOW = new Date('2026-10-15T10:17:00.000Z')
+
+test('parseSince takes auto, hours or days back from now, or a past ISO timestamp with a zone', () => {
+  const since = (raw) => {
+    const value = parseSince(raw, NOW)
+    return value instanceof Date ? value.toISOString() : value
+  }
+  assert.equal(since('auto'), 'auto')
+  assert.equal(since(' 48h '), '2026-10-13T10:17:00.000Z')
+  assert.equal(since('1h'), '2026-10-15T09:17:00.000Z')
+  assert.equal(since('7d'), '2026-10-08T10:17:00.000Z')
+  assert.equal(since('2026-10-08T00:00:00Z'), '2026-10-08T00:00:00.000Z')
+  assert.equal(since('2026-10-08T00:00:00.5Z'), '2026-10-08T00:00:00.500Z')
+  assert.equal(since('2026-10-08T00:00-07:00'), '2026-10-08T07:00:00.000Z')
+  assert.equal(since('2026-10-08'), '2026-10-08T00:00:00.000Z', 'a date alone is midnight UTC')
+  assert.equal(since('2026-10-15T10:17:00Z'), '2026-10-15T10:17:00.000Z', 'now itself is fine')
+  for (const bad of [undefined, '', 'Auto', 'yesterday', '0h', '05d', '-1d', '1w', '1.5h', '2026-10-08T00:00:00', '2026-13-01',
+    '2026-10-15T10:18:00Z', '99999999999d', '1700000000']) {
+    assert.equal(since(bad), null, String(bad))
+  }
+})
+
+test('autoSince goes back two days from the last sync, and never past two weeks, where a city never synced starts', () => {
+  assert.equal(autoSince('2026-10-14T10:17:03.120Z', NOW).toISOString(), '2026-10-12T10:17:03.120Z')
+  assert.equal(autoSince('2026-10-14T10:17:03+00:00', NOW).toISOString(), '2026-10-12T10:17:03.000Z', 'Postgres timestamptz text')
+  assert.equal(autoSince('2026-10-16T00:00:00Z', NOW).toISOString(), '2026-10-13T10:17:00.000Z', 'a sync in the future counts as now')
+  assert.equal(autoSince('2026-09-01T00:00:00Z', NOW).toISOString(), '2026-10-01T10:17:00.000Z', 'a city with no recent change')
+  assert.equal(autoSince(null, NOW).toISOString(), '2026-10-01T10:17:00.000Z')
+  assert.equal(autoSince(undefined, NOW).toISOString(), '2026-10-01T10:17:00.000Z')
+  assert.equal(autoSince('not a date', NOW).toISOString(), '2026-10-01T10:17:00.000Z')
+})
+
+test('hotelListQuery adds offset and an RFC3339 lastUpdatedAt only with --since', () => {
+  assert.equal(rfc3339(new Date('2026-10-08T07:05:09.999Z')), '2026-10-08T07:05:09Z')
+  assert.equal(hotelListQuery(SF, 15).toString(), 'countryCode=US&cityName=San+Francisco&limit=15', 'a normal run lists as before')
+  const query = hotelListQuery(SF, 1000, new Date('2026-10-08T07:05:09.999Z'), 2000)
+  assert.equal(query.toString(), 'countryCode=US&cityName=San+Francisco&limit=1000&offset=2000&lastUpdatedAt=2026-10-08T07%3A05%3A09Z')
+  assert.equal(hotelListQuery(SF, 1000, new Date('2026-10-08T00:00:00Z')).get('offset'), '0')
+})
+
+test('planSync updates imported hotels, hides deleted ones and caps new ones', () => {
+  const at = NOW.toISOString()
+  const listed = [
+    summary({ id: 'kept' }),
+    summary({ id: 'relisted' }),
+    summary({ id: 'gone', deletedAt: '2026-10-14T03:00:00Z' }),
+    summary({ id: 'gone-again', deletedAt: '2026-10-01T00:00:00Z' }),
+    summary({ id: 'gone-odd', deletedAt: 'sometime' }),
+    summary({ id: 'never-ours', deletedAt: '2026-10-14T03:00:00Z' }),
+    summary({ id: 'new1' }), summary({ id: 'new2' }), summary({ id: 'new3' }),
+  ]
+  const existing = new Map([
+    ['kept', null], ['relisted', '2026-09-01T00:00:00+00:00'], ['gone', null], ['gone-again', '2026-10-02T00:00:00+00:00'], ['gone-odd', null],
+    ['elsewhere', null],
+  ])
+  const plan = planSync(listed, existing, 2, at)
+  const ids = (list) => list.map((item) => item.id ?? item.s.id)
+  assert.deepEqual(ids(plan.update), ['kept', 'relisted'], 'a hotel listed again is updated, which clears liteapi_deleted_at')
+  assert.deepEqual(ids(plan.add), ['new1', 'new2'])
+  assert.deepEqual(plan.remove.map(({ s, at }) => [s.id, at]), [['gone', '2026-10-14T03:00:00.000Z'], ['gone-odd', at]])
+  assert.deepEqual(plan.skip.map(({ s, reason }) => [s.id, reason]), [
+    ['gone-again', 'already marked removed'],
+    ['never-ours', 'deleted at LiteAPI'],
+    ['new3', 'new, over --max-new 2'],
+  ])
+
+  assert.deepEqual(ids(planSync(listed, existing, 0, at).add), [], '--max-new 0 only refreshes')
+  const blind = planSync(listed, null, 3, at)
+  assert.deepEqual([ids(blind.update), ids(blind.add), blind.remove], [[], ['kept', 'relisted', 'new1'], []], 'no database: all new')
+  assert.equal(blind.skip.filter(({ reason }) => reason === 'deleted at LiteAPI').length, 4)
+
+  assert.equal(removedAt('2026-10-14T03:00:00+02:00', at), '2026-10-14T01:00:00.000Z')
+  assert.equal(removedAt('', at), at)
+})
+
+test('planSync adds the hotel one of ours was merged into, even over --max-new', () => {
+  const at = NOW.toISOString()
+  const merged = (id, primaryHotelId) => summary({ id, deletedAt: '2026-10-14T03:00:00Z', primaryHotelId })
+  const listed = [
+    summary({ id: 'new1' }),
+    summary({ id: 'survivor', primaryHotelId: null }),
+    merged('ours', 'survivor'),
+    merged('ours-hidden', 'elsewhere'),
+    merged('ours-into-ours', 'kept'),
+    merged('ours-into-itself', 'ours-into-itself'),
+    merged('not-ours', 'stranger'),
+  ]
+  const existing = new Map([['ours', null], ['ours-hidden', '2026-10-14T03:00:00+00:00'], ['ours-into-ours', null], ['ours-into-itself', null], ['kept', null]])
+  const plan = planSync(listed, existing, 0, at)
+  assert.deepEqual(plan.add.map((s) => s.id), ['survivor'])
+  assert.deepEqual(plan.remove.map(({ s }) => s.id), ['ours', 'ours-into-ours', 'ours-into-itself'])
+  assert.deepEqual(plan.unlisted.map((s) => [s.id, s.primaryHotelId]), [['ours-hidden', 'elsewhere']],
+    'an already hidden hotel still looks for its replacement, so a failed add is retried')
+
+  const found = summary({ id: 'elsewhere' })
+  const again = planSync([...listed, found], existing, 0, at)
+  assert.deepEqual([again.add.map((s) => s.id), again.unlisted], [['survivor', 'elsewhere'], []])
+  assert.deepEqual(planSync(listed, null, 0, at).unlisted, [], 'no database: nothing is ours')
+})
+
+test('sameCity compares country and city, ignoring case and spaces', () => {
+  const sf = summary({ country: 'US', city: 'San Francisco' })
+  assert.equal(sameCity(summary({ country: 'us', city: ' san francisco ' }), sf), true)
+  assert.equal(sameCity(summary({ country: 'US', city: 'Oakland' }), sf), false)
+  assert.equal(sameCity(summary({ country: 'CA', city: 'San Francisco' }), sf), false)
+  assert.equal(sameCity(summary({ city: undefined, country: undefined }), summary({ city: undefined, country: undefined })), false)
+})
+
+test('outsideTargets leaves out each target by city, country and US state, quoting the names', () => {
+  const paris = { countryCode: 'FR', cityName: 'Paris', city: 'Paris', region: null, country: 'France' }
+  const vegas = { countryCode: 'US', cityName: 'Las Vegas', city: 'Las Vegas', region: 'Nevada', country: 'USA' }
+  const cancun = { countryCode: 'MX', cityName: 'Cancun', city: 'Cancún', region: null, country: 'Mexico' }
+  const odd = { countryCode: 'XX', cityName: 'St. "Big", (Town)\\', city: 'St. "Big", (Town)\\', region: null, country: 'Côte d’Ivoire' }
+  assert.equal(outsideTargets([paris, vegas, cancun, odd]), 'not.or(' +
+    'and(city.eq."Paris",country.eq."France"),' +
+    'and(city.eq."Las Vegas",country.eq."USA",or(region.eq."Nevada",region.is.null)),' +
+    'and(city.eq."Cancún",country.eq."Mexico"),' +
+    'and(city.eq."St. \\"Big\\", (Town)\\\\",country.eq."Côte d’Ivoire"))')
+  // LiteAPI lists Bali under Ubud, so the Ubud change list misses hotels saved as Bali: those are refreshed by id
+  const bali = { countryCode: 'ID', cityName: 'Ubud', city: 'Bali', region: null, country: 'Indonesia' }
+  assert.equal(outsideTargets([bali, paris]), 'not.or(and(city.eq."Paris",country.eq."France"))')
+  assert.equal(outsideTargets([bali]), 'liteapi_id.not.is.null')
+})
+
+test('a saved hotel refreshed by id keeps the location it was saved with', () => {
+  const target = savedTarget({ liteapi_id: 'lp9', city: 'Paris', region: null, country: 'France' })
+  assert.deepEqual(target, { countryCode: '', cityName: 'Paris', city: 'Paris', region: null, country: 'France' })
+  const row = hotelRowFor(target, summary({ city: 'Somewhere else', country: 'fr' }), detail(), [], undefined, '2026-10-16T00:00:00.000Z')
+  assert.deepEqual([row.city, row.region, row.country], ['Paris', null, 'France'])
+  assert.deepEqual(savedTarget({ liteapi_id: 'lp9', city: null, region: null, country: null }),
+    { countryCode: '', cityName: '', city: '', region: null, country: '' })
+})
+
+test('targetFor stores the US as USA with the state from the zip, and other countries by name', () => {
+  assert.deepEqual(targetFor(detail({ city: 'Bend', country: 'US', zip: 'OR 97701' })),
+    { countryCode: 'US', cityName: 'Bend', city: 'Bend', region: 'Oregon', country: 'USA' })
+  assert.equal(targetFor(detail({ city: 'Bend', country: 'us', zip: '97701' })).region, null, 'no state in the zip')
+  assert.equal(targetFor(detail({ city: 'X', country: 'US', zip: 'ZZ 1' })).region, null, 'not a state')
+  assert.deepEqual(targetFor(detail({ city: ' Paris ', country: 'FR', zip: '75006' })),
+    { countryCode: 'FR', cityName: 'Paris', city: 'Paris', region: null, country: 'France' })
+  assert.deepEqual(targetFor(detail()), { countryCode: '', cityName: '', city: '', region: null, country: '' })
+  assert.equal(countryName('jp'), 'Japan')
+})
+
+test('summaryOf fills the summary hotelRowFor reads from the details', () => {
+  const s = summaryOf(detail({ city: 'Paris', country: 'FR', location: { latitude: 48.8, longitude: 2.3 }, starRating: 4, main_photo: 'p.jpg' }))
+  assert.equal(hotelRowFor(targetFor(detail({ city: 'Paris', country: 'FR' })), s, detail()).latitude, 48.8)
+  assert.deepEqual([s.id, s.city, s.country, s.stars, s.main_photo], ['lp1', 'Paris', 'FR', 4, 'p.jpg'])
+  assert.ok(Number.isNaN(summaryOf(detail()).latitude), 'no location is NaN, which hotelRowFor stores as null')
+  assert.equal(hotelRowFor(targetFor(detail()), summaryOf(detail()), detail()).latitude, null)
 })

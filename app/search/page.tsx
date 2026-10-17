@@ -1,22 +1,28 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { formatShort } from "../_components/dates";
 import { SearchExperience } from "../_components/SearchExperience";
 import { SkyBackground } from "../_components/SkyBackground";
 import { Button } from "../_components/ui";
 import { search } from "./search";
+import { priceSearchResults, quotePage } from "./livePrices";
+import { mergeLiveResults, withoutDates } from "./liveSearch";
 import type { SearchRequest } from "./types";
 import { Pagination } from "./components/Pagination";
 import { searchQuery } from "@/lib/stay-filters";
 import { SearchResultCard, type HotelSearchResult } from "./components/SearchResultCard";
 import { SortSelect } from "./components/SortSelect";
 import { FilterSheetButton, FilterSidebar, type FilterValues } from "./components/FilterSidebar";
-import { getMockSearchResults } from "./mockResults";
+import { catalogEnabled, facilityNames, findPlace, hotelsInPlace } from "@/lib/liteapi/catalog";
+import { savedLiteapiIds } from "@/utils/liteapi-hotels";
 import {parseDate, todayInTimeZone} from "@/utils/reservation-logic";
 
 type RawParams = Record<string, string | string[] | undefined>;
 type SortValue = "recommended" | "price-low" | "price-high";
 
 const PAGE_SIZE = 21;
+// search_hotels caps p_limit at 100
+const LIVE_CANDIDATES = 100;
 // The bar and the AI's reply to it sit 84px inside the results on wide screens; lined up edge to edge,
 // the page read as one flat column. 84px keeps the bar at 1152px where the results reach 1400px.
 const barColumn = "xl:mx-[84px]";
@@ -57,33 +63,82 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     let data: HotelSearchResult[] = [];
     let total = 0;
     let searchError = "";
-    let usingMockData = false;
+    // The page's LiteAPI prices, streamed in after its hotels show
+    let quoted: Promise<HotelSearchResult[]> | null = null;
 
     if (shouldSearch && !validationError) {
         try {
-            const {results} = await search(toSearchRequest(params), {
-                page: positiveInt(params.page, 1),
-                pageSize: PAGE_SIZE,
-            });
-            data = Array.isArray(results.data) ? (results.data as HotelSearchResult[]) : [];
-            total = Number(results.total ?? 0);
-            if (results.error) {
-                console.error("Search failed", results.error);
-                searchError = "We couldn't load stays right now. Please try again.";
+            const live = Boolean(params.checkIn && params.checkOut);
+            const page = positiveInt(params.page, 1);
+            const request = toSearchRequest(params);
+            const pageRows = (list: HotelSearchResult[]) => list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+            const listing = params.where?.trim() ? await liveListing(params.where, params.place) : null;
+            if (listing) {
+                const ids = listing.hotels.map((hotel) => hotel.id);
+                const [found, savedIds] = await Promise.all([
+                    search(request, {page: 1, pageSize: LIVE_CANDIDATES}, ids),
+                    savedLiteapiIds(ids),
+                ]);
+                if (found.results.error) {
+                    throw found.results.error;
+                }
+                const std = found.params;
+                const rows = rowsOf(found.results.data);
+                const complete = Number(found.results.total ?? rows.length) <= rows.length;
+                const merged = mergeLiveResults(rows, listing.hotels, savedIds, listing.names, std, complete);
+                if (!std.dates) {
+                    const shown = withoutDates(merged, std);
+                    data = pageRows(shown);
+                    total = data.length ? shown.length : 0;
+                } else if (std.price || std.sort === "price-low" || std.sort === "price-high") {
+                    // Only live prices can order or range these, so the page waits for them
+                    const priced = await priceSearchResults(merged, std);
+                    data = pageRows(priced);
+                    total = data.length ? priced.length : 0;
+                } else {
+                    const shown = pageRows(merged);
+                    quoted = quotePage(shown, std);
+                    data = shown.map((row): HotelSearchResult => (row.liteapi_id ? { ...row, min_price: null, price_status: "checking" } : row));
+                    total = data.length ? merged.length : 0;
+                }
+            } else {
+                // Live prices can drop, filter and reorder LiteAPI hotels, so with dates the page takes
+                // the SQL cap of 100 candidates and paginates them here
+                const found = await search(request, live ? {page: 1, pageSize: LIVE_CANDIDATES} : {page, pageSize: PAGE_SIZE});
+                const std = found.params;
+                let results = found.results;
+                const rows = rowsOf(results.data);
+                const matches = Number(results.total ?? 0);
+                if (!live || results.error) {
+                    data = rows;
+                    total = matches;
+                } else if (rows.some((row) => row.liteapi_id)) {
+                    if (matches > LIVE_CANDIDATES) {
+                        console.warn(`[search] live pricing saw only the first ${LIVE_CANDIDATES} matches`);
+                    }
+                    const priced = await priceSearchResults(rows, std);
+                    data = pageRows(priced);
+                    // A page past the end reads "0 stays found", as the SQL paging did
+                    total = data.length ? priced.length : 0;
+                } else if (matches > LIVE_CANDIDATES) {
+                    // No LiteAPI hotel among the candidates, so page through every match in SQL. Pricing the page
+                    // still filters any LiteAPI hotel further down, which the SQL let past the price range.
+                    results = (await search(request, {page, pageSize: PAGE_SIZE})).results;
+                    const sqlPage = rowsOf(results.data);
+                    data = results.error ? sqlPage : await priceSearchResults(sqlPage, std);
+                    total = Number(results.total ?? 0);
+                } else {
+                    data = pageRows(rows);
+                    total = data.length ? matches : 0;
+                }
+                if (results.error) {
+                    console.error("Search failed", results.error);
+                    searchError = "We couldn't load stays right now. Please try again.";
+                }
             }
         } catch (error) {
             console.error("Search failed", error);
             searchError = "We couldn't load stays right now. Please try again.";
-        }
-
-        // TODO(INTEGRATION): Remove this local-only fallback once the shared Supabase
-        // project has enough seeded hotel/room data for reliable frontend testing.
-        // It never runs in production and never hides a real search error.
-        if (process.env.NODE_ENV === "development" && !searchError && data.length === 0) {
-            const mock = getMockSearchResults(params);
-            data = mock.data;
-            total = mock.total;
-            usingMockData = true;
         }
     }
 
@@ -118,6 +173,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               initialMode={aiPrompt ? "ai" : "standard"}
               initialValues={{
                 where: params.where,
+                place: params.place,
                 checkIn: params.checkIn,
                 checkOut: params.checkOut,
                 adults: positiveInt(params.adults, 2),
@@ -141,7 +197,6 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
             <AiReplyCard reply={aiReply} params={params} />
           </div>
         )}
-        {usingMockData && <MockDataNotice />}
 
         {shouldSearch && (
           <div className="flex flex-col gap-5 border-b border-edge pb-6 sm:flex-row sm:items-end sm:justify-between">
@@ -194,13 +249,13 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                 />
               ) : (
                 <>
-                  <div key={resultsKey} className="grid gap-5 sm:grid-cols-2 2xl:grid-cols-3">
-                    {data.map((stay, index) => (
-                      <div key={String(stay.id ?? index)} className="card-in grid" style={{ "--i": Math.min(index, 8) } as React.CSSProperties}>
-                        <SearchResultCard stay={stay} eager={index < 3} search={stayLinkSearch} />
-                      </div>
-                    ))}
-                  </div>
+                  {quoted ? (
+                    <Suspense key={resultsKey} fallback={<ResultsGrid rows={data} search={stayLinkSearch} />}>
+                      <QuotedResultsGrid rows={quoted} search={stayLinkSearch} />
+                    </Suspense>
+                  ) : (
+                    <ResultsGrid key={resultsKey} rows={data} search={stayLinkSearch} />
+                  )}
                   <Pagination currentPage={currentPage} totalPages={totalPages} params={navigationParams} />
                 </>
               )}
@@ -214,6 +269,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
 type SearchParams = {
     where?: string;
+    /** LiteAPI's id for the place picked from the destination suggestions */
+    place?: string;
     checkIn?: string;
     checkOut?: string;
     adults?: string;
@@ -235,6 +292,7 @@ function normalizeParams(raw: RawParams): SearchParams {
     const sort = first(raw.sort);
     return {
         where: first(raw.where),
+        place: first(raw.place),
         checkIn: first(raw.checkIn)?.split("T")[0],
         checkOut: first(raw.checkOut)?.split("T")[0],
         adults: first(raw.adults),
@@ -256,6 +314,7 @@ function normalizeParams(raw: RawParams): SearchParams {
 function toRawParams(params: SearchParams): RawParams {
     return {
         where: params.where,
+        place: params.place,
         checkIn: params.checkIn,
         checkOut: params.checkOut,
         adults: params.adults,
@@ -460,7 +519,7 @@ function chipPrice(value = "") {
 
 function clearFiltersHref(params: SearchParams) {
   const query = new URLSearchParams();
-  for (const key of ["where", "checkIn", "checkOut", "adults", "children"] as const) {
+  for (const key of ["where", "place", "checkIn", "checkOut", "adults", "children"] as const) {
     const value = params[key];
     if (value) query.set(key, value);
   }
@@ -469,18 +528,35 @@ function clearFiltersHref(params: SearchParams) {
   return suffix ? `/search?${suffix}` : "/search";
 }
 
-function MockDataNotice() {
-    return (
-        <div
-            className="mb-5 flex items-start gap-3 rounded-xl border border-edge bg-surface/75 px-4 py-3 text-sm text-slate">
-      <span
-          className="mt-0.5 inline-flex shrink-0 rounded-full bg-blue/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] text-blue-dark">
-        Demo data
-      </span>
-            <p>Temporary local listings are filling empty database results so you can test cards, filters, sorting, and
-                pagination.</p>
+// `cascade` plays the cards' entrance. Prices streaming in replace cards already on screen, so those skip it.
+function ResultsGrid({ rows, search, cascade = true }: { rows: HotelSearchResult[]; search: string; cascade?: boolean }) {
+  return (
+    <div className="grid gap-5 sm:grid-cols-2 2xl:grid-cols-3">
+      {rows.map((stay, index) => (
+        <div key={String(stay.id ?? stay.liteapi_id ?? index)} className={cascade ? "card-in grid" : "grid"} style={{ "--i": Math.min(index, 8) } as React.CSSProperties}>
+          <SearchResultCard stay={stay} eager={index < 3} search={search} />
         </div>
-    );
+      ))}
+    </div>
+  );
+}
+
+async function QuotedResultsGrid({ rows, search }: { rows: Promise<HotelSearchResult[]>; search: string }) {
+  return <ResultsGrid rows={await rows} search={search} cascade={false} />;
+}
+
+// null without a LiteAPI key, or when LiteAPI can't find the place or list its hotels: the search then runs on
+// the database alone
+async function liveListing(where: string, placeId?: string) {
+  if (!catalogEnabled()) return null;
+  const id = placeId?.trim() || (await findPlace(where))?.placeId;
+  if (!id) return null;
+  const [hotels, names] = await Promise.all([hotelsInPlace(id), facilityNames()]);
+  return hotels ? { hotels, names } : null;
+}
+
+function rowsOf(data: unknown): HotelSearchResult[] {
+  return Array.isArray(data) ? (data as HotelSearchResult[]) : [];
 }
 
 function StatePanel({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {

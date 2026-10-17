@@ -67,6 +67,7 @@ export async function createReservation(reservation: {
   check_out: string
   total_price: number
   guests?: number
+  children?: number
   status?: string
   has_insurance?: boolean
 }) {
@@ -85,6 +86,7 @@ export async function updateReservation(
     room_id: string
     hotel_id: string
     guests: number
+    children: number
     check_in: string
     check_out: string
     status: string
