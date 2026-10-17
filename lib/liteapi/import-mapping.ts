@@ -2,6 +2,7 @@
 import { bedSizes, tags as filterTags } from '../../app/search/types.ts'
 import type { BedSize, Tag } from '../../app/search/types.ts'
 import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRoom } from './types.ts'
+import { stateFromZip } from '../us-states.ts'
 
 // city/region/country as search matches them ("USA" + full state name): TARGETS sets them on import, targetFor on
 // hotels saved from live search
@@ -347,17 +348,6 @@ function photosFor(s: LiteHotelSummary, d: LiteHotelDetail): string[] {
   return [d.main_photo, s.main_photo].map((url) => (url ?? '').trim()).filter(Boolean).slice(0, 1)
 }
 
-const US_STATES: Record<string, string> = {
-  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut',
-  DE: 'Delaware', DC: 'District of Columbia', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois',
-  IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
-  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana',
-  NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York',
-  NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania',
-  RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah',
-  VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
-}
-
 const regionNames = new Intl.DisplayNames(['en'], { type: 'region' })
 
 /** English name for a 2-letter country code ("FR" → "France"), or the code itself when there's none */
@@ -374,10 +364,7 @@ export function countryName(code: string): string {
 export function targetFor(d: LiteHotelDetail): Target {
   const code = (d.country ?? '').trim().toUpperCase()
   const city = (d.city ?? '').trim()
-  if (code === 'US') {
-    const state = /^([A-Z]{2})\b/.exec((d.zip ?? '').trim())?.[1]
-    return { countryCode: code, cityName: city, city, region: (state && US_STATES[state]) || null, country: 'USA' }
-  }
+  if (code === 'US') return { countryCode: code, cityName: city, city, region: stateFromZip(d.zip), country: 'USA' }
   return { countryCode: code, cityName: city, city, region: null, country: code ? countryName(code) : '' }
 }
 

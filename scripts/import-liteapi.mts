@@ -13,13 +13,41 @@ import {
   sameCity, samplePricesFor, savedTarget, typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import type { Existing, HotelRow, RoomRow, SavedRow, Target } from '../lib/liteapi/import-mapping.ts'
+import { stateFromZip } from '../lib/us-states.ts'
 
+// Popular destinations only; live search covers everywhere else. cityName is what LiteAPI lists the place under,
+// city is the destination picker's spelling. Outside the US there's no region and the country is countryName(code).
 const TARGETS = {
-  sf:  { countryCode: 'US', cityName: 'San Francisco', city: 'San Francisco', region: 'California', country: 'USA' },
-  nyc: { countryCode: 'US', cityName: 'New York',      city: 'New York',      region: 'New York',   country: 'USA' },
-  mia: { countryCode: 'US', cityName: 'Miami',         city: 'Miami',         region: 'Florida',    country: 'USA' },
-  lv:  { countryCode: 'US', cityName: 'Las Vegas',     city: 'Las Vegas',     region: 'Nevada',     country: 'USA' },
-  // non-US example: paris: { countryCode:'FR', cityName:'Paris', city:'Paris', region:null, country:'France' }
+  sf:         { countryCode: 'US', cityName: 'San Francisco',    city: 'San Francisco', region: 'California', country: 'USA' },
+  nyc:        { countryCode: 'US', cityName: 'New York',         city: 'New York',      region: 'New York',   country: 'USA' },
+  mia:        { countryCode: 'US', cityName: 'Miami',            city: 'Miami',         region: 'Florida',    country: 'USA' },
+  lv:         { countryCode: 'US', cityName: 'Las Vegas',        city: 'Las Vegas',     region: 'Nevada',     country: 'USA' },
+  orlando:    { countryCode: 'US', cityName: 'Orlando',          city: 'Orlando',       region: 'Florida',    country: 'USA' },
+  la:         { countryCode: 'US', cityName: 'Los Angeles',      city: 'Los Angeles',   region: 'California', country: 'USA' },
+  chicago:    { countryCode: 'US', cityName: 'Chicago',          city: 'Chicago',       region: 'Illinois',   country: 'USA' },
+  honolulu:   { countryCode: 'US', cityName: 'Honolulu',         city: 'Honolulu',      region: 'Hawaii',     country: 'USA' },
+  seattle:    { countryCode: 'US', cityName: 'Seattle',          city: 'Seattle',       region: 'Washington', country: 'USA' },
+  sedona:     { countryCode: 'US', cityName: 'Sedona',           city: 'Sedona',        region: 'Arizona',    country: 'USA' },
+  aspen:      { countryCode: 'US', cityName: 'Aspen',            city: 'Aspen',         region: 'Colorado',   country: 'USA' },
+  tahoe:      { countryCode: 'US', cityName: 'South Lake Tahoe', city: 'Lake Tahoe',    region: 'California', country: 'USA' },
+  monterey:   { countryCode: 'US', cityName: 'Monterey',         city: 'Monterey',      region: 'California', country: 'USA' },
+  santacruz:  { countryCode: 'US', cityName: 'Santa Cruz',       city: 'Santa Cruz',    region: 'California', country: 'USA' },
+  lakeplacid: { countryCode: 'US', cityName: 'Lake Placid',      city: 'Lake Placid',   region: 'New York',   country: 'USA' },
+  paris:      { countryCode: 'FR', cityName: 'Paris',     city: 'Paris',     region: null, country: 'France' },
+  london:     { countryCode: 'GB', cityName: 'London',    city: 'London',    region: null, country: 'United Kingdom' },
+  tokyo:      { countryCode: 'JP', cityName: 'Tokyo',     city: 'Tokyo',     region: null, country: 'Japan' },
+  rome:       { countryCode: 'IT', cityName: 'Rome',      city: 'Rome',      region: null, country: 'Italy' },
+  barcelona:  { countryCode: 'ES', cityName: 'Barcelona', city: 'Barcelona', region: null, country: 'Spain' },
+  kyoto:      { countryCode: 'JP', cityName: 'Kyoto',     city: 'Kyoto',     region: null, country: 'Japan' },
+  lisbon:     { countryCode: 'PT', cityName: 'Lisbon',    city: 'Lisbon',    region: null, country: 'Portugal' },
+  reykjavik:  { countryCode: 'IS', cityName: 'Reykjavik', city: 'Reykjavík', region: null, country: 'Iceland' },
+  lucerne:    { countryCode: 'CH', cityName: 'Luzern',    city: 'Lucerne',   region: null, country: 'Switzerland' },
+  bali:       { countryCode: 'ID', cityName: 'Ubud',      city: 'Bali',      region: null, country: 'Indonesia' },
+  banff:      { countryCode: 'CA', cityName: 'Banff',     city: 'Banff',     region: null, country: 'Canada' },
+  santorini:  { countryCode: 'GR', cityName: 'Santorini', city: 'Santorini', region: null, country: 'Greece' },
+  cancun:     { countryCode: 'MX', cityName: 'Cancun',    city: 'Cancún',    region: null, country: 'Mexico' },
+  dubai:      { countryCode: 'AE', cityName: 'Dubai',     city: 'Dubai',     region: null, country: 'United Arab Emirates' },
+  bangkok:    { countryCode: 'TH', cityName: 'Bangkok',   city: 'Bangkok',   region: null, country: 'Thailand' },
 } as const satisfies Record<string, Target>
 type CityKey = keyof typeof TARGETS
 
@@ -498,12 +526,16 @@ async function importHotels(
       if (run.existing?.has(s.id) && !run.existing.get(s.id)) return hide(report, s, removedAt(d.deletedAt, run.at))
       return skip(report, s, 'deleted at LiteAPI')
     }
+    const target = targetOf(s)
+    // LiteAPI's US city lists take same-named towns from other states (Las Vegas NM, Lake Placid FL)
+    const state = target.countryCode === 'US' && target.region ? stateFromZip(d.zip) : null
+    if (state && state !== target.region) return skip(report, s, 'in another state')
     const rooms = roomRowsFor(d.rooms, sample, options.maxRooms, isAdultsOnly(d))
     if (!rooms.length) return skip(report, s, 'no rooms')
     const kept = new Set(rooms.map((room) => room.liteapi_room_id))
     const keptRooms = (d.rooms ?? []).filter((room) => kept.has(String(room.id)))
     report.droppedRooms += Math.max(0, (d.rooms ?? []).length - rooms.length)
-    const hotel = hotelRowFor(targetOf(s), s, d, offersByHotel.get(s.id)?.flat(), keptRooms, run.at)
+    const hotel = hotelRowFor(target, s, d, offersByHotel.get(s.id)?.flat(), keptRooms, run.at)
     for (const name of unmappedFacilities(d)) report.unmapped.set(name, (report.unmapped.get(name) ?? 0) + 1)
     report.imported.push({ place, hotel, rooms })
     console.log(`  ok   ${label(s)}: ${rooms.length} room types, tags [${hotel.tags.join(', ')}]`)
