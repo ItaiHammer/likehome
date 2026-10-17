@@ -22,7 +22,7 @@ export type HotelRow = {
   longitude: number | null
   tags: Tag[]
   liteapi_deleted_at: null
-  liteapi_synced_at: string
+  liteapi_synced_at: string | null
 }
 
 export type RoomRow = {
@@ -384,7 +384,8 @@ export function summaryOf(d: LiteHotelDetail): LiteHotelSummary {
 }
 
 export function hotelRowFor(
-  target: Target, s: LiteHotelSummary, d: LiteHotelDetail, offers?: LiteOffer[], rooms?: LiteRoom[], syncedAt = new Date().toISOString(),
+  target: Target, s: LiteHotelSummary, d: LiteHotelDetail, offers?: LiteOffer[], rooms?: LiteRoom[],
+  syncedAt: string | null = new Date().toISOString(),
 ): HotelRow {
   return {
     liteapi_id: s.id,
@@ -461,19 +462,30 @@ export function parseSince(raw: string | undefined, now = new Date()): Date | 'a
   return Number.isFinite(at.getTime()) && at <= now ? at : null
 }
 
-// Two days before the last sync (or now, without one), but never more than two weeks back: a hotel a failed or
-// skipped request missed, or one over --max-new, is listed again on the next runs instead of falling out of the window.
+// Two days before the last sync, so a hotel a failed or skipped request missed, or one over --max-new, is listed again
+// on the next runs instead of falling out of the window. Never more than two weeks back, which is also where a city
+// never synced starts.
 export function autoSince(lastSyncedAt: string | null | undefined, now = new Date()): Date {
+  const earliest = now.getTime() - AUTO_MAX_DAYS * 24 * HOUR_MS
   const last = Date.parse(lastSyncedAt ?? '')
-  const from = Number.isFinite(last) ? Math.min(last, now.getTime()) : now.getTime()
-  return new Date(Math.max(from - AUTO_OVERLAP_DAYS * 24 * HOUR_MS, now.getTime() - AUTO_MAX_DAYS * 24 * HOUR_MS))
+  if (!Number.isFinite(last)) return new Date(earliest)
+  return new Date(Math.max(Math.min(last, now.getTime()) - AUTO_OVERLAP_DAYS * 24 * HOUR_MS, earliest))
 }
 
-// PostgREST filter (for .or()) keeping hotels outside every target city. City and country both count: a hotel saved in
-// London, Ontario isn't in the London import. Values are double-quoted, with \ and " escaped.
+const folded = (text: string) => text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+
+// PostgREST filter (for .or()) keeping the hotels no city sync refreshes, so they're refreshed by id. City, country and
+// the US state all count: a hotel saved in London, Ontario or Las Vegas, New Mexico isn't in that import (one with no
+// state is, and gets the target's). A target LiteAPI lists under another name (Bali under Ubud) keeps nothing out,
+// since its change list misses hotels saved under its own name. Values are double-quoted, with \ and " escaped.
 export function outsideTargets(targets: Target[]): string {
   const quoted = (value: string) => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
-  return `not.or(${targets.map((t) => `and(city.eq.${quoted(t.city)},country.eq.${quoted(t.country)})`).join(',')})`
+  const inside = targets.filter((t) => folded(t.city) === folded(t.cityName)).map((t) => {
+    const terms = [`city.eq.${quoted(t.city)}`, `country.eq.${quoted(t.country)}`]
+    if (t.region) terms.push(`or(region.eq.${quoted(t.region)},region.is.null)`)
+    return `and(${terms.join(',')})`
+  })
+  return inside.length ? `not.or(${inside.join(',')})` : 'liteapi_id.not.is.null'
 }
 
 const placeOf = (s: LiteHotelSummary) => [s.country, s.city].map((part) => String(part ?? '').trim().toLowerCase()).join('|')

@@ -89,7 +89,8 @@ export async function saveLiteapiHotel(liteapiId: string, stay?: Stay): Promise<
   const rooms = roomRowsFor(d.rooms, prices, MAX_ROOMS, isAdultsOnly(d))
   if (!rooms.length) return null
   const kept = new Set(rooms.map((room) => room.liteapi_room_id))
-  const hotel = hotelRowFor(targetFor(d), summaryOf(d), d, sample.offers, (d.rooms ?? []).filter((room) => kept.has(String(room.id))))
+  // No sync time: only a sync moves its city's --since auto window
+  const hotel = hotelRowFor(targetFor(d), summaryOf(d), d, sample.offers, (d.rooms ?? []).filter((room) => kept.has(String(room.id))), null)
 
   const { data: inserted, error } = await db.from('hotels').insert(hotel).select('id').single()
   if (error || !inserted) {

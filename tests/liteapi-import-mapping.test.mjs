@@ -499,14 +499,14 @@ test('parseSince takes auto, hours or days back from now, or a past ISO timestam
   }
 })
 
-test('autoSince goes back two days from the last sync, or from now without one, and never past two weeks', () => {
+test('autoSince goes back two days from the last sync, and never past two weeks, where a city never synced starts', () => {
   assert.equal(autoSince('2026-10-14T10:17:03.120Z', NOW).toISOString(), '2026-10-12T10:17:03.120Z')
   assert.equal(autoSince('2026-10-14T10:17:03+00:00', NOW).toISOString(), '2026-10-12T10:17:03.000Z', 'Postgres timestamptz text')
-  assert.equal(autoSince(null, NOW).toISOString(), '2026-10-13T10:17:00.000Z')
-  assert.equal(autoSince(undefined, NOW).toISOString(), '2026-10-13T10:17:00.000Z')
-  assert.equal(autoSince('not a date', NOW).toISOString(), '2026-10-13T10:17:00.000Z')
   assert.equal(autoSince('2026-10-16T00:00:00Z', NOW).toISOString(), '2026-10-13T10:17:00.000Z', 'a sync in the future counts as now')
   assert.equal(autoSince('2026-09-01T00:00:00Z', NOW).toISOString(), '2026-10-01T10:17:00.000Z', 'a city with no recent change')
+  assert.equal(autoSince(null, NOW).toISOString(), '2026-10-01T10:17:00.000Z')
+  assert.equal(autoSince(undefined, NOW).toISOString(), '2026-10-01T10:17:00.000Z')
+  assert.equal(autoSince('not a date', NOW).toISOString(), '2026-10-01T10:17:00.000Z')
 })
 
 test('hotelListQuery adds offset and an RFC3339 lastUpdatedAt only with --since', () => {
@@ -585,11 +585,20 @@ test('sameCity compares country and city, ignoring case and spaces', () => {
   assert.equal(sameCity(summary({ city: undefined, country: undefined }), summary({ city: undefined, country: undefined })), false)
 })
 
-test('outsideTargets leaves out each target by city and country, quoting the names', () => {
+test('outsideTargets leaves out each target by city, country and US state, quoting the names', () => {
   const paris = { countryCode: 'FR', cityName: 'Paris', city: 'Paris', region: null, country: 'France' }
-  const odd = { countryCode: 'XX', cityName: 'x', city: 'St. "Big", (Town)\\', region: null, country: 'Côte d’Ivoire' }
-  assert.equal(outsideTargets([paris, odd]),
-    'not.or(and(city.eq."Paris",country.eq."France"),and(city.eq."St. \\"Big\\", (Town)\\\\",country.eq."Côte d’Ivoire"))')
+  const vegas = { countryCode: 'US', cityName: 'Las Vegas', city: 'Las Vegas', region: 'Nevada', country: 'USA' }
+  const cancun = { countryCode: 'MX', cityName: 'Cancun', city: 'Cancún', region: null, country: 'Mexico' }
+  const odd = { countryCode: 'XX', cityName: 'St. "Big", (Town)\\', city: 'St. "Big", (Town)\\', region: null, country: 'Côte d’Ivoire' }
+  assert.equal(outsideTargets([paris, vegas, cancun, odd]), 'not.or(' +
+    'and(city.eq."Paris",country.eq."France"),' +
+    'and(city.eq."Las Vegas",country.eq."USA",or(region.eq."Nevada",region.is.null)),' +
+    'and(city.eq."Cancún",country.eq."Mexico"),' +
+    'and(city.eq."St. \\"Big\\", (Town)\\\\",country.eq."Côte d’Ivoire"))')
+  // LiteAPI lists Bali under Ubud, so the Ubud change list misses hotels saved as Bali: those are refreshed by id
+  const bali = { countryCode: 'ID', cityName: 'Ubud', city: 'Bali', region: null, country: 'Indonesia' }
+  assert.equal(outsideTargets([bali, paris]), 'not.or(and(city.eq."Paris",country.eq."France"))')
+  assert.equal(outsideTargets([bali]), 'liteapi_id.not.is.null')
 })
 
 test('a saved hotel refreshed by id keeps the location it was saved with', () => {

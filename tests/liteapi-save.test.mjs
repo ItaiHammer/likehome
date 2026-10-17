@@ -99,6 +99,7 @@ test('a new hotel is saved with its rooms, priced from the guest stay, and its i
   assert.deepEqual([hotel.liteapi_id, hotel.name, hotel.city, hotel.region, hotel.country, hotel.rating, hotel.latitude],
     ['lp33281', 'Campfire Hotel', 'Bend', 'Oregon', 'USA', 3, 44.06])
   assert.equal(hotel.owner_id, undefined, 'LiteAPI hotels have no owner')
+  assert.equal(hotel.liteapi_synced_at, null, 'only a sync moves its city\'s --since auto window')
 
   assert.deepEqual(roomsOp.slice(0, 2), ['rooms', 'insert'])
   assert.deepEqual(roomsOp[2].map((r) => [r.hotel_id, r.liteapi_room_id, r.price_per_night, r.max_adults, r.bed_size]), [
