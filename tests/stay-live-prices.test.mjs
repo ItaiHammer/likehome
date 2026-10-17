@@ -61,6 +61,12 @@ test('a quoted room shows the rate’s own name, price, cancellation terms and f
   assert.equal(twin.name, 'Stored twin')
 })
 
+test('rooms that can be booked come before sold-out ones, even when a sold-out room’s stored price is lower', async () => {
+  rates.value.byRoom['101'] = quote(199)
+  const stay = await withLiveRoomPrices(await getHotelStay(HOTEL_ID), Q)
+  assert.deepEqual(stay.rooms.map((r) => [r.id, r.nightly, !!r.soldOut]), [['king', 199, false], ['twin', 120, true]])
+})
+
 test('a rate without a room name keeps the stored one', async () => {
   rates.value.byRoom['101'] = quote(99, { rateName: '' })
   const stay = await withLiveRoomPrices(await getHotelStay(HOTEL_ID), Q)

@@ -22,7 +22,8 @@ export function RoomOptions({
 }) {
   return (
     <div className="mt-5 space-y-4">
-      {rooms.map((r) => {
+      {/* Live prices can sell out any room, so the ones left to book always come first */}
+      {[...rooms].sort((a, b) => Number(!!a.soldOut) - Number(!!b.soldOut)).map((r) => {
         const on = r.id === selectedId;
         const off = !!r.soldOut;
         const line = off ? "Sold out right now" : note(r);

@@ -111,6 +111,7 @@ export async function withLiveRoomPrices(stay: Stay, q: StayQuery, keepOpenRoomI
       if (quote.status === "sold_out") return { ...room, soldOut: room.id !== keepOpenRoomId };
       return room;
     })
-    .sort((a, b) => a.nightly - b.nightly);
+    // A sold-out room keeps its stored sample price, which can undercut every live one
+    .sort((a, b) => Number(!!a.soldOut) - Number(!!b.soldOut) || a.nightly - b.nightly);
   return { ...stay, rooms, priceSource: "live" };
 }
