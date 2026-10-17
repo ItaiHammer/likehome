@@ -435,6 +435,12 @@ export function hotelListQuery(target: Target, limit: number, since?: Date, offs
 // liteapi_id -> liteapi_deleted_at of the LiteAPI hotels already in the database
 export type Existing = Map<string, string | null>
 
+export type SavedRow = { liteapi_id: string; city: string | null; region: string | null; country: string | null }
+
+// A saved hotel outside the import cities is refreshed by id, so it keeps the location it was saved with
+export const savedTarget = (row: SavedRow): Target =>
+  ({ countryCode: '', cityName: row.city ?? '', city: row.city ?? '', region: row.region, country: row.country ?? '' })
+
 export type SyncPlan = {
   update: LiteHotelSummary[]
   add: LiteHotelSummary[]

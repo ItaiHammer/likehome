@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   autoSince, bedSizeFor, capacityFor, hotelListQuery, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, parseSince, planSync,
-  removedAt, rfc3339, roomRowsFor, roomTagsFor, sameCity, samplePricesFor, stripHtml, typicalPrices, unmappedFacilities,
+  removedAt, rfc3339, roomRowsFor, roomTagsFor, sameCity, samplePricesFor, savedTarget, stripHtml, typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import { tags as filterTags } from '../app/search/types.ts'
 
@@ -579,4 +579,13 @@ test('sameCity compares country and city, ignoring case and spaces', () => {
   assert.equal(sameCity(summary({ country: 'US', city: 'Oakland' }), sf), false)
   assert.equal(sameCity(summary({ country: 'CA', city: 'San Francisco' }), sf), false)
   assert.equal(sameCity(summary({ city: undefined, country: undefined }), summary({ city: undefined, country: undefined })), false)
+})
+
+test('a saved hotel refreshed by id keeps the location it was saved with', () => {
+  const target = savedTarget({ liteapi_id: 'lp9', city: 'Paris', region: null, country: 'France' })
+  assert.deepEqual(target, { countryCode: '', cityName: 'Paris', city: 'Paris', region: null, country: 'France' })
+  const row = hotelRowFor(target, summary({ city: 'Somewhere else', country: 'fr' }), detail(), [], undefined, '2026-10-16T00:00:00.000Z')
+  assert.deepEqual([row.city, row.region, row.country], ['Paris', null, 'France'])
+  assert.deepEqual(savedTarget({ liteapi_id: 'lp9', city: null, region: null, country: null }),
+    { countryCode: '', cityName: '', city: '', region: null, country: '' })
 })

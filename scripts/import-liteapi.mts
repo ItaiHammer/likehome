@@ -10,9 +10,9 @@ import { LITEAPI_BASE } from '../lib/liteapi/types.ts'
 import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRatesRequest, LiteRatesResponse } from '../lib/liteapi/types.ts'
 import {
   AUTO_OVERLAP_DAYS, autoSince, hotelListQuery, hotelRowFor, hotelSql, isAdultsOnly, parseSince, planSync, removedAt, rfc3339, roomRowsFor,
-  sameCity, samplePricesFor, typicalPrices, unmappedFacilities,
+  sameCity, samplePricesFor, savedTarget, typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
-import type { Existing, HotelRow, RoomRow, Target } from '../lib/liteapi/import-mapping.ts'
+import type { Existing, HotelRow, RoomRow, SavedRow, Target } from '../lib/liteapi/import-mapping.ts'
 
 const TARGETS = {
   sf:  { countryCode: 'US', cityName: 'San Francisco', city: 'San Francisco', region: 'California', country: 'USA' },
@@ -53,6 +53,8 @@ const USAGE = `Usage: npm run import:liteapi -- [options]
                       Updates hotels already imported, hides ones LiteAPI deleted (adding the hotel one was merged
                       into), and adds up to --max-new other new hotels per city
   --max-new 5         with --since, new hotels added per city (0-100), not counting merged-into ones
+  --max-saved 25      with --since, also refresh this many saved hotels outside those cities (0-200), longest
+                      unsynced first. Live search saves hotels from anywhere, and no city's change list covers them.
 
 Env (.env.local): LITEAPI_KEY, plus NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY unless --dry-run or --sql-out.
 A --since --dry-run reads (never writes) Supabase when both are set, to tell imported hotels from new ones.`
@@ -61,7 +63,7 @@ class CliError extends Error {}
 
 type Options = {
   dryRun: boolean; cities: CityKey[]; limit: number; maxRooms: number; sqlOut: string | null; help: boolean
-  since: Date | 'auto' | null; maxNew: number
+  since: Date | 'auto' | null; maxNew: number; maxSaved: number
 }
 
 function wholeNumber(flag: string, raw: string | undefined, max: number, min = 1): number {
@@ -73,6 +75,7 @@ function wholeNumber(flag: string, raw: string | undefined, max: number, min = 1
 function parseOptions(argv: string[]): Options {
   const options: Options = {
     dryRun: false, cities: Object.keys(TARGETS) as CityKey[], limit: 100, maxRooms: 10, sqlOut: null, help: false, since: null, maxNew: 5,
+    maxSaved: 25,
   }
   const given = new Set<string>()
   for (let i = 0; i < argv.length; i++) {
@@ -88,6 +91,7 @@ function parseOptions(argv: string[]): Options {
       case '--sql-out': options.sqlOut = value() ?? ''; break
       case '--help': case '-h': options.help = true; break
       case '--max-new': options.maxNew = wholeNumber(flag, value(), 100, 0); break
+      case '--max-saved': options.maxSaved = wholeNumber(flag, value(), 200, 0); break
       case '--since': {
         options.since = parseSince(value())
         if (options.since === null) throw new CliError('--since takes auto, a number of hours or days (48h, 7d) or a past ISO timestamp such as 2026-10-08T00:00:00Z.')
@@ -104,6 +108,7 @@ function parseOptions(argv: string[]): Options {
     }
   }
   if (options.since === null && given.has('--max-new')) throw new CliError('--max-new only applies with --since.')
+  if (options.since === null && given.has('--max-saved')) throw new CliError('--max-saved only applies with --since.')
   if (options.since !== null && given.has('--limit')) {
     throw new CliError('--limit does not apply with --since, which lists every hotel updated in the window. Use --max-new to cap new hotels.')
   }
@@ -216,7 +221,7 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return results
 }
 
-type Imported = { cityKey: CityKey; hotel: HotelRow; rooms: RoomRow[] }
+type Imported = { place: string; hotel: HotelRow; rooms: RoomRow[] }
 
 type Removed = { liteapi_id: string; at: string }
 
@@ -227,6 +232,8 @@ type Report = {
   failures: number
   droppedRooms: number
   unmapped: Map<string, number>
+  // Saved hotels a run looked at but couldn't refresh: their liteapi_synced_at still moves on, so the rotation does too
+  checked: string[]
 }
 
 // at: when the run started, every row's liteapi_synced_at, so --since auto never skips what changed during a run.
@@ -273,7 +280,7 @@ async function importCity(apiKey: string, cityKey: CityKey, options: Options, se
       candidates.push(s)
     }
   }
-  await importHotels(apiKey, cityKey, candidates, options, report, run)
+  await importHotels(apiKey, target.city, () => target, candidates, options, report, run)
 }
 
 async function sinceFor(db: SupabaseClient | null, target: Target, since: Date | 'auto'): Promise<Date> {
@@ -350,7 +357,50 @@ async function syncCity(
     console.log(`  skip ${n}: ${reason}`)
   }
   console.log(`  ${plan.update.length} to update, ${plan.add.length} new`)
-  await importHotels(apiKey, cityKey, [...plan.update, ...plan.add], options, report, run)
+  await importHotels(apiKey, target.city, () => target, [...plan.update, ...plan.add], options, report, run)
+}
+
+// Live search saves hotels from anywhere, and no city's change list covers those, so each run refreshes the few saved
+// longest ago by id. Their stored city, region and country stay as they are.
+async function refreshSaved(apiKey: string, db: SupabaseClient | null, options: Options, seen: Set<string>, report: Report, run: Run) {
+  if (!options.maxSaved) return
+  console.log('\nSaved hotels outside the import cities')
+  if (!db) return console.log('  skipped: no database to read them from')
+  const cities = Object.values(TARGETS).map((target) => `"${target.city}"`).join(',')
+  const { data, error } = await db.from('hotels').select('liteapi_id, city, region, country')
+    .not('liteapi_id', 'is', null).is('liteapi_deleted_at', null).not('city', 'in', `(${cities})`)
+    .order('liteapi_synced_at', { ascending: true, nullsFirst: true }).limit(options.maxSaved)
+  if (error) {
+    report.failures++
+    console.error(`  ! reading saved hotels failed: ${error.message}`)
+    return
+  }
+  const rows = ((data ?? []) as SavedRow[]).filter((row) => !seen.has(row.liteapi_id))
+  if (!rows.length) return console.log('  none')
+  for (const row of rows) seen.add(row.liteapi_id)
+
+  let listed: LiteHotelSummary[]
+  try {
+    const list = await liteapi<{ data?: LiteHotelSummary[] }>(apiKey,
+      `/data/hotels?${new URLSearchParams({ hotelIds: rows.map((row) => row.liteapi_id).join(','), limit: String(rows.length) })}`)
+    listed = (list?.data ?? []).filter(hasId)
+  } catch (err) {
+    report.failures++
+    console.error(`  ! listing saved hotels failed: ${(err as Error).message}`)
+    return
+  }
+  const targets = new Map(rows.map((row) => [row.liteapi_id, savedTarget(row)]))
+  const candidates: LiteHotelSummary[] = []
+  for (const s of listed) {
+    if (!targets.has(s.id)) continue
+    if (s.deletedAt) hide(report, s, removedAt(s.deletedAt, run.at))
+    else candidates.push(s)
+  }
+  console.log(`  ${rows.length} longest unsynced, ${candidates.length} to refresh`)
+  await importHotels(apiKey, 'saved hotels', (s) => targets.get(s.id)!, candidates, options, report, run)
+
+  const done = new Set([...report.imported.map((item) => item.hotel.liteapi_id), ...report.removed.map((item) => item.liteapi_id)])
+  report.checked.push(...rows.map((row) => row.liteapi_id).filter((id) => !done.has(id)))
 }
 
 function unseen(listed: LiteHotelSummary[], seen: Set<string>, report: Report): LiteHotelSummary[] {
@@ -378,9 +428,11 @@ async function mergedInto(apiKey: string, merged: LiteHotelSummary[], report: Re
   }
 }
 
-async function importHotels(apiKey: string, cityKey: CityKey, candidates: LiteHotelSummary[], options: Options, report: Report, run: Run) {
+async function importHotels(
+  apiKey: string, place: string, targetOf: (s: LiteHotelSummary) => Target, candidates: LiteHotelSummary[], options: Options,
+  report: Report, run: Run,
+) {
   if (!candidates.length) return
-  const target: Target = TARGETS[cityKey]
 
   const offersByHotel = new Map<string, LiteOffer[][]>()
   const unpriced = new Set<string>()
@@ -412,7 +464,7 @@ async function importHotels(apiKey: string, cityKey: CityKey, candidates: LiteHo
         }
       } catch (err) {
         report.failures++
-        console.error(`  ! sample rates for ${ratesRequest.checkin} failed for ${batch.length} ${target.city} hotels: ${(err as Error).message}`)
+        console.error(`  ! sample rates for ${ratesRequest.checkin} failed for ${batch.length} ${place} hotels: ${(err as Error).message}`)
         for (const s of batch) unpriced.add(s.id)
       }
     }
@@ -451,14 +503,14 @@ async function importHotels(apiKey: string, cityKey: CityKey, candidates: LiteHo
     const kept = new Set(rooms.map((room) => room.liteapi_room_id))
     const keptRooms = (d.rooms ?? []).filter((room) => kept.has(String(room.id)))
     report.droppedRooms += Math.max(0, (d.rooms ?? []).length - rooms.length)
-    const hotel = hotelRowFor(target, s, d, offersByHotel.get(s.id)?.flat(), keptRooms, run.at)
+    const hotel = hotelRowFor(targetOf(s), s, d, offersByHotel.get(s.id)?.flat(), keptRooms, run.at)
     for (const name of unmappedFacilities(d)) report.unmapped.set(name, (report.unmapped.get(name) ?? 0) + 1)
-    report.imported.push({ cityKey, hotel, rooms })
+    report.imported.push({ place, hotel, rooms })
     console.log(`  ok   ${label(s)}: ${rooms.length} room types, tags [${hotel.tags.join(', ')}]`)
   })
 }
 
-async function writeToSupabase(db: SupabaseClient, imported: Imported[], report: Report) {
+async function writeToSupabase(db: SupabaseClient, imported: Imported[], report: Report, syncedAt: string) {
   console.log('\nWriting to Supabase')
   let written = 0
   for (const { hotel, rooms } of imported) {
@@ -479,6 +531,15 @@ async function writeToSupabase(db: SupabaseClient, imported: Imported[], report:
     await dropStaleRooms(db, h.id, hotel.liteapi_id, rooms, report)
   }
   console.log(`  ${written} of ${imported.length} hotels written`)
+
+  if (report.checked.length) {
+    // Saved hotels sit outside every import city, so this never moves a city's --since auto window
+    const { error } = await db.from('hotels').update({ liteapi_synced_at: syncedAt }).in('liteapi_id', report.checked)
+    if (error) {
+      report.failures++
+      console.error(`  ! marking ${report.checked.length} saved hotels checked failed: ${error.message}`)
+    }
+  }
 
   if (!report.removed.length) return
   let hidden = 0
@@ -588,7 +649,7 @@ async function main(options: Options) {
   }
 
   const run: Run = { at: new Date().toISOString(), existing: null }
-  const report: Report = { imported: [], removed: [], skipped: new Map(), failures: 0, droppedRooms: 0, unmapped: new Map() }
+  const report: Report = { imported: [], removed: [], skipped: new Map(), failures: 0, droppedRooms: 0, unmapped: new Map(), checked: [] }
   const seen = new Set<string>()
   if (options.since === null) {
     for (const cityKey of options.cities) await importCity(apiKey, cityKey, options, seen, report, run)
@@ -599,6 +660,7 @@ async function main(options: Options) {
         `${options.since === 'auto' ? ` and --since auto means the last ${AUTO_OVERLAP_DAYS} days` : ''}.`)
     }
     for (const cityKey of options.cities) await syncCity(apiKey, db, cityKey, options, seen, report, run)
+    await refreshSaved(apiKey, db, options, seen, report, run)
   }
 
   if (options.dryRun) {
@@ -606,7 +668,8 @@ async function main(options: Options) {
     for (const item of report.imported.slice(0, 2)) console.log(JSON.stringify(item, null, 2))
   } else if (sqlOut !== null) {
     const header = `-- LiteAPI import for ${options.cities.join(', ')}, generated ${new Date().toISOString()}.\n` +
-      '-- Run supabase/migrations/liteapi_hotels.sql first. Safe to re-run: rows are updated in place and rooms are never deleted.\n' +
+      '-- Run supabase/migrations/liteapi_hotels.sql first. Safe to re-run: rows are updated in place, and room types this run\n' +
+      '-- left out are removed unless a reservation points at them.\n' +
       '-- Do not paste it over newer data (a later import or sync): its hotels would go back to this copy, and any LiteAPI\n' +
       '-- removed since would show in search again.\n'
     const sql = `${header}begin;\n\n${report.imported.map((item) => hotelSql(item.hotel, item.rooms)).join('\n')}\ncommit;\n`
@@ -614,7 +677,7 @@ async function main(options: Options) {
     fs.writeFileSync(sqlOut, sql)
     console.log(`\nWrote ${report.imported.length} hotels to ${sqlOut}`)
   } else if (db) {
-    await writeToSupabase(db, report.imported, report)
+    await writeToSupabase(db, report.imported, report, run.at)
   }
 
   printSummary(options, report, run)
