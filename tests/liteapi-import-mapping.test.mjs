@@ -388,24 +388,32 @@ test('hotelRowFor puts the default image first, prefers HD, removes duplicates a
   assert.deepEqual(hotelRowFor(SF, summary(), detail()).photo_urls, [])
 })
 
-test('roomRowsFor keeps priced rooms first, then the cheapest, up to --max-rooms', () => {
+test('roomRowsFor keeps only a mapped hotel’s priced rooms, cheapest first, up to --max-rooms', () => {
   const sample = samplePricesFor([offer(180.4, {}, { mappedRoomId: 3 }), offer(99.6, {}, { mappedRoomId: 2 })])
+  const rooms = [room(1), room(2, { roomAmenities: amenities(118) }), room(3), room(4)]
+  const rows = roomRowsFor(rooms, sample, 10)
+  assert.deepEqual(rows.map((r) => r.liteapi_room_id), ['2', '3'], 'no offer named rooms 1 and 4, so they would open sold out')
+  assert.deepEqual(rows.map((r) => r.price_per_night), [100, 180])
+  assert.deepEqual(rows[0].tags, ['Free Wi-Fi'])
+  assert.deepEqual(roomRowsFor(rooms, sample, 1).map((r) => r.liteapi_room_id), ['2'])
+})
+
+test('roomRowsFor fills up with rooms at the hotel cheapest when offers can’t name rooms by id', () => {
+  const unmapped = samplePricesFor([offer(180.4, {}, { name: 'Room 3' }), offer(99.6, {}, { name: 'Suite' })])
   const rooms = [
     room(1, { roomName: '  Standard King Room ', bedTypes: [{ id: 10, quantity: 1, bedType: 'King bed', bedSize: '151-180 cm wide' }] }),
-    room(2, { roomAmenities: amenities(118) }),
     room(3),
     room(4),
   ]
-  const rows = roomRowsFor(rooms, sample, 3)
-  assert.deepEqual(rows.map((r) => r.liteapi_room_id), ['2', '3', '1'])
-  assert.deepEqual(rows.map((r) => r.price_per_night), [100, 180, 100], 'unpriced rooms get the hotel cheapest')
-  assert.deepEqual(rows[0].tags, ['Free Wi-Fi'])
+  const rows = roomRowsFor(rooms, unmapped, 2)
+  assert.deepEqual(rows.map((r) => [r.liteapi_room_id, r.price_per_night]), [['3', 180], ['1', 100]])
   assert.ok(rows.every((r) => Array.isArray(r.tags)))
-  assert.deepEqual(rows[2], {
+  assert.deepEqual(rows[1], {
     liteapi_room_id: '1', room_type: 'Standard King Room', capacity: 2, max_adults: null, max_children: null, num_beds: 1, bed_size: 'King',
     price_per_night: 100, tags: [],
   })
-  assert.equal(roomRowsFor(rooms, sample, 10).length, 4)
+  const elsewhere = samplePricesFor([offer(99.6, {}, { mappedRoomId: 9 })])
+  assert.deepEqual(roomRowsFor(rooms, elsewhere).map((r) => r.liteapi_room_id), ['1', '3', '4'], 'a mapped hotel whose offers name none of its rooms')
 })
 
 test('roomRowsFor drops rooms without an id or name and repeated ids', () => {

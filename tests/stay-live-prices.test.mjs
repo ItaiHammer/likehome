@@ -32,6 +32,9 @@ let rates
 const getRoomRates = mock.fn(async (ids) => new Map(ids.map((id) => [id, rates])))
 const quoteForRoom = (r, room) => (room.liteapiRoomId in r.byRoom ? { status: 'live', value: r.byRoom[room.liteapiRoomId] } : { status: 'sold_out' })
 mock.module('@/lib/liteapi/rates', { namedExports: { getRoomRates, quoteForRoom, liveRatesEnabled: () => true } })
+let offeredRooms
+const saveOfferedRooms = mock.fn(async () => offeredRooms)
+mock.module('@/lib/liteapi/save', { namedExports: { saveOfferedRooms } })
 
 const { getHotelStay, withLiveRoomPrices } = await import('../app/reserve/[slug]/hotelStay.ts')
 const { GET } = await import('../app/api/stays/[id]/prices/route.ts')
@@ -44,6 +47,8 @@ beforeEach(() => {
   rooms = [roomRow('king', '101', 150), roomRow('twin', '102', 120)]
   rates = { status: 'live', value: { mapped: true, byName: {}, byRoom: { 101: quote(99.47) }, cheapest: quote(99.47) } }
   getRoomRates.mock.resetCalls()
+  offeredRooms = []
+  saveOfferedRooms.mock.resetCalls()
 })
 
 test('a quoted room shows the rate’s own name, price, cancellation terms and fees at the property', async () => {
@@ -73,11 +78,33 @@ test('a rate without a room name keeps the stored one', async () => {
   assert.equal(stay.rooms.find((r) => r.id === 'king').name, 'Stored king')
 })
 
-test('children count toward the biggest room before LiteAPI is asked', async () => {
+test('rooms LiteAPI offers a family that the hotel wasn’t saved with are saved, listed and priced', async () => {
+  // Villa Fontaine Grand Haneda: 2 adults and a child are offered mostly other rooms than the 2 adults it was saved for
   rooms = [roomRow('king', '101', 150, 3)]
+  rates.value.byRoom = { 101: quote(199), 201: quote(180.4), 202: quote(350) }
+  offeredRooms = [
+    { ...roomRow('tatami', '201', 180, 6), max_adults: 4, max_children: 4 },
+    { ...roomRow('suite', '202', 350, 6), max_adults: 4, max_children: 2 },
+  ]
   const stay = await withLiveRoomPrices(await getHotelStay(HOTEL_ID), Q)
-  assert.equal(stay.priceSource, 'stored')
-  assert.equal(getRoomRates.mock.callCount(), 0)
+  assert.equal(getRoomRates.mock.callCount(), 1, 'a party bigger than every saved room is still quoted')
+  assert.deepEqual(saveOfferedRooms.mock.calls[0].arguments, [HOTEL_ID, 'lp1', new Map([['201', 180.4], ['202', 350]])])
+  assert.deepEqual(stay.rooms.map((r) => [r.id, r.nightly, !!r.soldOut]), [['tatami', 180.4, false], ['king', 199, false], ['suite', 350, false]])
+  assert.deepEqual([stay.rooms[0].sleeps, stay.rooms[0].maxAdults, stay.rooms[0].maxChildren, stay.rooms[0].liteapiRoomId], [6, 4, 4, '201'])
+})
+
+test('nothing is saved when the hotel has every offered room, or its offers don’t name rooms', async () => {
+  await withLiveRoomPrices(await getHotelStay(HOTEL_ID), Q)
+  rates.value = { mapped: false, byName: {}, byRoom: { 999: quote(80) }, cheapest: quote(80) }
+  await withLiveRoomPrices(await getHotelStay(HOTEL_ID), Q)
+  assert.equal(saveOfferedRooms.mock.callCount(), 0)
+})
+
+test('a room that couldn’t be saved isn’t listed, and the saved ones still are', async () => {
+  rates.value.byRoom = { 101: quote(99), 301: quote(60) }
+  const stay = await withLiveRoomPrices(await getHotelStay(HOTEL_ID), Q)
+  assert.equal(saveOfferedRooms.mock.callCount(), 1)
+  assert.deepEqual(stay.rooms.map((r) => [r.id, !!r.soldOut]), [['king', false], ['twin', true]])
 })
 
 const get = async (query) => {
@@ -91,11 +118,14 @@ test('the prices route quotes adults and children apart, each child at the defau
   const r = await get({ checkIn: Q.checkIn, checkOut: Q.checkOut, adults: '2', children: '2' })
   assert.equal(r.status, 200)
   assert.deepEqual(getRoomRates.mock.calls[0].arguments[1], Q)
-  assert.deepEqual(r.body.rooms, [
+  const prices = ({ id, name, nightly, soldOut, refundable, cancelBy, dueAtProperty }) => ({ id, name, nightly, soldOut, refundable, cancelBy, dueAtProperty })
+  assert.deepEqual(r.body.rooms.map(prices), [
     { id: 'king', name: 'King Room - Mobility Accessible', nightly: 99.47, soldOut: false, refundable: true, cancelBy: '2026-11-07', dueAtProperty: 82 },
     // Every key is sent, so the page drops what an earlier quote showed
     { id: 'twin', name: 'Stored twin', nightly: 120, soldOut: true, refundable: null, cancelBy: null, dueAtProperty: null },
   ])
+  // With the details, so the page can list a room saved since it loaded
+  assert.deepEqual(r.body.rooms.map((room) => [room.sleeps, room.description, room.liteapiRoomId]), [[4, '1 king bed', '101'], [4, '1 king bed', '102']])
 
   await get({ checkIn: Q.checkIn, checkOut: Q.checkOut, adults: '3' })
   assert.deepEqual(getRoomRates.mock.calls[1].arguments[1], { ...Q, adults: 3, children: [] })

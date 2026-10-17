@@ -1,5 +1,5 @@
 //   GET /api/stays/[id]/prices?checkIn=&checkOut=&adults=&children= -> each room's name, nightly price, sold-out state,
-//                                                                     cancellation terms and fees due at the property
+//                                                                     cancellation terms, fees due at the property and details
 import { getHotelStay, withLiveRoomPrices } from '../../../../reserve/[slug]/hotelStay.ts'
 import { addDays } from '../../../../_components/dates.ts'
 import type { Room } from '../../../../_data/stays.ts'
@@ -8,11 +8,10 @@ import { countNights, MAX_NIGHTS, parseDate, todayUTC } from '../../../../../uti
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
-// Every key is set, null when the room has no live quote, so the page drops what an earlier quote showed
+// Every key is set, null when the room has no live quote, so the page drops what an earlier quote showed. The room's
+// details come too: a bigger party can be offered rooms the page didn't list yet.
 const roomPrice = (r: Room) => ({
-  id: r.id,
-  name: r.name,
-  nightly: r.nightly,
+  ...r,
   soldOut: !!r.soldOut,
   refundable: r.refundable ?? null,
   cancelBy: r.cancelBy ?? null,

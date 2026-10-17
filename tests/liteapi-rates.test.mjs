@@ -91,11 +91,12 @@ describe('request', () => {
     assert.deepEqual(sentBody(2).occupancies, [{ adults: 4 }])
   })
 
-  test('getFromPrices asks for one rate per hotel', async () => {
+  test('getFromPrices asks for one rate per hotel, from the same offers the stay page sells', async () => {
     await getFromPrices(['lp1'], Q)
     const body = sentBody()
     assert.equal(body.maxRatesPerHotel, 1)
-    assert.equal(body.roomMapping, undefined)
+    // The sandbox's Villa Fontaine Grand Haneda: $291.58 without roomMapping, an offer the mapped rooms never get
+    assert.equal(body.roomMapping, true)
     assert.deepEqual(body.occupancies, [{ adults: 2 }])
   })
 

@@ -439,7 +439,11 @@ export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices,
       },
     })
   }
+  // A mapped hotel's live prices go by room id, so a room no offer named would open sold out: unpriced rooms only
+  // fill in when the rooms can't be told apart that way
+  const anyPriced = candidates.some((candidate) => candidate.priced)
   return candidates
+    .filter((candidate) => candidate.priced || !sample.mapped || !anyPriced)
     .sort((a, b) => Number(b.priced) - Number(a.priced) || a.price - b.price)
     .slice(0, Math.max(0, maxRooms))
     .map((candidate) => candidate.row)

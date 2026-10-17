@@ -54,13 +54,17 @@ export function readRoomFilters(params: Params, guests: number, party?: Pick<Roo
   }
 }
 
+/** Whether the room holds these guests, by its own limits where it has them */
+export const roomFits = (r: FilterableRoom, guests: number, adults?: number, children?: number) =>
+  r.sleeps >= guests &&
+  (adults === undefined || r.maxAdults == null || r.maxAdults >= adults) &&
+  (children === undefined || r.maxChildren == null || r.maxChildren >= children)
+
 /** The cheapest open room that passes the filters, or null when none does */
 export function matchingRoom<R extends FilterableRoom>(rooms: R[], hotelTags: string[], f: RoomFilters): R | null {
   const passes = (r: R) =>
     !r.soldOut &&
-    r.sleeps >= f.guests &&
-    (f.adults === undefined || r.maxAdults == null || r.maxAdults >= f.adults) &&
-    (f.children === undefined || r.maxChildren == null || r.maxChildren >= f.children) &&
+    roomFits(r, f.guests, f.adults, f.children) &&
     (f.minPrice === undefined || r.nightly >= f.minPrice) &&
     (f.maxPrice === undefined || r.nightly <= f.maxPrice) &&
     (f.numBeds === undefined || (r.beds ?? 1) >= f.numBeds) &&

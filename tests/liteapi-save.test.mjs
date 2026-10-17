@@ -19,6 +19,7 @@ process.env.LITEAPI_KEY = 'test'
 let db
 function fakeDb({ saved = {}, failHotel = null, failRooms = false } = {}) {
   const ops = []
+  const rooms = []
   const from = (table) => {
     const q = { table, op: 'select', filters: [], payload: null }
     const result = () => {
@@ -35,12 +36,23 @@ function fakeDb({ saved = {}, failHotel = null, failRooms = false } = {}) {
         return { data: { id: 'h-new' }, error: null }
       }
       if (q.table === 'rooms' && q.op === 'insert') return { error: failRooms ? { code: '23514' } : null }
+      if (q.table === 'rooms' && q.op === 'upsert') {
+        if (failRooms) return { error: { code: '23514' } }
+        for (const row of q.payload) if (!rooms.some((r) => r.liteapi_room_id === row.liteapi_room_id)) rooms.push({ id: `room-${row.liteapi_room_id}`, ...row })
+        return { error: null }
+      }
+      if (q.table === 'rooms' && q.op === 'select') {
+        const [, ids] = q.filters.find(([col]) => col === 'liteapi_room_id')
+        return { data: rooms.filter((r) => ids.includes(r.liteapi_room_id)), error: null }
+      }
       return { error: null }
     }
     const builder = {
       select: () => builder,
       eq: (col, val) => (q.filters.push([col, val]), builder),
+      in: (col, vals) => (q.filters.push([col, vals]), builder),
       insert: (payload) => ((q.op = 'insert'), (q.payload = payload), ops.push([table, 'insert', payload]), builder),
+      upsert: (payload, options) => ((q.op = 'upsert'), (q.payload = payload), ops.push([table, 'upsert', payload, options]), builder),
       delete: () => ((q.op = 'delete'), ops.push([table, 'delete', q.filters]), builder),
       maybeSingle: async () => result(),
       single: async () => result(),
@@ -54,7 +66,7 @@ function fakeDb({ saved = {}, failHotel = null, failRooms = false } = {}) {
 const createAdminClient = mock.fn(() => db?.client ?? null)
 mock.module('../utils/supabase/admin.ts', { namedExports: { createAdminClient } })
 
-const { saveLiteapiHotel, isLiteapiId } = await import('../lib/liteapi/save.ts')
+const { saveLiteapiHotel, saveOfferedRooms, isLiteapiId, LiteApiUnavailable } = await import('../lib/liteapi/save.ts')
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 const usd = (amount) => [{ amount, currency: 'USD' }]
@@ -165,4 +177,59 @@ test('when another visit saved the hotel first, its id comes back', async () => 
   assert.equal(await saveLiteapiHotel('lp33281', STAY), 'h-other')
   assert.deepEqual(db.ops.map(([table, op]) => `${table} ${op}`), ['hotels insert'])
   assert.equal(warn.mock.callCount(), 0)
+})
+
+test('when LiteAPI is rate limited or down, saving throws (so the page offers Try again) and says why in the log', async () => {
+  answers.rates = async () => json({ error: { code: 429 } }, 429)
+  await assert.rejects(saveLiteapiHotel('lp33281', STAY), LiteApiUnavailable)
+  assert.ok(warn.mock.calls.some((call) => call.arguments.join(' ') === '[liteapi] request failed /hotels/rates 429'))
+
+  answers.rates = async () => { throw new DOMException('timed out', 'TimeoutError') }
+  await assert.rejects(saveLiteapiHotel('lp33281', STAY), LiteApiUnavailable)
+  assert.deepEqual(db.ops, [])
+})
+
+test('a hotel LiteAPI can’t save is logged with the reason', async () => {
+  answers.detail = async () => json({ error: { code: 4002 } }, 400)
+  assert.equal(await saveLiteapiHotel('lp33281', STAY), null)
+  const lines = warn.mock.calls.map((call) => call.arguments.join(' '))
+  assert.deepEqual(lines, ['[liteapi] request refused /data/hotel 400 4002', '[liteapi] nothing to save lp33281 no details'])
+})
+
+test('only the offered rooms that are open somewhere get saved: a mapped sample never adds rooms no offer named', async () => {
+  answers.rates = async () => json({ data: [{ hotelId: 'lp33281', roomTypes: [offer(12, 420)] }] })
+  assert.equal(await saveLiteapiHotel('lp33281', STAY), 'h-new')
+  assert.deepEqual(db.ops[1][2].map((r) => r.liteapi_room_id), ['12'])
+})
+
+const detailFor = (id) => async () => json({ data: { ...DETAIL, id } })
+
+test('rooms LiteAPI offers a party are saved for the hotel at their nightly price and come back with their ids', async () => {
+  answers.detail = detailFor('lp5001')
+  const rooms = await saveOfferedRooms('h-1', 'lp5001', new Map([['12', 210.4], ['99', 50]]))
+  assert.deepEqual(rooms.map((r) => [r.id, r.liteapi_room_id, r.price_per_night, r.capacity, r.max_adults, r.max_children]), [['room-12', '12', 210, 4, 4, 2]])
+  const [table, op, payload, options] = db.ops[0]
+  assert.deepEqual([table, op, payload.map((r) => r.hotel_id), options], ['rooms', 'upsert', ['h-1'], { onConflict: 'hotel_id,liteapi_room_id', ignoreDuplicates: true }])
+  assert.equal(fetchMock.mock.callCount(), 1)
+
+  // Asked about lately, so the next page view doesn't ask LiteAPI again, even for the room it couldn't find
+  assert.deepEqual(await saveOfferedRooms('h-1', 'lp5001', new Map([['99', 50]])), [])
+  assert.equal(fetchMock.mock.callCount(), 1)
+})
+
+test('offered rooms aren’t saved without the secret key, while LiteAPI is down, or when the database refuses them', async () => {
+  db = null
+  assert.deepEqual(await saveOfferedRooms('h-1', 'lp5002', new Map([['11', 150]])), [])
+  assert.equal(fetchMock.mock.callCount(), 0)
+
+  db = fakeDb()
+  answers.detail = async () => json({}, 503)
+  assert.deepEqual(await saveOfferedRooms('h-1', 'lp5002', new Map([['11', 150]])), [])
+  answers.detail = detailFor('lp5002')
+  assert.equal((await saveOfferedRooms('h-1', 'lp5002', new Map([['11', 150]]))).length, 1, 'an outage is tried again on the next view')
+
+  db = fakeDb({ failRooms: true })
+  answers.detail = detailFor('lp5003')
+  assert.deepEqual(await saveOfferedRooms('h-1', 'lp5003', new Map([['11', 150]])), [])
+  assert.ok(warn.mock.calls.some((call) => call.arguments.join(' ') === '[liteapi] saving offered rooms failed lp5003 23514'))
 })

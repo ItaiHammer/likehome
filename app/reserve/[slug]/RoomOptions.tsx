@@ -2,7 +2,9 @@
 
 import { Fragment } from "react";
 import { money } from "@/lib/bookings";
+import { roomFits } from "@/lib/stay-filters";
 import type { Room } from "../../_data/stays";
+import { guestLabel } from "./GuestsField";
 
 // The room list as radio cards, shared by the stay page and the change-booking page.
 // Keep it inside a <fieldset> with the legend; `locked` greys out every room but the selected one.
@@ -12,6 +14,7 @@ export function RoomOptions({
   onSelect,
   locked = false,
   note,
+  party,
 }: {
   rooms: Room[];
   selectedId: string;
@@ -19,14 +22,17 @@ export function RoomOptions({
   locked?: boolean;
   /** The small line under each room's details */
   note: (room: Room) => string;
+  /** The guests the rooms were priced for: a room LiteAPI left out that can't hold them is too small, not sold out */
+  party: { adults: number; children: number };
 }) {
   return (
     <div className="mt-5 space-y-4">
-      {/* Live prices can sell out any room, so the ones left to book always come first */}
-      {[...rooms].sort((a, b) => Number(!!a.soldOut) - Number(!!b.soldOut)).map((r) => {
+      {/* Live prices can sell out any room, so the ones left to book always come first, cheapest first like the server's order */}
+      {[...rooms].sort((a, b) => Number(!!a.soldOut) - Number(!!b.soldOut) || a.nightly - b.nightly).map((r) => {
         const on = r.id === selectedId;
         const off = !!r.soldOut;
-        const line = off ? "Sold out right now" : note(r);
+        const tooSmall = off && !roomFits(r, party.adults + party.children, party.adults, party.children);
+        const line = tooSmall ? `Too small for ${guestLabel(party.adults, party.children)}` : off ? "Sold out right now" : note(r);
         return (
           <label
             key={r.id}
@@ -74,7 +80,7 @@ export function RoomOptions({
                 off ? "border border-edge text-slate" : on ? "bg-blue text-on-blue" : "border border-edge bg-surface text-ink"
               }`}
             >
-              {off ? "Sold out" : on ? "Selected" : "Select"}
+              {tooSmall ? "Too small" : off ? "Sold out" : on ? "Selected" : "Select"}
             </span>
           </label>
         );

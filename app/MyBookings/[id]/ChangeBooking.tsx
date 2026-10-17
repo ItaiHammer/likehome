@@ -80,6 +80,8 @@ export function ChangeBooking({
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [livePrices, setLivePrices] = useState<LivePrices | null>(null);
+  // Every room the prices route listed, including ones LiteAPI offered for other guests after the page loaded
+  const [addedRooms, setAddedRooms] = useState<Room[]>([]);
   const [pricingOff, setPricingOff] = useState(false);
   const request = useRef<AbortController | null>(null);
   const sampleTimer = useRef<number | undefined>(undefined);
@@ -94,15 +96,16 @@ export function ChangeBooking({
   const pricesPending = !!priceKey && priceKey !== initialKey && livePrices?.key !== priceKey;
   const sameGuests = guests === current.guests && children === current.children;
   const sameStay = checkIn === current.checkIn && checkOut === current.checkOut && sameGuests;
+  const listed = [...listedRooms, ...addedRooms.filter((r) => !listedRooms.some((l) => l.id === r.id))];
   const rooms =
     livePrices && livePrices.key === priceKey
-      ? listedRooms.map((r) => {
+      ? listed.map((r) => {
           const live = livePrices.byId[r.id];
           if (!live) return r;
           // The guest already holds this room for these dates, even if LiteAPI has sold out of it since
           return { ...r, ...live, soldOut: live.soldOut && !(sameStay && r.id === current.roomId) };
         })
-      : listedRooms;
+      : listed;
   const room = rooms.find((r) => r.id === roomId) ?? rooms[0];
   const currentRoom = rooms.find((r) => r.id === current.roomId);
   const changed = checkIn !== current.checkIn || checkOut !== current.checkOut || !sameGuests || roomId !== current.roomId;
@@ -141,6 +144,11 @@ export function ChangeBooking({
         const body = (await res.json()) as { configured?: boolean; rooms?: (Partial<Room> & { id: string })[] };
         if (controller.signal.aborted) return;
         setLivePrices({ key: priceKey, byId: Object.fromEntries((body.rooms ?? []).map(({ id, ...live }) => [id, live])) });
+        const full = (body.rooms ?? []).filter((r): r is Room => Number.isFinite(r.nightly) && typeof r.sleeps === "number");
+        setAddedRooms((had) => {
+          const fresh = full.filter((r) => !had.some((h) => h.id === r.id));
+          return fresh.length ? [...had, ...fresh] : had;
+        });
         if (body.configured === false) setPricingOff(true);
       } catch {
         // Keep the prices shown and let Save through: the API reprices the change itself
@@ -269,6 +277,7 @@ export function ChangeBooking({
               setErrors(({ dates }) => ({ dates }));
             }}
             locked={locked}
+            party={{ adults, children }}
             note={(r) =>
               [r.id === current.roomId && "Your room now", nights > 0 && `${money(priceFor(r))} for ${nightsLabel(nights)}`]
                 .filter(Boolean)

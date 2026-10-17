@@ -153,7 +153,9 @@ async function requestRates(hotelIds: string[], q: StayQuery, nights: number, mo
     checkout: q.checkOut,
     timeout: 6,
     limit: hotelIds.length,
-    ...(mode === 'rooms' ? { roomMapping: true } : { maxRatesPerHotel: 1 }),
+    // Without roomMapping LiteAPI can add offers it leaves out with it, which the stay page (by room) can't sell
+    roomMapping: true,
+    ...(mode === 'from' ? { maxRatesPerHotel: 1 } : {}),
   }
   try {
     const res = await fetch(`${LITEAPI_BASE}/hotels/rates`, {

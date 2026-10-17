@@ -94,6 +94,9 @@ export function StayReservation({
   // Contact details survive going back to the stay (card details aren't kept)
   const [contact, setContact] = useState<Contact>({ firstName: "", lastName: "", email: "", phone: "" });
   const [livePrices, setLivePrices] = useState<{ key: string; byId: Record<string, Partial<Room>> } | null>(null);
+  // Every room the prices route listed, including ones saved after the page loaded because LiteAPI offered them for
+  // other guests; kept so a picked one stays listed
+  const [addedRooms, setAddedRooms] = useState<Room[]>([]);
   // Without a LiteAPI key the stored prices on the page hold for every date. A LiteAPI outage doesn't turn
   // this off: checkout also falls back to the stored price while LiteAPI is down.
   const [pricingOff, setPricingOff] = useState(!stay.liteapiConfigured);
@@ -117,7 +120,8 @@ export function StayReservation({
   const initialKey = `${initial.checkIn ?? ""}|${initial.checkOut ?? ""}|${initial.adults ?? 2}|${initial.children ?? 0}`;
   const priceKey = stay.liteapiId && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${adults}|${children}` : null;
   const liveKey = livePrices?.key;
-  const rooms = livePrices && livePrices.key === priceKey ? stay.rooms.map((r) => ({ ...r, ...livePrices.byId[r.id] })) : stay.rooms;
+  const listed = [...stay.rooms, ...addedRooms.filter((r) => !stay.rooms.some((s) => s.id === r.id))];
+  const rooms = livePrices && livePrices.key === priceKey ? listed.map((r) => ({ ...r, ...livePrices.byId[r.id] })) : listed;
   const pricesPending = !!priceKey && priceKey !== initialKey && liveKey !== priceKey;
 
   const room = rooms.find((r) => r.id === roomId)!;
@@ -167,6 +171,11 @@ export function StayReservation({
         // The route sets every key (null without a live quote), so an earlier quote's terms and fees don't linger
         const byId: Record<string, Partial<Room>> = {};
         for (const { id, ...r } of body.rooms ?? []) if (Number.isFinite(r.nightly)) byId[id] = { ...r, soldOut: !!r.soldOut };
+        const full = (body.rooms ?? []).filter((r): r is Room => Number.isFinite(r.nightly) && typeof r.sleeps === "number");
+        setAddedRooms((had) => {
+          const fresh = full.filter((r) => !had.some((h) => h.id === r.id));
+          return fresh.length ? [...had, ...fresh] : had;
+        });
         setLivePrices({ key: priceKey, byId });
         if (body.configured === false) setPricingOff(true);
       } catch {
@@ -247,8 +256,8 @@ export function StayReservation({
     if (stay.bookable && checkIn < todayISO()) return { field: "dates", message: "That check-in date is too soon to book. Pick a later date." };
     const clash = stay.bookable ? findOverlap(otherStays, checkIn, checkOut) : null;
     if (clash) return { field: "dates", message: overlapMessage(clash) };
-    if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
+    if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     return null;
   }
 
@@ -722,6 +731,7 @@ export function StayReservation({
             }}
             locked={roomsLocked}
             note={(r) => cancelNote(cancelTerms(stay, r, checkIn, today))}
+            party={{ adults, children }}
           />
         </fieldset>
 
