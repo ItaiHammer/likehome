@@ -95,7 +95,7 @@ export function StayReservation({
   const [contact, setContact] = useState<Contact>({ firstName: "", lastName: "", email: "", phone: "" });
   const [livePrices, setLivePrices] = useState<{ key: string; byId: Record<string, Partial<Room>> } | null>(null);
   // Without a LiteAPI key the stored prices on the page hold for every date. A LiteAPI outage doesn't turn
-  // this off: the refetch caches "unavailable", so checkout charges the same stored price the guest sees.
+  // this off: checkout also falls back to the stored price while LiteAPI is down.
   const [pricingOff, setPricingOff] = useState(!stay.liteapiConfigured);
   const cardRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);

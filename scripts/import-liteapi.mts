@@ -49,7 +49,7 @@ const USAGE = `Usage: npm run import:liteapi -- [options]
   --sql-out [path]    write an idempotent .sql file to paste into the SQL Editor instead of
                       writing to Supabase (default: the OS temp folder; paths inside the repo are refused)
   --since auto        refresh instead: list only hotels LiteAPI updated since an ISO timestamp, 48h, 7d, or auto
-                      (each city's last sync minus ${AUTO_OVERLAP_DAYS} days, so later nights retry what a run missed).
+                      (each city's last sync minus ${AUTO_OVERLAP_DAYS} days, so later runs retry what a run missed).
                       Updates hotels already imported, hides ones LiteAPI deleted (adding the hotel one was merged
                       into), and adds up to --max-new other new hotels per city
   --max-new 5         with --since, new hotels added per city (0-100), not counting merged-into ones
@@ -319,7 +319,7 @@ async function listUpdated(apiKey: string, target: Target, since: Date, report: 
       console.log(`  ${byId.size} hotels updated since ${rfc3339(since)}${total === undefined ? '' : ` (LiteAPI total ${total})`}`)
       if (total !== undefined && byId.size < total) {
         report.failures++
-        console.error(`  ! LiteAPI counted ${total} but listed ${byId.size}; the next nights list this window again`)
+        console.error(`  ! LiteAPI counted ${total} but listed ${byId.size}; the next runs list this window again`)
       }
       return [...byId.values()]
     }

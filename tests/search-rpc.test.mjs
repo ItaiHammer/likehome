@@ -30,7 +30,7 @@ const argsOfCall = () => {
 beforeEach(() => rpc.mock.resetCalls())
 
 // The names must match search_hotels.sql: PostgREST picks the function by its argument names
-test('every search_hotels argument is sent, as null when not given', async () => {
+test('every search_hotels argument but p_liteapi_ids is sent, as null when not given', async () => {
   await searchAvailableHotels({})
   assert.deepEqual(argsOfCall(), {
     p_query: null, p_city: null, p_region: null, p_country: null, p_check_in: null, p_check_out: null,

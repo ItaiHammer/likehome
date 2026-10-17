@@ -3,7 +3,8 @@ import { bedSizes, tags as filterTags } from '../../app/search/types.ts'
 import type { BedSize, Tag } from '../../app/search/types.ts'
 import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRoom } from './types.ts'
 
-// city/region/country come from here, never from LiteAPI: search matches them exactly ("USA" + full state name)
+// city/region/country as search matches them ("USA" + full state name): TARGETS sets them on import, targetFor on
+// hotels saved from live search
 export type Target = { countryCode: string; cityName: string; city: string; region: string | null; country: string }
 
 export type HotelRow = {
@@ -472,7 +473,7 @@ export function parseSince(raw: string | undefined, now = new Date()): Date | 'a
 }
 
 // A week before the last sync (or now, without one): a hotel a failed or skipped request missed, or one over
-// --max-new, is listed again on the next nights instead of falling out of the window.
+// --max-new, is listed again on the next runs instead of falling out of the window.
 export function autoSince(lastSyncedAt: string | null | undefined, now = new Date()): Date {
   const last = Date.parse(lastSyncedAt ?? '')
   const from = Number.isFinite(last) ? Math.min(last, now.getTime()) : now.getTime()

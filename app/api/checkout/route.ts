@@ -72,9 +72,9 @@ export async function POST(request: Request) {
     return Response.json({ error: capacityError }, { status: 400 })
   }
 
-  // 3. Price is always calculated here, never taken from the browser. LiteAPI hotels reuse the
-  //    quote the stay page cached (the same adults and children), so the guest pays what they were
-  //    shown; if LiteAPI is down, the stored estimate is charged instead.
+  // 3. Price is always calculated here, never taken from the browser. LiteAPI hotels are charged the
+  //    live quote for the same adults and children (the stay page's cached one when the same server
+  //    instance handles both); if LiteAPI is down, the stored estimate is charged instead.
   let nightly: number | string = room.price_per_night
   const liteapiHotelId = room.hotels?.liteapi_id
   if (liteapiHotelId) {
