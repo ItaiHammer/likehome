@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --experimental-test-module-mocks --test tests/*.test.mjs"
+    "test": "node --experimental-strip-types --experimental-test-module-mocks --test tests/*.test.mjs",
+    "import:liteapi": "node --env-file=.env.local scripts/import-liteapi.mts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.87",

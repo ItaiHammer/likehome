@@ -26,12 +26,13 @@ export function originalSearch(params: Params): string {
   return searchQuery(Object.fromEntries([...new Set(from.keys())].map((key) => [key, from.getAll(key)])))
 }
 
-export type RoomFilters = { guests: number; minPrice?: number; maxPrice?: number; numBeds?: number; bedSize?: string; tags: string[] }
+export type RoomFilters = { guests: number; adults?: number; children?: number; minPrice?: number; maxPrice?: number; numBeds?: number; bedSize?: string; tags: string[] }
 
-type FilterableRoom = { nightly: number; sleeps: number; soldOut?: boolean; beds?: number; bedSize?: string | null; tags?: string[] }
+type FilterableRoom = { nightly: number; sleeps: number; maxAdults?: number | null; maxChildren?: number | null; soldOut?: boolean; beds?: number; bedSize?: string | null; tags?: string[] }
 
-// Values the search itself would ignore (a typo'd price, an unknown tag) don't narrow the rooms either
-export function readRoomFilters(params: Params, guests: number): RoomFilters {
+// Values the search itself would ignore (a typo'd price, an unknown tag) don't narrow the rooms either.
+// `party` is the adults and children the search was sent, so the page checks the same per-room limits.
+export function readRoomFilters(params: Params, guests: number, party?: Pick<RoomFilters, 'adults' | 'children'>): RoomFilters {
   const one = (key: string) => (typeof params[key] === 'string' ? (params[key] as string) : undefined)
   const amount = (key: string) => {
     const v = one(key)?.trim()
@@ -44,6 +45,7 @@ export function readRoomFilters(params: Params, guests: number): RoomFilters {
   const reversed = minPrice !== undefined && maxPrice !== undefined && minPrice > maxPrice
   return {
     guests,
+    ...party,
     minPrice: reversed ? undefined : minPrice,
     maxPrice: reversed ? undefined : maxPrice,
     numBeds: beds && /^[1-9]\d*$/.test(beds) ? Number(beds) : undefined,
@@ -57,6 +59,8 @@ export function matchingRoom<R extends FilterableRoom>(rooms: R[], hotelTags: st
   const passes = (r: R) =>
     !r.soldOut &&
     r.sleeps >= f.guests &&
+    (f.adults === undefined || r.maxAdults == null || r.maxAdults >= f.adults) &&
+    (f.children === undefined || r.maxChildren == null || r.maxChildren >= f.children) &&
     (f.minPrice === undefined || r.nightly >= f.minPrice) &&
     (f.maxPrice === undefined || r.nightly <= f.maxPrice) &&
     (f.numBeds === undefined || (r.beds ?? 1) >= f.numBeds) &&

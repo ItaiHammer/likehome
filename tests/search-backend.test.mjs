@@ -114,11 +114,13 @@ describe('Search Module Integration', () => {
             assert.strictEqual(searchAvailableHotels.mock.callCount(), 1);
             assert.deepStrictEqual(searchAvailableHotels.mock.calls[0].arguments[0], {
                 city: 'Osaka',
-                region: 'Osaka Prefecture',
+                region: undefined, // only US hotels are stored with a region
                 country: 'Japan',
                 check_in: getDateFromToday(0),
                 check_out: getDateFromToday(1),
                 guests: 4, // 2 adults + 2 children total
+                adults: 2,
+                children: 2,
                 min_price: 150,
                 max_price: 400,
                 min_rating: 4,
@@ -159,6 +161,8 @@ describe('Search Module Integration', () => {
                 check_in: undefined,
                 check_out: undefined,
                 guests: undefined,
+                adults: undefined,
+                children: undefined,
                 min_price: undefined,
                 max_price: undefined,
                 min_rating: undefined,
@@ -218,6 +222,94 @@ describe('Search Module Integration', () => {
 
             // Assert
             assert.strictEqual(searchAvailableHotels.mock.calls[0].arguments[0].country, 'Canada');
+        });
+
+        test('sends a region only for the US, as the full state name hotels store', async () => {
+            for (const [where, region, country] of [
+                ['Miami, FL, USA', 'Florida', 'USA'],
+                ['Miami, Florida, United States', 'Florida', 'USA'],
+                ['Washington, D.C., United States', 'District of Columbia', 'USA'],
+                ['Rome, Metropolitan City of Rome Capital, Italy', undefined, 'Italy'],
+                ['Banff, Alberta, Canada', undefined, 'Canada'],
+            ]) {
+                // Arrange
+                searchAvailableHotels.mock.resetCalls();
+                searchAvailableHotels.mock.mockImplementationOnce(async () => ({}));
+
+                // Act
+                const result = await search({ where });
+
+                // Assert
+                const dbCall = searchAvailableHotels.mock.calls[0].arguments[0];
+                assert.strictEqual(dbCall.region, region, where);
+                assert.strictEqual(dbCall.country, country, where);
+                assert.strictEqual(result.params.location.region, where.split(', ')[1]); // params keep the request's wording
+            }
+        });
+
+        test('sends other spellings of a country the way hotels store it', async () => {
+            for (const [where, country] of [
+                ['London, UK', 'United Kingdom'],
+                ['Edinburgh, Scotland', 'United Kingdom'],
+                ['Istanbul, Turkey', 'Türkiye'],
+                ['Dubai, UAE', 'United Arab Emirates'],
+                ['Amsterdam, The Netherlands', 'Netherlands'],
+                ['Hong Kong, Hong Kong SAR', 'Hong Kong SAR China'],
+            ]) {
+                // Arrange
+                searchAvailableHotels.mock.resetCalls();
+                searchAvailableHotels.mock.mockImplementationOnce(async () => ({}));
+
+                // Act
+                await search({ where });
+
+                // Assert
+                assert.strictEqual(searchAvailableHotels.mock.calls[0].arguments[0].country, country, where);
+            }
+        });
+
+        test('sends a city by the name the import stores it under, with or without accents', async () => {
+            for (const [where, city] of [
+                ['Ubud, Bali, Indonesia', 'Bali'],
+                ['Luzern, Switzerland', 'Lucerne'],
+                ['South Lake Tahoe, California, United States', 'Lake Tahoe'],
+                ['cancun', 'Cancún'],
+                ['Reykjavik, Iceland', 'Reykjavík'],
+                ['Reykjavík, Iceland', 'Reykjavík'],
+                ['Paris, France', 'Paris'],
+            ]) {
+                // Arrange
+                searchAvailableHotels.mock.resetCalls();
+                searchAvailableHotels.mock.mockImplementationOnce(async () => ({}));
+
+                // Act
+                const result = await search({ where });
+
+                // Assert
+                assert.strictEqual(searchAvailableHotels.mock.calls[0].arguments[0].city, city, where);
+                assert.strictEqual(result.params.location.city, where.split(', ')[0]);
+            }
+        });
+
+        test('reads "City, State" as a US search', async () => {
+            for (const [where, region, country] of [
+                ['Lake Placid, New York', 'New York', 'USA'],
+                ['Paris, texas', 'Texas', 'USA'],
+                ['Tbilisi, Georgia', undefined, 'Georgia'],
+                ['Paris, France', undefined, 'France'],
+            ]) {
+                // Arrange
+                searchAvailableHotels.mock.resetCalls();
+                searchAvailableHotels.mock.mockImplementationOnce(async () => ({}));
+
+                // Act
+                await search({ where });
+
+                // Assert
+                const dbCall = searchAvailableHotels.mock.calls[0].arguments[0];
+                assert.strictEqual(dbCall.region, region, where);
+                assert.strictEqual(dbCall.country, country, where);
+            }
         });
     });
 });

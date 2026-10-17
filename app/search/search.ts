@@ -15,6 +15,7 @@ import { bedSizes, sorts, tags } from './types.ts';
 
 import { searchAvailableHotels } from '../../utils/search.ts';
 import { parseDate, todayInTimeZone } from '../../utils/reservation-logic.ts';
+import { stateName, stateNamed } from '../../lib/us-states.ts';
 
 // Paging stays out of SearchRequest: it picks which slice of results to show,
 // not which stays match, so the AI and filter parsing never see it.
@@ -25,16 +26,19 @@ export type PageOptions = {
 
 export async function search(searchParams: SearchRequest, pageOptions?: PageOptions): Promise<SearchResponse> {
     const standardizedParams = getSearchParams(searchParams);
+    const location = toStoredLocation(standardizedParams?.location);
 
     const result = await searchAvailableHotels({
         ...(pageOptions?.page !== undefined && { page: pageOptions.page }),
         ...(pageOptions?.pageSize !== undefined && { page_size: pageOptions.pageSize }),
-        city: standardizedParams?.location?.city,
-        region: standardizedParams?.location?.region,
-        country: toStoredCountry(standardizedParams?.location?.country),
+        city: location.city,
+        region: location.region,
+        country: location.country,
         check_in: standardizedParams?.dates?.checkIn,
         check_out: standardizedParams?.dates?.checkOut,
         guests: standardizedParams?.guests?.total,
+        adults: standardizedParams?.guests?.adults,
+        children: standardizedParams?.guests?.children,
         min_price: standardizedParams?.price?.min,
         max_price: standardizedParams?.price?.max,
         min_rating: standardizedParams?.rating?.minStars,
@@ -50,9 +54,42 @@ export async function search(searchParams: SearchRequest, pageOptions?: PageOpti
     };
 }
 
+// The hotels table spells places its own way, so only the database call is translated; params keep what was asked.
+function toStoredLocation(location?: LocationParams): Partial<LocationParams> {
+    if (!location) {
+        return {};
+    }
+    // "Paris, Texas": a US state where the country goes
+    const state = location.region === undefined ? stateNamed(location.country) : null;
+    const country = state ? 'USA' : toStoredCountry(location.country);
+    return {
+        city: toStoredCity(location.city),
+        region: state ?? toStoredRegion(location.region, country),
+        country,
+    };
+}
+
+// The import stores these under the destination picker's spelling (TARGETS in scripts/import-liteapi.mts)
+const STORED_CITY_NAMES: Record<string, string> = {
+    'ubud': 'Bali',
+    'luzern': 'Lucerne',
+    'south lake tahoe': 'Lake Tahoe',
+    'cancun': 'Cancún',
+    'reykjavik': 'Reykjavík',
+};
+
+function toStoredCity(city?: string): string | undefined {
+    if (city === undefined) {
+        return undefined;
+    }
+    const folded = city.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+    return STORED_CITY_NAMES[folded] ?? city;
+}
+
 // The hotels table stores the US as "USA", but the AI spells it out ("United States of America")
-// and the destination picker says "United States", so those found nothing. Other countries are
-// stored by their full name. Only the database call is translated; params keep what was asked.
+// and the destination picker says "United States", so those found nothing. LiteAPI hotels outside
+// the US are stored by the English name Intl.DisplayNames gives ("United Kingdom", "Türkiye"),
+// which people, place lists and the picker often spell differently.
 const STORED_COUNTRY_NAMES: Record<string, string> = {
     'united states of america': 'USA',
     'united states': 'USA',
@@ -60,6 +97,28 @@ const STORED_COUNTRY_NAMES: Record<string, string> = {
     'us': 'USA',
     'u.s.': 'USA',
     'u.s.a.': 'USA',
+    'uk': 'United Kingdom',
+    'u.k.': 'United Kingdom',
+    'great britain': 'United Kingdom',
+    'britain': 'United Kingdom',
+    'england': 'United Kingdom',
+    'scotland': 'United Kingdom',
+    'wales': 'United Kingdom',
+    'northern ireland': 'United Kingdom',
+    'united kingdom of great britain and northern ireland': 'United Kingdom',
+    'uae': 'United Arab Emirates',
+    'u.a.e.': 'United Arab Emirates',
+    'turkey': 'Türkiye',
+    'czech republic': 'Czechia',
+    'the netherlands': 'Netherlands',
+    'holland': 'Netherlands',
+    'korea': 'South Korea',
+    'republic of korea': 'South Korea',
+    'hong kong sar': 'Hong Kong SAR China',
+    'macao sar': 'Macao SAR China',
+    'bosnia and herzegovina': 'Bosnia & Herzegovina',
+    'saint lucia': 'St. Lucia',
+    'turks and caicos islands': 'Turks & Caicos Islands',
 };
 
 function toStoredCountry(country?: string): string | undefined {
@@ -67,6 +126,15 @@ function toStoredCountry(country?: string): string | undefined {
         return undefined;
     }
     return STORED_COUNTRY_NAMES[country.toLowerCase()] ?? country;
+}
+
+// Only US hotels are stored with a region, the full state name. Elsewhere the middle of
+// "Rome, Metropolitan City of Rome Capital, Italy" would rule out every hotel.
+function toStoredRegion(region: string | undefined, storedCountry: string | undefined): string | undefined {
+    if (region === undefined || storedCountry !== 'USA') {
+        return undefined;
+    }
+    return stateName(region) ?? region;
 }
 
 function getSearchParams(searchParams: SearchRequest): PropertyFilter {

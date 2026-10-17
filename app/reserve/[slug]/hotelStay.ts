@@ -21,6 +21,8 @@ type RoomRow = {
   room_type: string;
   price_per_night: number | string;
   capacity: number | null;
+  max_adults?: number | null;
+  max_children?: number | null;
   num_beds: number | null;
   bed_size: string | null;
   tags: string[] | null;
@@ -54,6 +56,8 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
       // The room's own amenities, the same tags search filters on
       description: [bedLabel(r.num_beds, r.bed_size), ...roomAmenityList(r.tags)].filter(Boolean).join(" · "),
       sleeps: r.capacity ?? 2,
+      maxAdults: r.max_adults ?? null,
+      maxChildren: r.max_children ?? null,
       nightly: Number(r.price_per_night),
       beds: r.num_beds ?? 1,
       bedSize: r.bed_size,

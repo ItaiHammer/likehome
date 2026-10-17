@@ -53,6 +53,20 @@ test('the stay opens on the cheapest room that passes the search, as search_hote
   assert.equal(matchingRoom([room('gone', 50, { soldOut: true }), room('open', 80)], [], filters()).id, 'open')
 })
 
+test('the stay room fits the adults and children on their own, skipping limits a room doesn’t have', () => {
+  const rooms = [
+    room('adults', 100, { sleeps: 4, maxAdults: 4, maxChildren: 0 }),
+    room('unknown', 150, { sleeps: 4, maxAdults: null, maxChildren: null }),
+    room('family', 200, { sleeps: 4, maxAdults: 2, maxChildren: 3 }),
+  ]
+  assert.equal(matchingRoom(rooms, [], filters({ guests: 4 })).id, 'adults')
+  assert.equal(matchingRoom(rooms, [], filters({ guests: 4, adults: 2, children: 2 })).id, 'unknown')
+  assert.equal(matchingRoom([rooms[0], rooms[2]], [], filters({ guests: 4, adults: 2, children: 2 })).id, 'family')
+  assert.equal(matchingRoom(rooms, [], filters({ guests: 3, adults: 3 })).id, 'adults')
+  assert.equal(matchingRoom([rooms[2]], [], filters({ guests: 3, adults: 3 })), null)
+  assert.equal(matchingRoom([room('owner', 90, { sleeps: 4 })], [], filters({ guests: 4, adults: 1, children: 3 })).id, 'owner')
+})
+
 test('filter values the search ignores don’t narrow the rooms', () => {
   const f = readRoomFilters({ minPrice: '100abc', maxPrice: '$500', numBeds: '0', bedSize: 'Huge', tags: ['Kitchen', 'Moat'] }, 3)
   assert.deepEqual(f, { guests: 3, minPrice: undefined, maxPrice: undefined, numBeds: undefined, bedSize: undefined, tags: ['Kitchen'] })
@@ -64,6 +78,11 @@ test('filter values the search ignores don’t narrow the rooms', () => {
     bedSize: 'Twin XL',
     tags: ['Pool'],
   })
+  // Adults and children only when the page passes them, as the search only sends them when given
+  assert.deepEqual(readRoomFilters({}, 4, { adults: 2, children: 2 }), {
+    guests: 4, adults: 2, children: 2, minPrice: undefined, maxPrice: undefined, numBeds: undefined, bedSize: undefined, tags: [],
+  })
+  assert.ok(!('adults' in readRoomFilters({}, 2)) && !('children' in readRoomFilters({}, 2)))
   // The search drops a reversed range entirely, so it doesn't narrow the rooms here either
   const reversed = readRoomFilters({ minPrice: '300', maxPrice: '100' }, 2)
   assert.equal(reversed.minPrice, undefined)
