@@ -11,41 +11,45 @@ import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRatesRequest, Li
 import { hotelRowFor, hotelSql, isAdultsOnly, roomRowsFor, samplePricesFor, typicalPrices, unmappedFacilities } from '../lib/liteapi/import-mapping.ts'
 import type { HotelRow, RoomRow, Target } from '../lib/liteapi/import-mapping.ts'
 import { stateFromZip } from '../lib/us-states.ts'
+import { CITY_RADIUS_KM, farFrom } from '../lib/liteapi/near.ts'
 
-// Popular destinations only; live search covers everywhere else. cityName is what LiteAPI lists the place under,
-// city is the destination picker's spelling. Outside the US there's no region and the country is countryName(code).
+type ImportTarget = Target & { center: readonly [number, number] }
+
+// Popular destinations only; live search covers everywhere else. cityName is what LiteAPI lists the place under, city
+// the destination picker's spelling (search.ts maps the other way). Outside the US there's no region, and the country is
+// the English name Intl.DisplayNames gives ("United Kingdom"). Hotels more than CITY_RADIUS_KM from center are skipped.
 const TARGETS = {
-  sf:         { countryCode: 'US', cityName: 'San Francisco',    city: 'San Francisco', region: 'California', country: 'USA' },
-  nyc:        { countryCode: 'US', cityName: 'New York',         city: 'New York',      region: 'New York',   country: 'USA' },
-  mia:        { countryCode: 'US', cityName: 'Miami',            city: 'Miami',         region: 'Florida',    country: 'USA' },
-  lv:         { countryCode: 'US', cityName: 'Las Vegas',        city: 'Las Vegas',     region: 'Nevada',     country: 'USA' },
-  orlando:    { countryCode: 'US', cityName: 'Orlando',          city: 'Orlando',       region: 'Florida',    country: 'USA' },
-  la:         { countryCode: 'US', cityName: 'Los Angeles',      city: 'Los Angeles',   region: 'California', country: 'USA' },
-  chicago:    { countryCode: 'US', cityName: 'Chicago',          city: 'Chicago',       region: 'Illinois',   country: 'USA' },
-  honolulu:   { countryCode: 'US', cityName: 'Honolulu',         city: 'Honolulu',      region: 'Hawaii',     country: 'USA' },
-  seattle:    { countryCode: 'US', cityName: 'Seattle',          city: 'Seattle',       region: 'Washington', country: 'USA' },
-  sedona:     { countryCode: 'US', cityName: 'Sedona',           city: 'Sedona',        region: 'Arizona',    country: 'USA' },
-  aspen:      { countryCode: 'US', cityName: 'Aspen',            city: 'Aspen',         region: 'Colorado',   country: 'USA' },
-  tahoe:      { countryCode: 'US', cityName: 'South Lake Tahoe', city: 'Lake Tahoe',    region: 'California', country: 'USA' },
-  monterey:   { countryCode: 'US', cityName: 'Monterey',         city: 'Monterey',      region: 'California', country: 'USA' },
-  santacruz:  { countryCode: 'US', cityName: 'Santa Cruz',       city: 'Santa Cruz',    region: 'California', country: 'USA' },
-  lakeplacid: { countryCode: 'US', cityName: 'Lake Placid',      city: 'Lake Placid',   region: 'New York',   country: 'USA' },
-  paris:      { countryCode: 'FR', cityName: 'Paris',     city: 'Paris',     region: null, country: 'France' },
-  london:     { countryCode: 'GB', cityName: 'London',    city: 'London',    region: null, country: 'United Kingdom' },
-  tokyo:      { countryCode: 'JP', cityName: 'Tokyo',     city: 'Tokyo',     region: null, country: 'Japan' },
-  rome:       { countryCode: 'IT', cityName: 'Rome',      city: 'Rome',      region: null, country: 'Italy' },
-  barcelona:  { countryCode: 'ES', cityName: 'Barcelona', city: 'Barcelona', region: null, country: 'Spain' },
-  kyoto:      { countryCode: 'JP', cityName: 'Kyoto',     city: 'Kyoto',     region: null, country: 'Japan' },
-  lisbon:     { countryCode: 'PT', cityName: 'Lisbon',    city: 'Lisbon',    region: null, country: 'Portugal' },
-  reykjavik:  { countryCode: 'IS', cityName: 'Reykjavik', city: 'Reykjavík', region: null, country: 'Iceland' },
-  lucerne:    { countryCode: 'CH', cityName: 'Luzern',    city: 'Lucerne',   region: null, country: 'Switzerland' },
-  bali:       { countryCode: 'ID', cityName: 'Ubud',      city: 'Bali',      region: null, country: 'Indonesia' },
-  banff:      { countryCode: 'CA', cityName: 'Banff',     city: 'Banff',     region: null, country: 'Canada' },
-  santorini:  { countryCode: 'GR', cityName: 'Santorini', city: 'Santorini', region: null, country: 'Greece' },
-  cancun:     { countryCode: 'MX', cityName: 'Cancun',    city: 'Cancún',    region: null, country: 'Mexico' },
-  dubai:      { countryCode: 'AE', cityName: 'Dubai',     city: 'Dubai',     region: null, country: 'United Arab Emirates' },
-  bangkok:    { countryCode: 'TH', cityName: 'Bangkok',   city: 'Bangkok',   region: null, country: 'Thailand' },
-} as const satisfies Record<string, Target>
+  sf:         { countryCode: 'US', cityName: 'San Francisco',    city: 'San Francisco', region: 'California', country: 'USA', center: [37.7749, -122.4194] },
+  nyc:        { countryCode: 'US', cityName: 'New York',         city: 'New York',      region: 'New York',   country: 'USA', center: [40.7128, -74.006] },
+  mia:        { countryCode: 'US', cityName: 'Miami',            city: 'Miami',         region: 'Florida',    country: 'USA', center: [25.7617, -80.1918] },
+  lv:         { countryCode: 'US', cityName: 'Las Vegas',        city: 'Las Vegas',     region: 'Nevada',     country: 'USA', center: [36.1699, -115.1398] },
+  orlando:    { countryCode: 'US', cityName: 'Orlando',          city: 'Orlando',       region: 'Florida',    country: 'USA', center: [28.5383, -81.3792] },
+  la:         { countryCode: 'US', cityName: 'Los Angeles',      city: 'Los Angeles',   region: 'California', country: 'USA', center: [34.0522, -118.2437] },
+  chicago:    { countryCode: 'US', cityName: 'Chicago',          city: 'Chicago',       region: 'Illinois',   country: 'USA', center: [41.8781, -87.6298] },
+  honolulu:   { countryCode: 'US', cityName: 'Honolulu',         city: 'Honolulu',      region: 'Hawaii',     country: 'USA', center: [21.3069, -157.8583] },
+  seattle:    { countryCode: 'US', cityName: 'Seattle',          city: 'Seattle',       region: 'Washington', country: 'USA', center: [47.6062, -122.3321] },
+  sedona:     { countryCode: 'US', cityName: 'Sedona',           city: 'Sedona',        region: 'Arizona',    country: 'USA', center: [34.8697, -111.761] },
+  aspen:      { countryCode: 'US', cityName: 'Aspen',            city: 'Aspen',         region: 'Colorado',   country: 'USA', center: [39.1911, -106.8175] },
+  tahoe:      { countryCode: 'US', cityName: 'South Lake Tahoe', city: 'Lake Tahoe',    region: 'California', country: 'USA', center: [38.9399, -119.9772] },
+  monterey:   { countryCode: 'US', cityName: 'Monterey',         city: 'Monterey',      region: 'California', country: 'USA', center: [36.6002, -121.8947] },
+  santacruz:  { countryCode: 'US', cityName: 'Santa Cruz',       city: 'Santa Cruz',    region: 'California', country: 'USA', center: [36.9741, -122.0308] },
+  lakeplacid: { countryCode: 'US', cityName: 'Lake Placid',      city: 'Lake Placid',   region: 'New York',   country: 'USA', center: [44.2795, -73.9799] },
+  paris:      { countryCode: 'FR', cityName: 'Paris',     city: 'Paris',     region: null, country: 'France',               center: [48.8566, 2.3522] },
+  london:     { countryCode: 'GB', cityName: 'London',    city: 'London',    region: null, country: 'United Kingdom',       center: [51.5074, -0.1278] },
+  tokyo:      { countryCode: 'JP', cityName: 'Tokyo',     city: 'Tokyo',     region: null, country: 'Japan',                center: [35.6762, 139.6503] },
+  rome:       { countryCode: 'IT', cityName: 'Rome',      city: 'Rome',      region: null, country: 'Italy',                center: [41.9028, 12.4964] },
+  barcelona:  { countryCode: 'ES', cityName: 'Barcelona', city: 'Barcelona', region: null, country: 'Spain',                center: [41.3874, 2.1686] },
+  kyoto:      { countryCode: 'JP', cityName: 'Kyoto',     city: 'Kyoto',     region: null, country: 'Japan',                center: [35.0116, 135.7681] },
+  lisbon:     { countryCode: 'PT', cityName: 'Lisbon',    city: 'Lisbon',    region: null, country: 'Portugal',             center: [38.7223, -9.1393] },
+  reykjavik:  { countryCode: 'IS', cityName: 'Reykjavik', city: 'Reykjavík', region: null, country: 'Iceland',              center: [64.1466, -21.9426] },
+  lucerne:    { countryCode: 'CH', cityName: 'Luzern',    city: 'Lucerne',   region: null, country: 'Switzerland',          center: [47.0502, 8.3093] },
+  bali:       { countryCode: 'ID', cityName: 'Ubud',      city: 'Bali',      region: null, country: 'Indonesia',            center: [-8.5069, 115.2625] },
+  banff:      { countryCode: 'CA', cityName: 'Banff',     city: 'Banff',     region: null, country: 'Canada',               center: [51.1784, -115.5708] },
+  santorini:  { countryCode: 'GR', cityName: 'Santorini', city: 'Santorini', region: null, country: 'Greece',               center: [36.3932, 25.4615] },
+  cancun:     { countryCode: 'MX', cityName: 'Cancun',    city: 'Cancún',    region: null, country: 'Mexico',               center: [21.1619, -86.8515] },
+  dubai:      { countryCode: 'AE', cityName: 'Dubai',     city: 'Dubai',     region: null, country: 'United Arab Emirates', center: [25.2048, 55.2708] },
+  bangkok:    { countryCode: 'TH', cityName: 'Bangkok',   city: 'Bangkok',   region: null, country: 'Thailand',             center: [13.7563, 100.5018] },
+} as const satisfies Record<string, ImportTarget>
 type CityKey = keyof typeof TARGETS
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -63,7 +67,8 @@ const USAGE = `Usage: npm run import:liteapi -- [options]
        node --env-file=.env.local scripts/import-liteapi.mts [options]
 
   --dry-run           fetch and map everything, print a summary, write nothing
-  --cities sf,nyc     cities to import (default: ${Object.keys(TARGETS).join(',')})
+  --cities sf,nyc     cities to import (default: ${Object.keys(TARGETS).join(',')}).
+                      Nothing is written until every city is done, so import a few at a time
   --limit 100         hotels listed per city (1-${MAX_LIMIT})
   --max-rooms 10      room types kept per hotel
   --sql-out [path]    write an idempotent .sql file to paste into the SQL Editor instead of
@@ -228,7 +233,7 @@ function skip(report: Report, s: { id: string; name?: string }, reason: string) 
 }
 
 async function importCity(apiKey: string, cityKey: CityKey, options: Options, seen: Set<string>, report: Report) {
-  const target: Target = TARGETS[cityKey]
+  const target: ImportTarget = TARGETS[cityKey]
   console.log(`\n${target.city} (${cityKey})`)
 
   const query = new URLSearchParams({ countryCode: target.countryCode, cityName: target.cityName, limit: String(options.limit) })
@@ -247,6 +252,7 @@ async function importCity(apiKey: string, cityKey: CityKey, options: Options, se
   for (const s of listed) {
     if (seen.has(s.id)) skip(report, s, 'already imported in this run')
     else if (s.deletedAt) skip(report, s, 'deleted at LiteAPI')
+    else if (farFrom(s, target.center)) skip(report, s, `more than ${CITY_RADIUS_KM} km from the city`)
     else {
       seen.add(s.id)
       candidates.push(s)
@@ -315,7 +321,7 @@ async function importCity(apiKey: string, cityKey: CityKey, options: Options, se
     if (d === undefined) return skip(report, s, 'details request failed')
     if (d === null) return skip(report, s, 'no details')
     if (d.deletedAt) return skip(report, s, 'deleted at LiteAPI')
-    // LiteAPI's US city lists take same-named towns from other states (Las Vegas NM, Lake Placid FL)
+    // Close by but across a state line, when the zip names the state
     const state = target.countryCode === 'US' ? stateFromZip(d.zip) : null
     if (state && state !== target.region) return skip(report, s, 'in another state')
     const rooms = roomRowsFor(d.rooms, sample, options.maxRooms, isAdultsOnly(d))

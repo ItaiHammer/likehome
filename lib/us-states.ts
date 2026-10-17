@@ -14,6 +14,13 @@ export function stateName(code: string | null | undefined): string | null {
   return US_STATES[(code ?? '').replaceAll('.', '').trim().toUpperCase()] ?? null
 }
 
+/** The state a full name stands for, ignoring case ("new york" → "New York"); Georgia is left to the country */
+export function stateNamed(name: string | null | undefined): string | null {
+  const wanted = (name ?? '').trim().toLowerCase()
+  if (!wanted || wanted === 'georgia') return null
+  return Object.values(US_STATES).find((state) => state.toLowerCase() === wanted) ?? null
+}
+
 /** The state at the front of a LiteAPI hotel's zip ("NV 89109" → "Nevada"), or null */
 export function stateFromZip(zip: string | null | undefined): string | null {
   return stateName(/^([A-Z]{2})\b/.exec((zip ?? '').trim())?.[1])
