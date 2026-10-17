@@ -20,7 +20,6 @@ export interface LiteHotelSummary {
 
 // GET /data/hotels?placeId=…: `country` is a 2-letter code here
 export interface LiteHotelListing extends LiteHotelSummary {
-  primaryHotelId?: string | null
   rating?: number
   reviewCount?: number
   facilityIds?: number[]
