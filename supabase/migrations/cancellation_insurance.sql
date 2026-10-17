@@ -36,7 +36,7 @@ set
   paid as (
     select coalesce(sum(t.amount) filter (where t.transaction_type = 'charge'), 0)
          - coalesce(sum(t.amount) filter (where t.transaction_type = 'credit'), 0) as booking,
-           coalesce(sum(t.amount) filter (where t.transaction_type = 'insurance'), 0) as
+           coalesce(sum(t.amount) filter (where t.transaction_type = 'insurance'), 0) as insurance
     from public.payments p
     join public.transactions t on t.payment_id = p.id
     where p.reservation_id = p_reservation_id and t.status = 'completed'

@@ -68,6 +68,7 @@ export async function createReservation(reservation: {
   total_price: number
   guests?: number
   status?: string
+  has_insurance?: boolean
 }) {
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)
@@ -124,4 +125,21 @@ export async function getAccountOverlappingBookings(
     p_exclude_reservation_id: excludeReservationId ?? null,
   })
   return { data: data ?? [], error }
+}
+export async function getCancellationQuote(reservationId: string) {
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+  const { data, error } = await supabase
+    .rpc('get_cancellation_quote', { p_reservation_id: reservationId })
+    .maybeSingle()
+  return { data, error }
+}
+
+export async function cancelReservation(reservationId: string) {
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+  const { data, error } = await supabase
+    .rpc('cancel_reservation', { p_reservation_id: reservationId })
+    .single()
+  return { data, error }
 }
