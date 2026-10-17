@@ -566,7 +566,7 @@ function sqlValue(value: string | number | null | readonly string[]): string {
 
 const updateSet = (columns: readonly string[]) => columns.map((column) => `${column} = excluded.${column}`).join(', ')
 
-// Same upserts as the Supabase path. Rooms missing from a later run are never deleted (reservations point at them).
+// Same writes as the Supabase path (upserts, then dropStaleRooms).
 export function hotelSql(hotel: HotelRow, rooms: RoomRow[]): string {
   let sql = `insert into public.hotels (${HOTEL_COLUMNS.join(', ')})\n` +
     `values (${HOTEL_COLUMNS.map((column) => sqlValue(hotel[column])).join(', ')})\n` +
