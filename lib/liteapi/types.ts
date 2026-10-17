@@ -31,6 +31,11 @@ export interface LiteRoom {
 export interface LiteHotelDetail {
   id: string
   name: string
+  city?: string
+  /** 2-letter code */
+  country?: string
+  /** US hotels start it with the state: "OR 97701" */
+  zip?: string
   hotelDescription?: string
   address?: string
   hotelImages?: { url: string; urlHd?: string; order?: number; defaultImage?: boolean }[]
