@@ -50,6 +50,12 @@ test('a saved hotel the database filtered out stays out', () => {
     assert.deepEqual(keys(rows), ['lp2']);
 });
 
+test('when the database search hit its row limit, a saved hotel it left out is checked like an unsaved one', () => {
+    const hotels = [listing('lp1'), listing('lp2', { stars: 2 })];
+    assert.deepEqual(keys(mergeLiveResults([], hotels, new Set(['lp1', 'lp2']), NAMES, {}, false)), ['lp1', 'lp2']);
+    assert.deepEqual(keys(mergeLiveResults([], hotels, new Set(['lp1', 'lp2']), NAMES, { rating: { minStars: 3 } }, false)), ['lp1']);
+});
+
 test('unsaved hotels are filtered on what the list knows', () => {
     const hotels = [
         listing('pool', { facilityIds: [103] }),

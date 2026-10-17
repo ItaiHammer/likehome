@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   autoSince, bedSizeFor, capacityFor, countryName, hotelListQuery, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, parseSince,
-  planSync, removedAt, rfc3339, roomRowsFor, roomTagsFor, sameCity, samplePricesFor, savedTarget, stripHtml, summaryOf, targetFor,
+  outsideTargets, planSync, removedAt, rfc3339, roomRowsFor, roomTagsFor, sameCity, samplePricesFor, savedTarget, stripHtml, summaryOf, targetFor,
   typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import { tags as filterTags } from '../app/search/types.ts'
@@ -499,13 +499,14 @@ test('parseSince takes auto, hours or days back from now, or a past ISO timestam
   }
 })
 
-test('autoSince goes back a week from the last sync, or from now without one', () => {
-  assert.equal(autoSince('2026-10-14T10:17:03.120Z', NOW).toISOString(), '2026-10-07T10:17:03.120Z')
-  assert.equal(autoSince('2026-10-14T10:17:03+00:00', NOW).toISOString(), '2026-10-07T10:17:03.000Z', 'Postgres timestamptz text')
-  assert.equal(autoSince(null, NOW).toISOString(), '2026-10-08T10:17:00.000Z')
-  assert.equal(autoSince(undefined, NOW).toISOString(), '2026-10-08T10:17:00.000Z')
-  assert.equal(autoSince('not a date', NOW).toISOString(), '2026-10-08T10:17:00.000Z')
-  assert.equal(autoSince('2026-10-16T00:00:00Z', NOW).toISOString(), '2026-10-08T10:17:00.000Z', 'a sync in the future counts as now')
+test('autoSince goes back two days from the last sync, or from now without one, and never past two weeks', () => {
+  assert.equal(autoSince('2026-10-14T10:17:03.120Z', NOW).toISOString(), '2026-10-12T10:17:03.120Z')
+  assert.equal(autoSince('2026-10-14T10:17:03+00:00', NOW).toISOString(), '2026-10-12T10:17:03.000Z', 'Postgres timestamptz text')
+  assert.equal(autoSince(null, NOW).toISOString(), '2026-10-13T10:17:00.000Z')
+  assert.equal(autoSince(undefined, NOW).toISOString(), '2026-10-13T10:17:00.000Z')
+  assert.equal(autoSince('not a date', NOW).toISOString(), '2026-10-13T10:17:00.000Z')
+  assert.equal(autoSince('2026-10-16T00:00:00Z', NOW).toISOString(), '2026-10-13T10:17:00.000Z', 'a sync in the future counts as now')
+  assert.equal(autoSince('2026-09-01T00:00:00Z', NOW).toISOString(), '2026-10-01T10:17:00.000Z', 'a city with no recent change')
 })
 
 test('hotelListQuery adds offset and an RFC3339 lastUpdatedAt only with --since', () => {
@@ -582,6 +583,13 @@ test('sameCity compares country and city, ignoring case and spaces', () => {
   assert.equal(sameCity(summary({ country: 'US', city: 'Oakland' }), sf), false)
   assert.equal(sameCity(summary({ country: 'CA', city: 'San Francisco' }), sf), false)
   assert.equal(sameCity(summary({ city: undefined, country: undefined }), summary({ city: undefined, country: undefined })), false)
+})
+
+test('outsideTargets leaves out each target by city and country, quoting the names', () => {
+  const paris = { countryCode: 'FR', cityName: 'Paris', city: 'Paris', region: null, country: 'France' }
+  const odd = { countryCode: 'XX', cityName: 'x', city: 'St. "Big", (Town)\\', region: null, country: 'Côte d’Ivoire' }
+  assert.equal(outsideTargets([paris, odd]),
+    'not.or(and(city.eq."Paris",country.eq."France"),and(city.eq."St. \\"Big\\", (Town)\\\\",country.eq."Côte d’Ivoire"))')
 })
 
 test('a saved hotel refreshed by id keeps the location it was saved with', () => {

@@ -9,8 +9,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { LITEAPI_BASE } from '../lib/liteapi/types.ts'
 import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRatesRequest, LiteRatesResponse } from '../lib/liteapi/types.ts'
 import {
-  AUTO_OVERLAP_DAYS, autoSince, hotelListQuery, hotelRowFor, hotelSql, isAdultsOnly, parseSince, planSync, removedAt, rfc3339, roomRowsFor,
-  sameCity, samplePricesFor, savedTarget, typicalPrices, unmappedFacilities,
+  AUTO_MAX_DAYS, AUTO_OVERLAP_DAYS, autoSince, hotelListQuery, hotelRowFor, hotelSql, isAdultsOnly, parseSince, planSync, removedAt, rfc3339, roomRowsFor,
+  outsideTargets, sameCity, samplePricesFor, savedTarget, typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import type { Existing, HotelRow, RoomRow, SavedRow, Target } from '../lib/liteapi/import-mapping.ts'
 import { stateFromZip } from '../lib/us-states.ts'
@@ -77,7 +77,8 @@ const USAGE = `Usage: npm run import:liteapi -- [options]
   --sql-out [path]    write an idempotent .sql file to paste into the SQL Editor instead of
                       writing to Supabase (default: the OS temp folder; paths inside the repo are refused)
   --since auto        refresh instead: list only hotels LiteAPI updated since an ISO timestamp, 48h, 7d, or auto
-                      (each city's last sync minus ${AUTO_OVERLAP_DAYS} days, so later runs retry what a run missed).
+                      (each city's last sync minus ${AUTO_OVERLAP_DAYS} days, so later runs retry what a run missed,
+                      but at most ${AUTO_MAX_DAYS} days back).
                       Updates hotels already imported, hides ones LiteAPI deleted (adding the hotel one was merged
                       into), and adds up to --max-new other new hotels per city
   --max-new 5         with --since, new hotels added per city (0-100), not counting merged-into ones
@@ -316,13 +317,13 @@ async function sinceFor(db: SupabaseClient | null, target: Target, since: Date |
   let last: string | null = null
   if (db) {
     // Only LiteAPI rows: owners can edit every column of their own listings
-    const { data, error } = await db.from('hotels').select('liteapi_synced_at').eq('city', target.city).not('liteapi_id', 'is', null)
-      .not('liteapi_synced_at', 'is', null).order('liteapi_synced_at', { ascending: false }).limit(1)
+    const { data, error } = await db.from('hotels').select('liteapi_synced_at').eq('city', target.city).eq('country', target.country)
+      .not('liteapi_id', 'is', null).not('liteapi_synced_at', 'is', null).order('liteapi_synced_at', { ascending: false }).limit(1)
     if (error) throw new CliError(`Reading hotels.liteapi_synced_at failed: ${error.message}. Has supabase/migrations/liteapi_hotels.sql been run?`)
     last = data?.[0]?.liteapi_synced_at ?? null
   }
   const at = autoSince(last)
-  console.log(`  --since auto: ${last ? `last sync ${last}` : `${db ? 'no earlier sync' : 'no database'}, so now`} minus ${AUTO_OVERLAP_DAYS} days`)
+  console.log(`  --since auto: ${last ? `last sync ${last}` : `${db ? 'no earlier sync' : 'no database'}, so now`} minus ${AUTO_OVERLAP_DAYS} days (${rfc3339(at)})`)
   return at
 }
 
@@ -394,9 +395,8 @@ async function refreshSaved(apiKey: string, db: SupabaseClient | null, options: 
   if (!options.maxSaved) return
   console.log('\nSaved hotels outside the import cities')
   if (!db) return console.log('  skipped: no database to read them from')
-  const cities = Object.values(TARGETS).map((target) => `"${target.city}"`).join(',')
   const { data, error } = await db.from('hotels').select('liteapi_id, city, region, country')
-    .not('liteapi_id', 'is', null).is('liteapi_deleted_at', null).not('city', 'in', `(${cities})`)
+    .not('liteapi_id', 'is', null).is('liteapi_deleted_at', null).not('city', 'is', null).or(outsideTargets(Object.values(TARGETS)))
     .order('liteapi_synced_at', { ascending: true, nullsFirst: true }).limit(options.maxSaved)
   if (error) {
     report.failures++

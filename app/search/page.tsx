@@ -83,7 +83,9 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                     throw found.results.error;
                 }
                 const std = found.params;
-                const merged = mergeLiveResults(rowsOf(found.results.data), listing.hotels, savedIds, listing.names, std);
+                const rows = rowsOf(found.results.data);
+                const complete = Number(found.results.total ?? rows.length) <= rows.length;
+                const merged = mergeLiveResults(rows, listing.hotels, savedIds, listing.names, std, complete);
                 if (!std.dates) {
                     const shown = withoutDates(merged, std);
                     data = pageRows(shown);

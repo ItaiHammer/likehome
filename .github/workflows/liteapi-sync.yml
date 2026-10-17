@@ -1,4 +1,6 @@
-# LiteAPI refresh of the shared Supabase hotels every 3 hours: updates changed hotels, hides deleted ones, adds a few new ones.
+# LiteAPI refresh of the shared Supabase hotels every 3 hours: updates changed hotels and hides deleted ones. It adds no
+# other new hotels (--max-new 0): the import picks each city's hotels and live search saves the ones people open, so busy
+# cities like Paris don't keep growing.
 name: LiteAPI sync
 
 on:
@@ -26,7 +28,8 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # About 30 cities usually take a few minutes; writes wait until the end, so a run cut short writes nothing
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
@@ -64,6 +67,6 @@ jobs:
           SINCE: ${{ inputs.since || 'auto' }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          args=(--since "$SINCE")
+          args=(--since "$SINCE" --max-new 0)
           if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
           node scripts/import-liteapi.mts "${args[@]}"

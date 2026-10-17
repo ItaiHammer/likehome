@@ -445,7 +445,9 @@ export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices,
 }
 
 const HOUR_MS = 60 * 60 * 1000
-export const AUTO_OVERLAP_DAYS = 7
+export const AUTO_OVERLAP_DAYS = 2
+// So a city whose imported hotels rarely change doesn't list an ever-longer history of the rest
+export const AUTO_MAX_DAYS = 14
 
 // An ISO timestamp needs a zone when it has a time, so it means the same on any machine
 const ISO_SINCE = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/
@@ -459,12 +461,19 @@ export function parseSince(raw: string | undefined, now = new Date()): Date | 'a
   return Number.isFinite(at.getTime()) && at <= now ? at : null
 }
 
-// A week before the last sync (or now, without one): a hotel a failed or skipped request missed, or one over
-// --max-new, is listed again on the next runs instead of falling out of the window.
+// Two days before the last sync (or now, without one), but never more than two weeks back: a hotel a failed or
+// skipped request missed, or one over --max-new, is listed again on the next runs instead of falling out of the window.
 export function autoSince(lastSyncedAt: string | null | undefined, now = new Date()): Date {
   const last = Date.parse(lastSyncedAt ?? '')
   const from = Number.isFinite(last) ? Math.min(last, now.getTime()) : now.getTime()
-  return new Date(from - AUTO_OVERLAP_DAYS * 24 * HOUR_MS)
+  return new Date(Math.max(from - AUTO_OVERLAP_DAYS * 24 * HOUR_MS, now.getTime() - AUTO_MAX_DAYS * 24 * HOUR_MS))
+}
+
+// PostgREST filter (for .or()) keeping hotels outside every target city. City and country both count: a hotel saved in
+// London, Ontario isn't in the London import. Values are double-quoted, with \ and " escaped.
+export function outsideTargets(targets: Target[]): string {
+  const quoted = (value: string) => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+  return `not.or(${targets.map((t) => `and(city.eq.${quoted(t.city)},country.eq.${quoted(t.country)})`).join(',')})`
 }
 
 const placeOf = (s: LiteHotelSummary) => [s.country, s.city].map((part) => String(part ?? '').trim().toLowerCase()).join('|')

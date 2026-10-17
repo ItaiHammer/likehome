@@ -36,7 +36,8 @@ function listingMatches(row: HotelSearchResult, hotel: LiteHotelListing, p: Prop
 /**
  * Owner listings first, then LiteAPI's hotels in LiteAPI's order, then saved LiteAPI hotels the place list didn't
  * include. A saved hotel comes from search_hotels, which already checked its rooms, so one missing there failed the
- * filters; an unsaved one is checked here.
+ * filters; an unsaved one is checked here. When search_hotels hit its row limit (complete false), a missing saved
+ * hotel may just have been cut, so it's checked here too.
  */
 export function mergeLiveResults(
     dbRows: HotelSearchResult[],
@@ -44,6 +45,7 @@ export function mergeLiveResults(
     savedIds: Set<string>,
     names: Map<number, string>,
     p: PropertyFilter,
+    complete = true,
 ): HotelSearchResult[] {
     const fromDb = new Map(dbRows.flatMap((row) => (row.liteapi_id ? [[row.liteapi_id, row] as const] : [])));
     const listed: HotelSearchResult[] = [];
@@ -54,7 +56,7 @@ export function mergeLiveResults(
             // search_hotels returns neither stars nor tags
             listed.push({ ...row, ...saved, rating: saved.rating ?? row.rating, tags: saved.tags ?? row.tags });
             fromDb.delete(hotel.id);
-        } else if (!savedIds.has(hotel.id) && listingMatches(row, hotel, p)) {
+        } else if ((!complete || !savedIds.has(hotel.id)) && listingMatches(row, hotel, p)) {
             listed.push(row);
         }
     }
