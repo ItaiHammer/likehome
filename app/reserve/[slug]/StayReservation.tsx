@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
@@ -116,29 +116,18 @@ export function StayReservation({
   // Free cancellation ends 2 days before check-in; for a stay that starts sooner, it's already over.
   // Today is "" while rendering on the server, so the server and the browser agree on first render.
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
-  const [userBookingBlockedOffsets, setUserBookingBlockedOffsets] = useState<number[]>([]);
-
-  useEffect(() => {
-    const currentDate = todayISO();
-
-    const offsets = otherStays.flatMap((booking) => {
+  // Nights the guest already has booked at other hotels, as days from today, so the calendar crosses
+  // them out. Derived from `today` (empty on the server), so it fills in once the page is in the browser.
+  const userBookingBlockedOffsets = useMemo(() => {
+    if (!today) return [];
+    return otherStays.flatMap((booking) => {
       const bookingOffsets: number[] = [];
-
-      for (
-        let night = booking.checkIn;
-        night < booking.checkOut;
-        night = addDays(night, 1)
-      ) {
-        if (night >= currentDate) {
-          bookingOffsets.push(nightsBetween(currentDate, night));
-        }
+      for (let night = booking.checkIn; night < booking.checkOut; night = addDays(night, 1)) {
+        if (night >= today) bookingOffsets.push(nightsBetween(today, night));
       }
-
       return bookingOffsets;
     });
-
-    setUserBookingBlockedOffsets(offsets);
-  }, [otherStays]);
+  }, [otherStays, today]);
 
   const blockedOffsets = [
     ...new Set([...stay.blockedNights, ...userBookingBlockedOffsets]),
