@@ -1,19 +1,31 @@
 "use client";
-
+import { type Provider } from "@supabase/supabase-js"
 import { createClient } from "@/utils/supabase/client";
 import { API_ROUTES } from "@/constants/routes";
 
 export async function signInWithGoogle() {
+    signIn('google');
+}
+
+export async function signInWithFacebook() {
+    signIn('facebook');
+}
+
+export async function signInWithGitHub() {
+    signIn('github');
+}
+
+export async function signInWithDiscord() {
+    signIn('discord');
+}
+
+async function signIn(provider: Provider) {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
+        provider,
         options: { redirectTo: getRedirectUrl() },
     });
     if (error) console.error(error.message);
-}
-
-export function SignInWithGoogleOAuthButton() {
-    return <button onClick={signInWithGoogle}>Sign In</button>;
 }
 
 function getRedirectUrl(): string {
