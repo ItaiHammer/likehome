@@ -132,6 +132,6 @@ function getOptionalNumberToString(min?: number, max?: number, decimalDigits: nu
     return value.transform((val) => val.toFixed(decimalDigits)).optional();
 }
 
-function getOptionalEnum(options: readonly any[]) {
+function getOptionalEnum<const T extends readonly [string, ...string[]]>(options: T) {
     return z.enum(options).optional();
 }

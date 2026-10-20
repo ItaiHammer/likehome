@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { bookingCode, changeBlocker, findOverlap, formatStayDates, money, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
-import { calculateTotalPrice, MAX_NIGHTS, todayUTC } from "@/utils/reservation-logic";
-import { formatDate, nightsBetween } from "../../_components/dates";
+import { calculateTotalPrice, MAX_NIGHTS, todayInTimeZone } from "@/utils/reservation-logic";
+import { browserTimeZone, formatDate, nightsBetween } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Stepper } from "../../_components/ui";
 import type { Room } from "../../_data/stays";
@@ -118,8 +118,8 @@ export function ChangeBooking({
   function problem(): { field: "dates" | "guests"; message: string } | null {
     if (!nights) return { field: "dates", message: "Pick your new check-in and check-out dates." };
     if (nights > MAX_NIGHTS) return { field: "dates", message: `Stays can be up to ${MAX_NIGHTS} nights.` };
-    // The API counts days in UTC, so in the US evening "today" has already passed for it
-    if (checkIn < todayUTC()) return { field: "dates", message: "That check-in date is too soon. Pick a later date." };
+    // The guest's today; the API judges it the same way from the time_zone sent with the change
+    if (checkIn < todayInTimeZone(browserTimeZone())) return { field: "dates", message: "That check-in date is too soon. Pick a later date." };
     const clash = findOverlap(otherStays, checkIn, checkOut);
     if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
@@ -164,7 +164,7 @@ export function ChangeBooking({
       const res = await fetch(`/api/reservations/${booking.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ room_id: roomId, check_in: checkIn, check_out: checkOut, guests }),
+        body: JSON.stringify({ room_id: roomId, check_in: checkIn, check_out: checkOut, guests, time_zone: browserTimeZone() }),
         signal: controller.signal,
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; reservation?: { total_price?: number | string | null } | null };
@@ -192,8 +192,8 @@ export function ChangeBooking({
     setDone(false);
   }
 
-  // A change can move check-in to today (UTC), after which the API refuses further changes
-  const againBlocker = done ? changeBlocker({ status: "confirmed", checkIn: current.checkIn, checkOut: current.checkOut }, todayUTC()) : null;
+  // A change can move check-in to today, after which the API refuses further changes
+  const againBlocker = done ? changeBlocker({ status: "confirmed", checkIn: current.checkIn, checkOut: current.checkOut }, todayInTimeZone(browserTimeZone())) : null;
   const signInHref = `${PAGE_ROUTES.LOGIN}?next=${encodeURIComponent(`${PAGE_ROUTES.MY_BOOKINGS}/${booking.id}`)}`;
   const locked = done || saving;
 

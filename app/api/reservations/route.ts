@@ -1,8 +1,7 @@
 // Quick Reservation API (US 4.1.2)
 //   POST /api/reservations  -> create a reservation for the logged-in user
 //   GET  /api/reservations  -> list the logged-in user's reservations
-import { cookies } from 'next/headers'
-import { createClient } from '@/utils/supabase/server'
+import { getUserId } from '@/utils/user'
 import { createReservation, getReservationsByAccount } from '@/utils/reservations'
 import {
   calculateTotalPrice,
@@ -16,13 +15,6 @@ import {
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
 const EXCLUSION_VIOLATION = '23P01'
 const ACCOUNT_OVERLAP_CONSTRAINT = 'reservations_no_account_overlap'
-
-async function getUserId() {
-  const supabase = createClient(await cookies())
-  const { data, error } = await supabase.auth.getClaims()
-  if (error || !data?.claims?.sub) return { supabase, userId: null }
-  return { supabase, userId: data.claims.sub as string }
-}
 
 export async function POST(request: Request) {
   const { supabase, userId } = await getUserId()

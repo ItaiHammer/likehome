@@ -4,7 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import { Button, Card } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { bookingCode, formatStayDates, money } from "@/lib/bookings";
-import { countNights, todayUTC } from "@/utils/reservation-logic";
+import { countNights } from "@/utils/reservation-logic";
+import { guestToday } from "@/utils/guest-today";
 import { getPaymentsByReservation } from "@/utils/payments";
 import { getAmountPaid } from "@/utils/transactions";
 import { getHotelStay } from "../../../reserve/[slug]/hotelStay";
@@ -33,7 +34,8 @@ async function loadConfirmation(id: string, today: string) {
 // Omar's confirmation design (#70), filled from the saved booking; no rewards card until points can be earned
 export default async function BookingConfirmedPage(props: PageProps<"/MyBookings/[id]/confirmed">) {
   const { id } = await props.params;
-  const today = todayUTC();
+  // The guest's today (from their time zone cookie), not UTC's
+  const today = await guestToday();
   // Dev only, like /MyBookings?sample
   const { sample } = await props.searchParams;
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;

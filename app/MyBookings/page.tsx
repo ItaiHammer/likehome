@@ -5,7 +5,7 @@ import { PAGE_ROUTES } from "@/constants/routes";
 import { firstName, groupBookings, type Booking } from "@/lib/bookings";
 import { getAccount } from "@/utils/accounts";
 import { getHotelsByIds } from "@/utils/hotels";
-import { todayUTC } from "@/utils/reservation-logic";
+import { guestToday } from "@/utils/guest-today";
 import { getReservationsByAccount } from "@/utils/reservations";
 import { getRoomsByIds } from "@/utils/rooms";
 import { getUserId } from "@/utils/user";
@@ -57,7 +57,8 @@ async function loadMyBookings() {
 }
 
 export default async function MyBookingsPage({ searchParams }: { searchParams: Promise<{ sample?: string }> }) {
-  const today = todayUTC();
+  // The guest's today (from their time zone cookie), not UTC's
+  const today = await guestToday();
   // Dev only: ?sample (or ?sample=empty) fills the page without signing in, see sampleBookings.ts
   const { sample } = await searchParams;
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
