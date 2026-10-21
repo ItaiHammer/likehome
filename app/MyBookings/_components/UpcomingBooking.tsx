@@ -30,10 +30,16 @@ export function UpcomingBooking({
           View booking
         </Button>
         <CancelBooking booking={booking} quote={cancellation} sample={sample} className="grow basis-44 xl:flex-none" />
-        {/* Same look as "View stay" on the search cards; a span until there's a way to contact the hotel */}
-        <span title="Coming soon" className="w-full text-right text-sm font-semibold text-blue">
-          Contact hotel
-        </span>
+        {/* "View stay" look from the search cards; px-1.5 insets it by the buttons' corner radius so it lines up with their edge */}
+        <div className="flex w-full justify-end">
+          <button
+            type="button"
+            title="Coming soon"
+            className="rounded-control px-1.5 text-xs font-semibold text-blue transition-colors hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
+          >
+            Contact hotel
+          </button>
+        </div>
       </div>
     </article>
   );
