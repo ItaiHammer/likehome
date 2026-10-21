@@ -1,8 +1,15 @@
 "use client";
 
 import { SkyBackground } from "@/app/_components/SkyBackground";
+import { signInWithGoogle } from "@/components/sign-in-google-button";
 import styles from "./page.module.css";
-import { providers } from "@/app/auth/login/provider-config"
+
+const providers = [
+  { name: "Google", icon: "/login/google-logo.svg", available: true },
+  { name: "Apple", icon: "/login/apple-logo.svg", available: false },
+  { name: "Microsoft", icon: "/login/microsoft-logo.svg", available: false },
+  { name: "Facebook", icon: "/login/facebook-logo.svg", available: false },
+];
 
 export default function SignInPage() {
   return (
@@ -22,13 +29,21 @@ export default function SignInPage() {
                 key={provider.name}
                 type="button"
                 className={styles.providerButton}
-                onClick={provider.handler}
+                disabled={!provider.available}
+                title={provider.available ? undefined : "Coming soon"}
+                onClick={
+                  provider.name === "Google" ? signInWithGoogle : undefined
+                }
               >
                 <span className={styles.icon}>
-                  <img src={provider.icon()} alt="" />
+                  <img src={provider.icon} alt="" />
                 </span>
 
                 <span>Continue with {provider.name}</span>
+
+                {!provider.available && (
+                  <span className={styles.badge}>Soon</span>
+                )}
               </button>
             ))}
           </div>
