@@ -101,6 +101,42 @@ export async function updateReservation(
   return { data: data?.map(normalizeReservationDates) ?? data, error }
 }
 
+// Includes payment adjustments
+export async function editReservation(
+  id: string,
+  updates: {
+    room_id: string
+    check_in: string
+    check_out: string
+    guests?: number
+  },
+  options: {
+    payment_method: 'card' | 'points'
+    time_zone: string | null
+    expected: {
+      room_id: string
+      check_in: string
+      check_out: string
+      guests: number | null
+      total_price: number
+    }
+  }
+) {
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+  const { data, error } = await supabase.rpc('edit_reservation', {
+    p_reservation_id: id,
+    p_room_id: updates.room_id,
+    p_check_in: updates.check_in,
+    p_check_out: updates.check_out,
+    p_guests: updates.guests ?? null,
+    p_payment_method: options.payment_method,
+    p_time_zone: options.time_zone,
+    p_expected: options.expected,
+  })
+  return { data: data?.map(normalizeReservationDates) ?? data, error }
+}
+
 export async function deleteReservation(id: string) {
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)
