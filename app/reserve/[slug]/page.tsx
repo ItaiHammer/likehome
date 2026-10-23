@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { getOtherStays } from "@/lib/other-stays";
 import { matchingRoom, originalSearch, readRoomFilters } from "@/lib/stay-filters";
+import { recordHotelView } from "@/utils/recently-viewed";
 import { countNights, MAX_NIGHTS, parseDate, todayUTC } from "@/utils/reservation-logic";
 import { createClient } from "@/utils/supabase/server";
 import { addDays } from "../../_components/dates";
@@ -71,9 +72,12 @@ export default async function ReservePage(props: PageProps<"/reserve/[slug]">) {
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
   const account = claims?.sub ? { email: typeof claims.email === "string" ? claims.email : "" } : null;
+  // Recently viewed history for the compare pages, saved alongside the other-stays lookup
+  const viewed = claims?.sub && stay.bookable ? recordHotelView(claims.sub, stay.slug) : null;
   const otherStays = claims?.sub && stay.bookable ? await getOtherStays(claims.sub, stay.slug) : [];
   const params = await props.searchParams;
 
+  await viewed;
   return (
     <div className="relative isolate flex flex-1 flex-col">
       <PageBackdrop />
