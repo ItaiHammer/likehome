@@ -41,7 +41,7 @@ export const MAX_COMPARED = 3
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// Null when the hotel page would 404 for it: missing, delisted, or no rooms
+// Null when it can't be compared: missing, delisted (search hides it), or no rooms
 export function toComparisonListing(hotel: ComparisonHotelRow | null, viewedAt: string | null = null): ComparisonListing | null {
   const rooms = hotel?.rooms ?? []
   if (!hotel || hotel.liteapi_deleted_at || rooms.length === 0) return null
