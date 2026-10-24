@@ -218,7 +218,9 @@ export async function checkoutReservation(
     p_exp_month: payment.exp_month,
     p_exp_year: payment.exp_year,
   })
-  return { data: data?.map(normalizeReservationDates) ?? data, error }
+
+  let res = data ? { ...data, reservation: normalizeReservationDates(data.reservation) } : null
+  return { data: res, error}
 }
 
 // Fixed, reasonable number for simplicity
