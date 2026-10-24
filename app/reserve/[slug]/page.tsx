@@ -10,6 +10,7 @@ import { PageBackdrop } from "../../_components/PageBackdrop";
 import { getStay, type Stay } from "../../_data/stays";
 import { getHotelStay } from "./hotelStay";
 import { StayReservation, type StayChoices } from "./StayReservation";
+import { recordHotelView } from "@/utils/recently-viewed";
 
 // Database hotels are read per request with the cookie-based Supabase client, which a prerendered
 // page can't do: a production build would answer every hotel id with a 500.
@@ -70,8 +71,36 @@ export default async function ReservePage(props: PageProps<"/reserve/[slug]">) {
   const supabase = createClient(await cookies());
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
-  const account = claims?.sub ? { email: typeof claims.email === "string" ? claims.email : "" } : null;
-  const otherStays = claims?.sub && stay.bookable ? await getOtherStays(claims.sub, stay.slug) : [];
+  const account = claims?.sub
+      ? {
+        email:
+            typeof claims.email === "string"
+                ? claims.email
+                : "",
+      }
+      : null;
+
+  if (claims?.sub && stay.bookable) {
+    const { error } = await recordHotelView(
+        claims.sub,
+        stay.slug,
+    );
+
+    if (error) {
+      console.error(
+          "Failed to record recently viewed hotel:",
+          error,
+      );
+    }
+  }
+
+  const otherStays =
+      claims?.sub && stay.bookable
+          ? await getOtherStays(
+              claims.sub,
+              stay.slug,
+          )
+          : [];
   const params = await props.searchParams;
 
   return (
