@@ -4,16 +4,14 @@ import { Button } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { firstName, groupBookings, type Booking } from "@/lib/bookings";
 import { getAccount } from "@/utils/accounts";
-import { getHotelsByIds } from "@/utils/hotels";
 import { guestToday } from "@/utils/guest-today";
-import { getReservationsByAccount } from "@/utils/reservations";
-import { getRoomsByIds } from "@/utils/rooms";
 import { getUserId } from "@/utils/user";
 import { AccountSidebar } from "./_components/AccountSidebar";
 import { PastBooking } from "./_components/PastBooking";
 import { SampleNotice } from "./_components/SampleNotice";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
 import { getSampleBookings } from "./sampleBookings";
+import { getMyBookings } from "@/utils/history";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
 
@@ -23,37 +21,20 @@ async function loadMyBookings() {
   const { userId } = await getUserId();
   if (!userId) redirect(PAGE_ROUTES.LOGIN);
 
-  const [account, reservations] = await Promise.all([getAccount(userId), getReservationsByAccount(userId)]);
-  if (reservations.error) throw new Error(reservations.error.message);
-  const rows = reservations.data ?? [];
-
-  const hotelIds = [...new Set(rows.map((r) => r.hotel_id))];
-  const roomIds = [...new Set(rows.map((r) => r.room_id))];
-  const [hotels, rooms] = await Promise.all([
-    hotelIds.length ? getHotelsByIds(hotelIds) : { data: [], error: null },
-    roomIds.length ? getRoomsByIds(roomIds) : { data: [], error: null },
+  const [account, bookingHistory] = await Promise.all([
+    getAccount(userId),
+    getMyBookings(),
   ]);
-  if (hotels.error) throw new Error(hotels.error.message);
-  if (rooms.error) throw new Error(rooms.error.message);
-  const hotelById = new Map(hotels.data?.map((h) => [h.id, h]));
-  const roomById = new Map(rooms.data?.map((r) => [r.id, r]));
 
-  const bookings: Booking[] = rows.map((r) => {
-    const hotel = hotelById.get(r.hotel_id);
-    return {
-      id: r.id,
-      checkIn: r.check_in,
-      checkOut: r.check_out,
-      guests: r.guests ?? null,
-      status: r.status ?? "confirmed",
-      hotelName: hotel?.name ?? "Hotel no longer listed",
-      city: hotel?.city ?? null,
-      photoUrl: hotel?.photo_urls?.find(Boolean) ?? null,
-      roomType: roomById.get(r.room_id)?.room_type ?? null,
-    };
-  });
+  if (bookingHistory.error) {
+    throw new Error(bookingHistory.error.message);
+  }
 
-  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings };
+  return {
+    name: account.data?.full_name ?? null,
+    email: account.data?.email ?? null,
+    bookings: bookingHistory.data ?? [],
+  };
 }
 
 export default async function MyBookingsPage({ searchParams }: { searchParams: Promise<{ sample?: string }> }) {
