@@ -1,0 +1,463 @@
+// Imports LiteAPI hotels and room types into `hotels` / `rooms`. Run `npm run import:liteapi -- --help`.
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { fileURLToPath } from 'node:url'
+import { createClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { LITEAPI_BASE } from '../lib/liteapi/types.ts'
+import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRatesRequest, LiteRatesResponse } from '../lib/liteapi/types.ts'
+import { hotelRowFor, hotelSql, isAdultsOnly, roomRowsFor, samplePricesFor, typicalPrices, unmappedFacilities } from '../lib/liteapi/import-mapping.ts'
+import type { HotelRow, RoomRow, Target } from '../lib/liteapi/import-mapping.ts'
+import { stateFromZip } from '../lib/us-states.ts'
+import { CITY_RADIUS_KM, farFrom } from '../lib/liteapi/near.ts'
+
+type ImportTarget = Target & { center: readonly [number, number] }
+
+// Popular destinations only; live search covers everywhere else. cityName is what LiteAPI lists the place under, city
+// the destination picker's spelling (search.ts maps the other way). Outside the US there's no region, and the country is
+// the English name Intl.DisplayNames gives ("United Kingdom"). Hotels more than CITY_RADIUS_KM from center are skipped.
+const TARGETS = {
+  sf:         { countryCode: 'US', cityName: 'San Francisco',    city: 'San Francisco', region: 'California', country: 'USA', center: [37.7749, -122.4194] },
+  nyc:        { countryCode: 'US', cityName: 'New York',         city: 'New York',      region: 'New York',   country: 'USA', center: [40.7128, -74.006] },
+  mia:        { countryCode: 'US', cityName: 'Miami',            city: 'Miami',         region: 'Florida',    country: 'USA', center: [25.7617, -80.1918] },
+  lv:         { countryCode: 'US', cityName: 'Las Vegas',        city: 'Las Vegas',     region: 'Nevada',     country: 'USA', center: [36.1699, -115.1398] },
+  orlando:    { countryCode: 'US', cityName: 'Orlando',          city: 'Orlando',       region: 'Florida',    country: 'USA', center: [28.5383, -81.3792] },
+  la:         { countryCode: 'US', cityName: 'Los Angeles',      city: 'Los Angeles',   region: 'California', country: 'USA', center: [34.0522, -118.2437] },
+  chicago:    { countryCode: 'US', cityName: 'Chicago',          city: 'Chicago',       region: 'Illinois',   country: 'USA', center: [41.8781, -87.6298] },
+  honolulu:   { countryCode: 'US', cityName: 'Honolulu',         city: 'Honolulu',      region: 'Hawaii',     country: 'USA', center: [21.3069, -157.8583] },
+  seattle:    { countryCode: 'US', cityName: 'Seattle',          city: 'Seattle',       region: 'Washington', country: 'USA', center: [47.6062, -122.3321] },
+  sedona:     { countryCode: 'US', cityName: 'Sedona',           city: 'Sedona',        region: 'Arizona',    country: 'USA', center: [34.8697, -111.761] },
+  aspen:      { countryCode: 'US', cityName: 'Aspen',            city: 'Aspen',         region: 'Colorado',   country: 'USA', center: [39.1911, -106.8175] },
+  tahoe:      { countryCode: 'US', cityName: 'South Lake Tahoe', city: 'Lake Tahoe',    region: 'California', country: 'USA', center: [38.9399, -119.9772] },
+  monterey:   { countryCode: 'US', cityName: 'Monterey',         city: 'Monterey',      region: 'California', country: 'USA', center: [36.6002, -121.8947] },
+  santacruz:  { countryCode: 'US', cityName: 'Santa Cruz',       city: 'Santa Cruz',    region: 'California', country: 'USA', center: [36.9741, -122.0308] },
+  lakeplacid: { countryCode: 'US', cityName: 'Lake Placid',      city: 'Lake Placid',   region: 'New York',   country: 'USA', center: [44.2795, -73.9799] },
+  paris:      { countryCode: 'FR', cityName: 'Paris',     city: 'Paris',     region: null, country: 'France',               center: [48.8566, 2.3522] },
+  london:     { countryCode: 'GB', cityName: 'London',    city: 'London',    region: null, country: 'United Kingdom',       center: [51.5074, -0.1278] },
+  tokyo:      { countryCode: 'JP', cityName: 'Tokyo',     city: 'Tokyo',     region: null, country: 'Japan',                center: [35.6762, 139.6503] },
+  rome:       { countryCode: 'IT', cityName: 'Rome',      city: 'Rome',      region: null, country: 'Italy',                center: [41.9028, 12.4964] },
+  barcelona:  { countryCode: 'ES', cityName: 'Barcelona', city: 'Barcelona', region: null, country: 'Spain',                center: [41.3874, 2.1686] },
+  kyoto:      { countryCode: 'JP', cityName: 'Kyoto',     city: 'Kyoto',     region: null, country: 'Japan',                center: [35.0116, 135.7681] },
+  lisbon:     { countryCode: 'PT', cityName: 'Lisbon',    city: 'Lisbon',    region: null, country: 'Portugal',             center: [38.7223, -9.1393] },
+  reykjavik:  { countryCode: 'IS', cityName: 'Reykjavik', city: 'Reykjavík', region: null, country: 'Iceland',              center: [64.1466, -21.9426] },
+  lucerne:    { countryCode: 'CH', cityName: 'Luzern',    city: 'Lucerne',   region: null, country: 'Switzerland',          center: [47.0502, 8.3093] },
+  bali:       { countryCode: 'ID', cityName: 'Ubud',      city: 'Bali',      region: null, country: 'Indonesia',            center: [-8.5069, 115.2625] },
+  banff:      { countryCode: 'CA', cityName: 'Banff',     city: 'Banff',     region: null, country: 'Canada',               center: [51.1784, -115.5708] },
+  santorini:  { countryCode: 'GR', cityName: 'Santorini', city: 'Santorini', region: null, country: 'Greece',               center: [36.3932, 25.4615] },
+  cancun:     { countryCode: 'MX', cityName: 'Cancun',    city: 'Cancún',    region: null, country: 'Mexico',               center: [21.1619, -86.8515] },
+  dubai:      { countryCode: 'AE', cityName: 'Dubai',     city: 'Dubai',     region: null, country: 'United Arab Emirates', center: [25.2048, 55.2708] },
+  bangkok:    { countryCode: 'TH', cityName: 'Bangkok',   city: 'Bangkok',   region: null, country: 'Thailand',             center: [13.7563, 100.5018] },
+} as const satisfies Record<string, ImportTarget>
+type CityKey = keyof typeof TARGETS
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const MAX_LIMIT = 200
+// The sandbox allows 5 requests per second
+const MIN_GAP_MS = 250
+const BACKOFF_MS = [1000, 2000, 4000]
+const DETAIL_CONCURRENCY = 4
+// One rates request for 100 New York hotels came back "no availability" for all of them; 25 at a time price normally
+const RATES_BATCH = 25
+// One-night samples starting 30 days out; a week counts every weekday once
+const SAMPLE_NIGHTS = 7
+
+const USAGE = `Usage: npm run import:liteapi -- [options]
+       node --env-file=.env.local scripts/import-liteapi.mts [options]
+
+  --dry-run           fetch and map everything, print a summary, write nothing
+  --cities sf,nyc     cities to import (default: ${Object.keys(TARGETS).join(',')}).
+                      Nothing is written until every city is done, so import a few at a time
+  --limit 100         hotels listed per city (1-${MAX_LIMIT})
+  --max-rooms 10      room types kept per hotel
+  --sql-out [path]    write an idempotent .sql file to paste into the SQL Editor instead of
+                      writing to Supabase (default: the OS temp folder; paths inside the repo are refused)
+
+Env (.env.local): LITEAPI_KEY, plus NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY unless --dry-run or --sql-out.`
+
+class CliError extends Error {}
+
+type Options = { dryRun: boolean; cities: CityKey[]; limit: number; maxRooms: number; sqlOut: string | null; help: boolean }
+
+function positiveInt(flag: string, raw: string | undefined, max: number): number {
+  const value = Number(raw)
+  if (!raw || !Number.isInteger(value) || value < 1 || value > max) throw new CliError(`${flag} needs a whole number from 1 to ${max}.`)
+  return value
+}
+
+function parseOptions(argv: string[]): Options {
+  const options: Options = { dryRun: false, cities: Object.keys(TARGETS) as CityKey[], limit: 100, maxRooms: 10, sqlOut: null, help: false }
+  for (let i = 0; i < argv.length; i++) {
+    const eq = argv[i].indexOf('=')
+    const flag = eq === -1 ? argv[i] : argv[i].slice(0, eq)
+    const inline = eq === -1 ? undefined : argv[i].slice(eq + 1)
+    const value = () => inline ?? (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') ? argv[++i] : undefined)
+    switch (flag) {
+      case '--dry-run': options.dryRun = true; break
+      case '--limit': options.limit = positiveInt(flag, value(), MAX_LIMIT); break
+      case '--max-rooms': options.maxRooms = positiveInt(flag, value(), 100); break
+      case '--sql-out': options.sqlOut = value() ?? ''; break
+      case '--help': case '-h': options.help = true; break
+      case '--cities': {
+        const keys = (value() ?? '').split(',').map((key) => key.trim().toLowerCase()).filter(Boolean)
+        const unknown = keys.filter((key) => !(key in TARGETS))
+        if (!keys.length || unknown.length) throw new CliError(`--cities takes a comma-separated list of ${Object.keys(TARGETS).join(', ')}${unknown.length ? ` (unknown: ${unknown.join(', ')})` : ''}.`)
+        options.cities = [...new Set(keys)] as CityKey[]
+        break
+      }
+      default: throw new CliError(`Unknown option ${argv[i]}\n\n${USAGE}`)
+    }
+  }
+  return options
+}
+
+// Resolves junctions/symlinks on the part of the path that exists, so a link into the repo is still caught
+function realPath(target: string): string {
+  const rest: string[] = []
+  let existing = path.resolve(target)
+  while (!fs.existsSync(existing)) {
+    const parent = path.dirname(existing)
+    if (parent === existing) break
+    rest.unshift(path.basename(existing))
+    existing = parent
+  }
+  const real = path.join(fs.realpathSync.native(existing), ...rest)
+  return process.platform === 'win32' ? real.toLowerCase() : real
+}
+
+function isInside(child: string, parent: string): boolean {
+  const rel = path.relative(realPath(parent), realPath(child))
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel))
+}
+
+// Fetched data never goes inside the repo, so it can't be committed by accident
+function sqlOutPath(raw: string): string {
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')
+  const name = `likehome-liteapi-import-${stamp}.sql`
+  let target = raw ? path.resolve(raw) : path.join(os.tmpdir(), name)
+  if (raw && fs.existsSync(target) && fs.statSync(target).isDirectory()) target = path.join(target, name)
+  if (isInside(target, REPO_ROOT)) {
+    throw new CliError(`--sql-out must point outside the repo (${REPO_ROOT}) so fetched data is never committed. Leave the path out to write to ${os.tmpdir()}.`)
+  }
+  return target
+}
+
+let nextSlot = 0
+let requestCount = 0
+
+async function throttle() {
+  const now = Date.now()
+  const at = Math.max(now, nextSlot)
+  nextSlot = at + MIN_GAP_MS
+  if (at > now) await sleep(at - now)
+}
+
+function errorText(text: string): string {
+  try {
+    const error = (JSON.parse(text) as { error?: { code?: unknown; message?: unknown } } | null)?.error
+    return error ? ` (LiteAPI error ${error.code}: ${error.message})` : ''
+  } catch {
+    return ''
+  }
+}
+
+// HTTP 204 is checked before parsing: it is LiteAPI's "no availability" and may have no body
+async function liteapi<T>(apiKey: string, pathAndQuery: string, body?: unknown): Promise<T | null> {
+  for (let attempt = 0; ; attempt++) {
+    await throttle()
+    requestCount++
+    let status = 0
+    let text = ''
+    let problem = ''
+    try {
+      const res = await fetch(`${LITEAPI_BASE}${pathAndQuery}`, {
+        method: body === undefined ? 'GET' : 'POST',
+        headers: { 'X-API-Key': apiKey, Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(20_000),
+      })
+      status = res.status
+      if (status === 204) return null
+      text = await res.text()
+    } catch (err) {
+      problem = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    }
+    if (!problem && status >= 200 && status < 300) {
+      try {
+        return (text ? JSON.parse(text) : null) as T
+      } catch {
+        throw new Error(`HTTP ${status} with a body that is not JSON`)
+      }
+    }
+    const retryable = problem !== '' || status === 429 || status >= 500
+    if (!retryable || attempt >= BACKOFF_MS.length) throw new Error(problem || `HTTP ${status}${errorText(text)}`)
+    await sleep(BACKOFF_MS[attempt])
+  }
+}
+
+const isoDay = (offsetDays: number) => {
+  const date = new Date()
+  date.setUTCDate(date.getUTCDate() + offsetDays)
+  return date.toISOString().slice(0, 10)
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++
+      results[i] = await fn(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+type Imported = { cityKey: CityKey; hotel: HotelRow; rooms: RoomRow[] }
+
+type Report = {
+  imported: Imported[]
+  skipped: Map<string, number>
+  failures: number
+  droppedRooms: number
+  unmapped: Map<string, number>
+}
+
+const label = (s: { id: string; name?: string }) => `${s.id} "${s.name ?? ''}"`
+
+function skip(report: Report, s: { id: string; name?: string }, reason: string) {
+  report.skipped.set(reason, (report.skipped.get(reason) ?? 0) + 1)
+  console.log(`  skip ${label(s)}: ${reason}`)
+}
+
+async function importCity(apiKey: string, cityKey: CityKey, options: Options, seen: Set<string>, report: Report) {
+  const target: ImportTarget = TARGETS[cityKey]
+  console.log(`\n${target.city} (${cityKey})`)
+
+  const query = new URLSearchParams({ countryCode: target.countryCode, cityName: target.cityName, limit: String(options.limit) })
+  let listed: LiteHotelSummary[]
+  try {
+    const list = await liteapi<{ data?: LiteHotelSummary[] }>(apiKey, `/data/hotels?${query}`)
+    listed = (list?.data ?? []).filter((s) => typeof s?.id === 'string' && s.id !== '')
+  } catch (err) {
+    report.failures++
+    console.error(`  ! listing hotels failed, skipping ${target.city}: ${(err as Error).message}`)
+    return
+  }
+  console.log(`  ${listed.length} hotels listed`)
+
+  const candidates: LiteHotelSummary[] = []
+  for (const s of listed) {
+    if (seen.has(s.id)) skip(report, s, 'already imported in this run')
+    else if (s.deletedAt) skip(report, s, 'deleted at LiteAPI')
+    else if (farFrom(s, target.center)) skip(report, s, `more than ${CITY_RADIUS_KM} km from the city`)
+    else {
+      seen.add(s.id)
+      candidates.push(s)
+    }
+  }
+  if (!candidates.length) return
+
+  const offersByHotel = new Map<string, LiteOffer[][]>()
+  const unpriced = new Set<string>()
+  for (let i = 0; i < candidates.length; i += RATES_BATCH) {
+    const batch = candidates.slice(i, i + RATES_BATCH)
+    for (let night = 0; night < SAMPLE_NIGHTS; night++) {
+      const ratesRequest: LiteRatesRequest = {
+        hotelIds: batch.map((s) => s.id),
+        occupancies: [{ adults: 2 }],
+        currency: 'USD',
+        guestNationality: 'US',
+        checkin: isoDay(30 + night),
+        checkout: isoDay(31 + night),
+        timeout: 12,
+        roomMapping: true,
+        limit: batch.length,
+      }
+      try {
+        // The sandbox sometimes answers a whole batch with "no availability"; asking again usually prices it
+        for (let attempt = 0; ; attempt++) {
+          const rates = await liteapi<LiteRatesResponse>(apiKey, '/hotels/rates', ratesRequest)
+          if (rates?.error && rates.error.code !== 2001) throw new Error(`LiteAPI error ${rates.error.code}: ${rates.error.message}`)
+          if (rates?.data?.length || attempt === 1) {
+            for (const entry of rates?.data ?? []) offersByHotel.set(entry.hotelId, [...(offersByHotel.get(entry.hotelId) ?? []), entry.roomTypes ?? []])
+            break
+          }
+          console.log(`  no prices for a batch of ${batch.length} on ${ratesRequest.checkin}, asking again`)
+          await sleep(BACKOFF_MS[0])
+        }
+      } catch (err) {
+        report.failures++
+        console.error(`  ! sample rates for ${ratesRequest.checkin} failed for ${batch.length} ${target.city} hotels: ${(err as Error).message}`)
+        for (const s of batch) unpriced.add(s.id)
+      }
+    }
+  }
+
+  const priced = candidates.flatMap((s) => {
+    const sample = typicalPrices((offersByHotel.get(s.id) ?? []).map((offers) => samplePricesFor(offers)))
+    if (!sample) {
+      skip(report, s, unpriced.has(s.id) ? 'sample rates request failed' : 'no priced sample rate')
+      return []
+    }
+    return [{ s, sample }]
+  })
+
+  const details = await mapLimit(priced, DETAIL_CONCURRENCY, async ({ s }) => {
+    try {
+      const detail = await liteapi<{ data?: LiteHotelDetail }>(apiKey, `/data/hotel?${new URLSearchParams({ hotelId: s.id, timeout: '8' })}`)
+      return detail?.data ?? null
+    } catch (err) {
+      report.failures++
+      console.error(`  ! details for ${label(s)} failed: ${(err as Error).message}`)
+      return undefined
+    }
+  })
+
+  priced.forEach(({ s, sample }, i) => {
+    const d = details[i]
+    if (d === undefined) return skip(report, s, 'details request failed')
+    if (d === null) return skip(report, s, 'no details')
+    if (d.deletedAt) return skip(report, s, 'deleted at LiteAPI')
+    // Close by but across a state line, when the zip names the state
+    const state = target.countryCode === 'US' ? stateFromZip(d.zip) : null
+    if (state && state !== target.region) return skip(report, s, 'in another state')
+    const rooms = roomRowsFor(d.rooms, sample, options.maxRooms, isAdultsOnly(d))
+    if (!rooms.length) return skip(report, s, 'no rooms')
+    const kept = new Set(rooms.map((room) => room.liteapi_room_id))
+    const keptRooms = (d.rooms ?? []).filter((room) => kept.has(String(room.id)))
+    report.droppedRooms += Math.max(0, (d.rooms ?? []).length - rooms.length)
+    const hotel = hotelRowFor(target, s, d, offersByHotel.get(s.id)?.flat(), keptRooms)
+    for (const name of unmappedFacilities(d)) report.unmapped.set(name, (report.unmapped.get(name) ?? 0) + 1)
+    report.imported.push({ cityKey, hotel, rooms })
+    console.log(`  ok   ${label(s)}: ${rooms.length} room types, tags [${hotel.tags.join(', ')}]`)
+  })
+}
+
+async function writeToSupabase(db: SupabaseClient, imported: Imported[], report: Report) {
+  console.log('\nWriting to Supabase')
+  let written = 0
+  for (const { hotel, rooms } of imported) {
+    const { data: h, error } = await db.from('hotels').upsert(hotel, { onConflict: 'liteapi_id' }).select('id').single()
+    if (error || !h) {
+      report.failures++
+      console.error(`  ! ${hotel.liteapi_id}: hotel upsert failed: ${error?.message ?? 'no row returned'}`)
+      continue
+    }
+    const { error: roomError } = await db.from('rooms')
+      .upsert(rooms.map((room) => ({ ...room, hotel_id: h.id })), { onConflict: 'hotel_id,liteapi_room_id' })
+    if (roomError) {
+      report.failures++
+      console.error(`  ! ${hotel.liteapi_id}: room upsert failed: ${roomError.message}`)
+      continue
+    }
+    written++
+    await dropStaleRooms(db, h.id, hotel.liteapi_id, rooms, report)
+  }
+  console.log(`  ${written} of ${imported.length} hotels written`)
+}
+
+// A room type a run didn't import keeps its old sample price (once $3 a night), so it goes. One a reservation points
+// at has to stay, and takes the hotel's cheapest current price instead.
+async function dropStaleRooms(db: SupabaseClient, hotelId: string, liteapiId: string, rooms: RoomRow[], report: Report) {
+  const kept = new Set(rooms.map((room) => room.liteapi_room_id))
+  const { data: existing, error } = await db.from('rooms').select('id, liteapi_room_id').eq('hotel_id', hotelId)
+  if (error) {
+    report.failures++
+    console.error(`  ! ${liteapiId}: reading its rooms failed: ${error.message}`)
+    return
+  }
+  const stale = (existing ?? []).filter((room) => room.liteapi_room_id && !kept.has(room.liteapi_room_id)).map((room) => room.id as string)
+  if (!stale.length) return
+  const { data: booked, error: bookedError } = await db.from('reservations').select('room_id').in('room_id', stale)
+  if (bookedError) {
+    report.failures++
+    console.error(`  ! ${liteapiId}: reading reservations failed: ${bookedError.message}`)
+    return
+  }
+  const keep = [...new Set((booked ?? []).map((reservation) => reservation.room_id as string))]
+  const remove = stale.filter((id) => !keep.includes(id))
+  if (remove.length) {
+    const { error: deleteError } = await db.from('rooms').delete().in('id', remove)
+    if (deleteError) {
+      report.failures++
+      console.error(`  ! ${liteapiId}: removing old room types failed: ${deleteError.message}`)
+    }
+  }
+  if (keep.length) {
+    const cheapest = Math.min(...rooms.map((room) => room.price_per_night))
+    const { error: updateError } = await db.from('rooms').update({ price_per_night: cheapest }).in('id', keep)
+    if (updateError) {
+      report.failures++
+      console.error(`  ! ${liteapiId}: repricing booked old room types failed: ${updateError.message}`)
+    }
+  }
+  console.log(`  ${liteapiId}: removed ${remove.length} old room type(s)${keep.length ? `, repriced ${keep.length} with bookings` : ''}`)
+}
+
+function printSummary(options: Options, report: Report) {
+  const roomCount = report.imported.reduce((sum, item) => sum + item.rooms.length, 0)
+  console.log(`\nSummary: ${report.imported.length} hotels, ${roomCount} room types mapped, ${requestCount} LiteAPI requests`)
+  for (const [reason, n] of report.skipped) console.log(`  skipped ${n}: ${reason}`)
+  if (report.droppedRooms) console.log(`  ${report.droppedRooms} room types left out by --max-rooms ${options.maxRooms} or missing an id/name`)
+  if (report.unmapped.size) {
+    console.log(`\nFacility names no tag rule matched (${report.unmapped.size}):`)
+    for (const [name, n] of [...report.unmapped].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) console.log(`  ${n}x ${name}`)
+  }
+}
+
+async function main(options: Options) {
+  if (options.help) return console.log(USAGE)
+
+  const apiKey = process.env.LITEAPI_KEY?.trim()
+  if (!apiKey) {
+    throw new CliError('LITEAPI_KEY is not set. Add LITEAPI_KEY=<your LiteAPI sandbox key> to .env.local and run it with node --env-file=.env.local (npm run import:liteapi does).')
+  }
+  if (options.dryRun && options.sqlOut !== null) console.log('--dry-run writes nothing, so --sql-out is ignored.')
+  const sqlOut = !options.dryRun && options.sqlOut !== null ? sqlOutPath(options.sqlOut) : null
+
+  let db: SupabaseClient | null = null
+  if (!options.dryRun && sqlOut === null) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+    const secret = process.env.SUPABASE_SECRET_KEY?.trim()
+    if (!secret) throw new CliError('SUPABASE_SECRET_KEY is not set, so nothing can be written. Add it to .env.local, or use --dry-run or --sql-out.')
+    if (!url) throw new CliError('NEXT_PUBLIC_SUPABASE_URL is not set. Add it to .env.local.')
+    db = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } })
+  }
+
+  const report: Report = { imported: [], skipped: new Map(), failures: 0, droppedRooms: 0, unmapped: new Map() }
+  const seen = new Set<string>()
+  for (const cityKey of options.cities) await importCity(apiKey, cityKey, options, seen, report)
+
+  if (options.dryRun) {
+    console.log('\nFirst mapped rows (dry run, nothing written):')
+    for (const item of report.imported.slice(0, 2)) console.log(JSON.stringify(item, null, 2))
+  } else if (sqlOut !== null) {
+    const header = `-- LiteAPI import for ${options.cities.join(', ')}, generated ${new Date().toISOString()}.\n` +
+      '-- Run supabase/migrations/liteapi_hotels.sql first. Safe to re-run: rows are updated in place, and room types this run\n' +
+      '-- left out are removed unless a reservation points at them.\n' +
+      '-- Do not paste it over newer data (a later import or sync): its hotels would go back to this copy, and any LiteAPI\n' +
+      '-- removed since would show in search again.\n'
+    const sql = `${header}begin;\n\n${report.imported.map((item) => hotelSql(item.hotel, item.rooms)).join('\n')}\ncommit;\n`
+    fs.mkdirSync(path.dirname(sqlOut), { recursive: true })
+    fs.writeFileSync(sqlOut, sql)
+    console.log(`\nWrote ${report.imported.length} hotels to ${sqlOut}`)
+  } else if (db) {
+    await writeToSupabase(db, report.imported, report)
+  }
+
+  printSummary(options, report)
+  if (report.failures) {
+    console.error(`\n${report.failures} request(s) or write(s) failed; see the log above.`)
+    process.exitCode = 1
+  }
+}
+
+try {
+  await main(parseOptions(process.argv.slice(2)))
+} catch (err) {
+  console.error(err instanceof CliError ? err.message : err)
+  process.exitCode = 1
+}
