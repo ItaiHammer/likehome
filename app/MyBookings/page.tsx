@@ -4,12 +4,9 @@ import { Button } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { firstName, groupBookings, type Booking } from "@/lib/bookings";
 import { getAccount } from "@/utils/accounts";
-import { getHotelsByIds, getHotels } from "@/utils/hotels";
+import { getHotels } from "@/utils/hotels";
 import { guestToday } from "@/utils/guest-today";
-import { getReservationsByAccount } from "@/utils/reservations";
-import { getRoomsByIds } from "@/utils/rooms";
 import { getUserId } from "@/utils/user";
-import { STAYS } from "@/app/_data/stays";
 import { AccountSidebar, type AccountTab } from "./_components/AccountSidebar";
 import { AccountTabContent, type Transaction } from "./_components/AccountTabContent";
 import { PastBooking } from "./_components/PastBooking";
@@ -17,6 +14,7 @@ import { SampleNotice } from "./_components/SampleNotice";
 import { SavedHotelsList } from "./_components/SavedHotelsList";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
 import { getSampleBookings } from "./sampleBookings";
+import { getMyBookings } from "@/utils/history";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
 
@@ -24,78 +22,25 @@ async function loadMyBookings() {
   const { userId } = await getUserId();
   if (!userId) redirect(PAGE_ROUTES.LOGIN);
 
-  const [account, reservations, allHotelsRes] = await Promise.all([
+  const [account, bookingHistory, hotelsResult] = await Promise.all([
     getAccount(userId),
-    getReservationsByAccount(userId),
+    getMyBookings(),
     getHotels(),
   ]);
 
-  if (account.error) throw new Error(account.error.message);
-  if (allHotelsRes.error) {
-    throw new Error(allHotelsRes.error.message);
+  if (bookingHistory.error) {
+    throw new Error(bookingHistory.error.message);
+  }
+  if (hotelsResult.error) {
+    throw new Error(hotelsResult.error.message);
   }
 
-  if (reservations.error) throw new Error(reservations.error.message);
-  const rows = reservations.data ?? [];
-
-  const hotelIds = [...new Set(rows.map((r) => r.hotel_id))];
-  const roomIds = [...new Set(rows.map((r) => r.room_id))];
-  const [hotels, rooms] = await Promise.all([
-    hotelIds.length ? getHotelsByIds(hotelIds) : { data: [], error: null },
-    roomIds.length ? getRoomsByIds(roomIds) : { data: [], error: null },
-  ]);
-
-  if (hotels.error) throw new Error(hotels.error.message);
-  if (rooms.error) throw new Error(rooms.error.message);
-  const hotelById = new Map(hotels.data?.map((h) => [h.id, h]));
-  const roomById = new Map(rooms.data?.map((r) => [r.id, r]));
-
-  const bookings: Booking[] = rows.map((r) => {
-    const hotel = hotelById.get(r.hotel_id);
-    return {
-      id: r.id,
-      checkIn: r.check_in,
-      checkOut: r.check_out,
-      guests: r.guests ?? null,
-      status: r.status ?? "confirmed",
-      hotelName: hotel?.name ?? "Hotel no longer listed",
-      city: hotel?.city ?? null,
-      photoUrl: hotel?.photo_urls?.find(Boolean) ?? null,
-      roomType: roomById.get(r.room_id)?.room_type ?? null,
-    };
-  });
-
-  // Create lookup map from STAYS static data for reliable price/image matching
-  const staysByName = new Map(
-    STAYS.map((stay) => [stay.name.toLowerCase().trim(), stay])
-  );
-
-const allHotels = (allHotelsRes.data ?? []).map((h) => {
-  const matchedStay = staysByName.get(h.name.toLowerCase().trim());
-
-  const staticPrices =
-    matchedStay?.rooms
-      .map((room) => room.nightly)
-      .filter((price) => Number.isFinite(price) && price > 0) ?? [];
-
-  const staticPrice =
-    staticPrices.length > 0 ? Math.min(...staticPrices) : null;
-
-  const price = staticPrice;
-
   return {
-    id: h.id,
-    name: h.name,
-    city: h.city ?? matchedStay?.location ?? null,
-    region: h.region ?? null,
-    country: h.country ?? null,
-    photoUrl: h.photo_urls?.find(Boolean) ?? matchedStay?.photos?.[0] ?? null,
-    pricePerNight: price,
-    tags: h.tags ?? matchedStay?.tags ?? null,
+    name: account.data?.full_name ?? null,
+    email: account.data?.email ?? null,
+    bookings: bookingHistory.data ?? [],
+    allHotels: hotelsResult.data ?? [],
   };
-});
-
-  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, allHotels };
 }
 
 export default async function MyBookingsPage({
