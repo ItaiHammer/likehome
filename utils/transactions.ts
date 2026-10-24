@@ -6,7 +6,7 @@ import { createClient } from '@/utils/supabase/server'
 // charge = customer pays for the reservation. credit = value goes back to the customer's
 // site wallet (no money returns to the card). The wallet balance itself lives in the wallet table.
 
-export type TransactionType = 'charge' | 'credit'
+export type TransactionType = 'charge' | 'credit' | 'insurance'
 export type TransactionStatus = 'pending' | 'completed' | 'failed'
 
 export async function createTransaction(transaction: {
