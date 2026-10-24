@@ -25,7 +25,7 @@ export default function SignInPage() {
                 onClick={provider.handler}
               >
                 <span className={styles.icon}>
-                  <img src={provider.icon()} alt="" />
+                  <provider.Icon />
                 </span>
 
                 <span>Continue with {provider.name}</span>
