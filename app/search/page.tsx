@@ -149,7 +149,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               <p className="text-sm font-semibold text-blue">Search results</p>
               <h1 className="mt-1 font-serif text-[36px] leading-[44px] text-ink wrap-break-word sm:text-[44px] sm:leading-[52px]">{locationHeading}</h1>
               <p className="mt-2 text-sm text-slate">
-                {searchError ? "Results unavailable" : `${total} ${total === 1 ? "stay" : "stays"} found`}
+                {validationError ? "Check your search" : searchError ? "Results unavailable" : `${total} ${total === 1 ? "stay" : "stays"} found`}
                 {activeFilterCount > 0 &&
                   ` · ${activeFilterCount} ${aiPrompt ? "AI " : ""}${activeFilterCount === 1 ? "filter" : "filters"} applied`}
               </p>
@@ -170,7 +170,10 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               params={navigationParams}
             />
             <div className="min-w-0">
-              {searchError ? (
+              {/* Bad dates or prices skip the search, so say why instead of "No stays found" */}
+              {validationError ? (
+                <StatePanel title="Almost there" body={validationError} />
+              ) : searchError ? (
                 <StatePanel
                   title="We couldn't load stays"
                   body="Try the search again. If this keeps happening, the search service may be temporarily unavailable."
