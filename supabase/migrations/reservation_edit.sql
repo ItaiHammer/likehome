@@ -237,7 +237,8 @@ begin
       );
     end if;
   -- Edit decreases price
-  elsif v_difference < 0 then
+  -- only refund if has cancellation insurance to avoid loophole of reducing price of booking before cancelling without insurance
+  elsif v_reservation.has_insurance and v_difference < 0 then
     insert into public.transactions (
       payment_id, amount, transaction_type, status
     )
