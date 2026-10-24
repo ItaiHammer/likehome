@@ -36,6 +36,8 @@ let userId
 let reservationResult
 let hotelResult
 let roomsResult
+let otherStays
+const getOtherStays = mock.fn(async () => otherStays)
 // Rebooking must never write: these stay at zero for the whole file
 const createReservation = mock.fn()
 const updateReservation = mock.fn()
@@ -47,6 +49,7 @@ mock.module('@/utils/reservations', {
 })
 mock.module('@/utils/hotels', { namedExports: { getHotel: async () => hotelResult } })
 mock.module('@/utils/rooms', { namedExports: { getRoomsByHotel: async () => roomsResult } })
+mock.module('@/lib/other-stays', { namedExports: { getOtherStays } })
 
 const { POST } = await import('../app/api/reservations/[id]/rebook/route.ts')
 
@@ -75,6 +78,8 @@ beforeEach(() => {
   reservationResult = { data: { ...PAST }, error: null }
   hotelResult = { data: { ...HOTEL }, error: null }
   roomsResult = { data: ROOMS.map((r) => ({ ...r })), error: null }
+  otherStays = []
+  getOtherStays.mock.resetCalls()
   consoleError.mock.resetCalls()
 })
 
@@ -128,6 +133,7 @@ describe('new dates', () => {
     for (const body of ['null', '"hi"', '42', '[]']) {
       assert.equal((await post(body)).status, 400, body)
     }
+    assert.equal(getOtherStays.mock.callCount(), 0)
   })
 })
 
@@ -164,6 +170,18 @@ describe('hotel and room', () => {
     assert.equal(r.json.error, 'This room fits up to 2 guests.')
   })
 
+  test('409 with the clashing stay when the dates overlap another hotel booking', async () => {
+    otherStays = [{ checkIn: future(12), checkOut: future(15), hotelName: 'Harbor Inn' }]
+    const r = await post(validBody())
+    assert.equal(r.status, 409)
+    assert.match(r.json.error, /^You already have a booking at Harbor Inn/)
+    assert.deepEqual(getOtherStays.mock.calls[0].arguments, ['user-1', 'hotel-1'])
+  })
+
+  test('back-to-back with another stay is fine (check-out day is free)', async () => {
+    otherStays = [{ checkIn: future(13), checkOut: future(15), hotelName: 'Harbor Inn' }]
+    assert.equal((await post(validBody())).status, 200)
+  })
 })
 
 describe('the rebook', () => {

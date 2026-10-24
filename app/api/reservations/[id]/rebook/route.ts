@@ -1,12 +1,14 @@
 // Book again: turns one of the guest's past stays into a pre-filled checkout link for new dates.
 //   POST /api/reservations/[id]/rebook  { check_in, check_out, time_zone? }
 //     -> the same hotel, room type and guest count, plus the /reserve link,
-//        or why it can't be rebooked (no longer listed).
+//        or why it can't be rebooked (no longer listed, double-booked).
 // Nothing is booked or held here: /api/checkout still checks, prices and saves the new stay.
 import { getUserId } from '@/utils/user'
 import { getReservation } from '@/utils/reservations'
 import { getHotel } from '@/utils/hotels'
 import { getRoomsByHotel } from '@/utils/rooms'
+import { getOtherStays } from '@/lib/other-stays'
+import { findOverlap, overlapMessage } from '@/lib/bookings'
 import { rebookHref } from '@/lib/rebook'
 import {
   calculateTotalPrice,
@@ -80,7 +82,13 @@ export async function POST(
     return Response.json({ error: capacityError }, { status: 400 })
   }
 
-  // 5. total_price is only for showing: /api/checkout prices the stay again when it's booked
+  // 5. The database refuses a stay that overlaps one at another hotel; say which one now, not at payment
+  const clash = findOverlap(await getOtherStays(userId, past.hotel_id), check_in, check_out)
+  if (clash) {
+    return Response.json({ error: overlapMessage(clash) }, { status: 409 })
+  }
+
+  // 6. total_price is only for showing: /api/checkout prices the stay again when it's booked
   return Response.json({
     rebook: {
       hotel_id: past.hotel_id,
