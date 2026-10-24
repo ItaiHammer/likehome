@@ -145,6 +145,13 @@ describe('hotel and room', () => {
     assert.equal(r.json.error, 'This hotel is no longer listed.')
   })
 
+  test('404 when LiteAPI removed the hotel (search hides it)', async () => {
+    hotelResult = { data: { ...HOTEL, liteapi_deleted_at: '2026-10-20T00:00:00+00:00' }, error: null }
+    const r = await post(validBody())
+    assert.equal(r.status, 404)
+    assert.equal(r.json.error, 'This hotel is no longer listed.')
+  })
+
   test('500 when the hotel or rooms lookup fails', async () => {
     roomsResult = { data: null, error: { code: '08006', message: 'connection lost' } }
     assert.equal((await post(validBody())).status, 500)

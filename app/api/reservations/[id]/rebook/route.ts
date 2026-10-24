@@ -68,7 +68,8 @@ export async function POST(
     console.error('Loading the hotel to rebook failed:', rooms.error ?? hotel.error)
     return Response.json({ error: 'Could not load the hotel.' }, { status: 500 })
   }
-  if (!hotel.data) {
+  // Gone, or removed by LiteAPI (search hides those)
+  if (!hotel.data || hotel.data.liteapi_deleted_at) {
     return Response.json({ error: 'This hotel is no longer listed.' }, { status: 404 })
   }
 
