@@ -8,7 +8,7 @@ import { bookingCode, changeBlocker, datesProblem, findOverlap, formatStayDates,
 import { calculateTotalPrice, todayInTimeZone } from "@/utils/reservation-logic";
 import { browserTimeZone, formatDate, nightsBetween } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
-import { buttonPrimary, buttonSecondary, Stepper } from "../../_components/ui";
+import { buttonPrimary, buttonSecondary, FormError, Stepper } from "../../_components/ui";
 import type { Room } from "../../_data/stays";
 import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
@@ -321,19 +321,7 @@ export function ChangeBooking({
                 <p className="text-sm text-slate">Add your dates to see the new total.</p>
               )}
 
-              {errors.form && (
-                <p role="alert" className="text-sm text-danger">
-                  {errors.form}
-                  {errors.signIn && (
-                    <>
-                      {" "}
-                      <Link href={signInHref} className="font-semibold underline">
-                        Sign in
-                      </Link>
-                    </>
-                  )}
-                </p>
-              )}
+              <FormError message={errors.form} signInHref={errors.signIn ? signInHref : undefined} />
 
               {/* aria-disabled while saving (not disabled), so a focused button keeps focus */}
               <button type="button" onClick={save} disabled={!changed} aria-disabled={saving || undefined} className={`${buttonPrimary} w-full`}>
