@@ -108,6 +108,8 @@ export async function createHotel(hotel: {
   city: string
   region?: string
   country?: string
+  property_type?: string
+  postal_code?: string
   photo_urls?: string[]
   tags?: string[];
 }) {
@@ -129,6 +131,8 @@ export async function updateHotel(
     city: string
     region: string
     country: string
+    property_type: string
+    postal_code: string
     photo_urls: string[]
     tags: string[];
   }>

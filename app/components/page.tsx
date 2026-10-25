@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { Button, Card, Field, IconButton, Select, Stars, Tag, TextArea } from "../_components/ui";
 import { InteractiveDemos } from "./InteractiveDemos";
 
@@ -66,6 +67,8 @@ const ArrowIcon = ({ flip = false }: { flip?: boolean }) => (
 );
 
 export default function ComponentsPage() {
+  // Internal design-system reference: available in development only, not on the live site
+  if (process.env.NODE_ENV === "production") notFound();
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-12 sm:px-6">
       <header>

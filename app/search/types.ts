@@ -45,9 +45,9 @@ export type PropertyFilter = {
 
 // Database to Backend contract
 export type PropertyRecords = {
-    data: any, 
-    error: any, 
-    total: any
+    data: unknown,
+    error: unknown,
+    total?: number
 }
 
 // Export intended only for use in /search/page.tsx

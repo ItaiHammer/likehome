@@ -2,8 +2,7 @@
 //   POST /api/checkout -> validate, price on the server, run the mock charge, then save
 //                         the reservation, its payment (last 4 digits only) and the charge.
 // Never log the request body: it contains card details.
-import { cookies } from 'next/headers'
-import { createClient } from '@/utils/supabase/server'
+import { getUserId } from '@/utils/user'
 import { createReservation, updateReservation } from '@/utils/reservations'
 import { createPayment } from '@/utils/payments'
 import { createTransaction } from '@/utils/transactions'
@@ -21,13 +20,6 @@ import { liveRoomPrice } from '@/lib/liteapi/rates'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
 const EXCLUSION_VIOLATION = '23P01'
-
-async function getUserId() {
-  const supabase = createClient(await cookies())
-  const { data, error } = await supabase.auth.getClaims()
-  if (error || !data?.claims?.sub) return { supabase, userId: null }
-  return { supabase, userId: data.claims.sub as string }
-}
 
 export async function POST(request: Request) {
   const { supabase, userId } = await getUserId()

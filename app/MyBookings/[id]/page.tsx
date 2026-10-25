@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { partyOf } from "@/lib/liteapi/party";
 import { getOtherStays } from "@/lib/other-stays";
-import { todayUTC } from "@/utils/reservation-logic";
+import { guestToday } from "@/utils/guest-today";
 import { getHotelStay, withLiveRoomPrices } from "../../reserve/[slug]/hotelStay";
 import { SampleNotice } from "../_components/SampleNotice";
 import { getSampleBooking } from "../sampleBookings";
@@ -30,7 +30,8 @@ async function loadBooking(id: string, today: string) {
 
 export default async function BookingPage(props: PageProps<"/MyBookings/[id]">) {
   const { id } = await props.params;
-  const today = todayUTC();
+  // The guest's today (from their time zone cookie), not UTC's
+  const today = await guestToday();
   // Dev only: ?sample opens the sample bookings from /MyBookings?sample, see sampleBookings.ts
   const { sample } = await props.searchParams;
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;

@@ -66,8 +66,8 @@ export function SearchExperience({
   const [mode, setMode] = useState<SearchMode>(initialMode);
   const router = useRouter();
 
-  // AI mode: send the prompt to Cara's /api/search/ai endpoint (the same way her
-  // app/sample/search page does), then open the standard search it describes.
+  // AI mode: send the prompt to Cara's /api/search/ai endpoint, then open the
+  // standard search it describes.
   // Off-topic prompts come back as a reply with no filters, shown under the bar.
   const promptRef = useRef("");
   const [aiNote, setAiNote] = useState("");

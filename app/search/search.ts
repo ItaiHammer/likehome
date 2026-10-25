@@ -262,7 +262,7 @@ function getBedsParams(num?: string, size?: string): BedParams | undefined {
 }
 
 function getGuestsParams(adults?: string, children?: string): GuestParams | undefined {
-    let adultGuests = getPositiveNumberOrUndefined(adults);
+    const adultGuests = getPositiveNumberOrUndefined(adults);
     const childGuests = getPositiveNumberOrUndefined(children);
     let total = 0;
 
@@ -365,7 +365,7 @@ function getAsTypeOrUndefined<T extends readonly string[]>(
     value: string | undefined,
     validValues: T
 ): T[number] | undefined {
-    if (validValues.includes(value as any)) {
+    if ((validValues as readonly string[]).includes(value as string)) {
         return value as T[number];
     }
     return undefined;
