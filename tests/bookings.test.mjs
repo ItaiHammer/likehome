@@ -4,6 +4,7 @@ import {
   bookingCode,
   bookingSummary,
   changeBlocker,
+  datesProblem,
   findOverlap,
   firstName,
   formatStayDates,
@@ -105,6 +106,17 @@ test('a booking can be changed until check-in day (UTC)', () => {
   assert.match(changeBlocker(stay('2026-10-01', '2026-10-05'), TODAY), /over/)
   assert.match(changeBlocker(stay('2026-10-20', '2026-10-24', 'completed'), TODAY), /over/)
   assert.match(changeBlocker(stay('2026-10-20', '2026-10-24', 'cancelled'), TODAY), /cancelled/)
+})
+
+test('new dates need both days, at most 30 nights, and no check-in before today', () => {
+  assert.equal(datesProblem('2026-10-20', '2026-10-24', TODAY), null)
+  assert.equal(datesProblem(TODAY, '2026-10-11', TODAY), null)
+  assert.equal(datesProblem('2026-10-20', '2026-11-19', TODAY), null)
+  assert.match(datesProblem('', '', TODAY), /Pick your new check-in and check-out/)
+  assert.match(datesProblem('2026-10-20', '', TODAY), /Pick your new check-in and check-out/)
+  assert.match(datesProblem('2026-10-24', '2026-10-20', TODAY), /Pick your new check-in and check-out/)
+  assert.match(datesProblem('2026-10-20', '2026-11-20', TODAY), /up to 30 nights/)
+  assert.match(datesProblem('2026-10-09', '2026-10-12', TODAY), /too soon/)
 })
 
 test('finds a booking at another hotel that the new dates overlap', () => {

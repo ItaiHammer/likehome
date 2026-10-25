@@ -1,4 +1,5 @@
 // No Supabase / Next.js imports here so it can be unit tested with `npm test`.
+import { countNights, MAX_NIGHTS } from '../utils/reservation-logic.ts'
 
 export type Booking = {
   id: string
@@ -71,6 +72,16 @@ export function findOverlap(stays: OtherStay[], checkIn: string, checkOut: strin
 
 export function overlapMessage(stay: OtherStay): string {
   return `You already have a booking at ${stay.hotelName} for ${formatStayDates(stay.checkIn, stay.checkOut)}. Pick dates that don’t overlap it.`
+}
+
+// The date rules the reservation APIs check (validateReservationInput), in the guest's words so they
+// show before saving. `today` should come from todayInTimeZone(browserTimeZone()).
+export function datesProblem(checkIn: string, checkOut: string, today: string): string | null {
+  const nights = countNights(checkIn, checkOut)
+  if (nights <= 0) return 'Pick your new check-in and check-out dates.'
+  if (nights > MAX_NIGHTS) return `Stays can be up to ${MAX_NIGHTS} nights.`
+  if (checkIn < today) return 'That check-in date is too soon. Pick a later date.'
+  return null
 }
 
 export const TOO_CLOSE_TO_CHANGE = 'It’s too close to check-in to change this booking online.'

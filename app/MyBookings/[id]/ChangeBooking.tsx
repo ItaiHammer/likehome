@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { bookingCode, changeBlocker, findOverlap, formatStayDates, money, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
-import { calculateTotalPrice, MAX_NIGHTS, todayInTimeZone } from "@/utils/reservation-logic";
+import { bookingCode, changeBlocker, datesProblem, findOverlap, formatStayDates, money, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
+import { calculateTotalPrice, todayInTimeZone } from "@/utils/reservation-logic";
 import { browserTimeZone, formatDate, nightsBetween } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Stepper } from "../../_components/ui";
@@ -116,10 +116,9 @@ export function ChangeBooking({
 
   // The same rules the API checks, so problems show on the card before saving
   function problem(): { field: "dates" | "guests"; message: string } | null {
-    if (!nights) return { field: "dates", message: "Pick your new check-in and check-out dates." };
-    if (nights > MAX_NIGHTS) return { field: "dates", message: `Stays can be up to ${MAX_NIGHTS} nights.` };
     // The guest's today; the API judges it the same way from the time_zone sent with the change
-    if (checkIn < todayInTimeZone(browserTimeZone())) return { field: "dates", message: "That check-in date is too soon. Pick a later date." };
+    const dates = datesProblem(checkIn, checkOut, todayInTimeZone(browserTimeZone()));
+    if (dates) return { field: "dates", message: dates };
     const clash = findOverlap(otherStays, checkIn, checkOut);
     if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
