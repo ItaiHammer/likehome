@@ -11,6 +11,8 @@ export type Booking = {
   city: string | null
   photoUrl: string | null
   roomType: string | null
+  /** The hotel is gone or hidden from search, so the stay can't be booked again */
+  unlisted?: boolean
 }
 
 // A stay that's under way (checked in, check-out still ahead) counts as upcoming
