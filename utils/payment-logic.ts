@@ -104,3 +104,9 @@ export function authorizeMockPayment(cardNumber: string, amount: number): Author
   }
   return { approved: true }
 }
+
+/** Saved cards contain no full number or CVC, so the mock treats them as already authorized. */
+export function authorizeSavedPayment(amount: number): AuthorizationResult {
+  if (!(amount > 0)) return { approved: false, reason: 'Invalid payment amount.' }
+  return { approved: true }
+}
