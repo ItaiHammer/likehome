@@ -5,7 +5,6 @@ import { PAGE_ROUTES } from "@/constants/routes";
 import { firstName, groupBookings, type Booking } from "@/lib/bookings";
 import { getAccount } from "@/utils/accounts";
 import { getHotelsByIds, getHotels } from "@/utils/hotels";
-import { todayUTC } from "@/utils/reservation-logic";
 import { guestToday } from "@/utils/guest-today";
 import { getReservationsByAccount } from "@/utils/reservations";
 import { getRoomsByIds } from "@/utils/rooms";
@@ -30,6 +29,11 @@ async function loadMyBookings() {
     getReservationsByAccount(userId),
     getHotels(),
   ]);
+
+  if (account.error) throw new Error(account.error.message);
+  if (allHotelsRes.error) {
+    throw new Error(allHotelsRes.error.message);
+  }
 
   if (reservations.error) throw new Error(reservations.error.message);
   const rows = reservations.data ?? [];
@@ -62,47 +66,56 @@ async function loadMyBookings() {
   });
 
   // Create lookup map from STAYS static data for reliable price/image matching
-  const staysByHotelId = new Map(STAYS.map((s) => [s.hotelId || s.id, s]));
-  const staysByName = new Map(STAYS.map((s) => [s.name.toLowerCase().trim(), s]));
+  const staysByName = new Map(
+    STAYS.map((stay) => [stay.name.toLowerCase().trim(), stay])
+  );
 
-  const allHotels = (allHotelsRes.data ?? []).map((h) => {
-    const matchedStay = staysByHotelId.get(h.id) || staysByName.get(h.name.toLowerCase().trim());
+const allHotels = (allHotelsRes.data ?? []).map((h) => {
+  const matchedStay = staysByName.get(h.name.toLowerCase().trim());
 
-    // Determine exact price from Supabase min_price, rooms, or static STAYS dataset
-    let price: number | null = h.min_price ? Number(h.min_price) : null;
+  const staticPrices =
+    matchedStay?.rooms
+      .map((room) => room.nightly)
+      .filter((price) => Number.isFinite(price) && price > 0) ?? [];
 
-    if (!price && h.rooms && h.rooms.length > 0) {
-      const validRoomPrices = h.rooms.map((r: any) => Number(r.price_per_night || 0)).filter(Boolean);
-      if (validRoomPrices.length > 0) {
-        price = Math.min(...validRoomPrices);
-      }
-    }
+  const staticPrice =
+    staticPrices.length > 0 ? Math.min(...staticPrices) : null;
 
-    if (!price && matchedStay) {
-      const stayPrice = matchedStay.pricePerNight ?? matchedStay.price;
-      price = stayPrice ? Number(stayPrice) : null;
-    }
+  const price = staticPrice;
 
-    return {
-      id: h.id,
-      name: h.name,
-      city: h.city ?? matchedStay?.city ?? null,
-      region: h.region ?? matchedStay?.region ?? null,
-      country: h.country ?? matchedStay?.country ?? null,
-      photoUrl: h.photo_urls?.find(Boolean) ?? matchedStay?.photoUrl ?? null,
-      pricePerNight: price && !isNaN(price) && isFinite(price) ? price : null,
-      tags: h.tags ?? matchedStay?.tags ?? null,
-    };
-  });
+  return {
+    id: h.id,
+    name: h.name,
+    city: h.city ?? matchedStay?.location ?? null,
+    region: h.region ?? null,
+    country: h.country ?? null,
+    photoUrl: h.photo_urls?.find(Boolean) ?? matchedStay?.photos?.[0] ?? null,
+    pricePerNight: price,
+    tags: h.tags ?? matchedStay?.tags ?? null,
+  };
+});
 
   return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, allHotels };
 }
 
-export default async function MyBookingsPage({ searchParams }: { searchParams: Promise<{ sample?: string }> }) {
+export default async function MyBookingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    sample?: string;
+    tab?: string;
+  }>;
+}) {
   // The guest's today (from their time zone cookie), not UTC's
   const today = await guestToday();
   // Dev only: ?sample (or ?sample=empty) fills the page without signing in, see sampleBookings.ts
-  const { sample } = await searchParams;
+  const { sample, tab } = await searchParams;
+  const activeTab: AccountTab =
+    tab === "saved"
+      ? "saved"
+      : tab === "account"
+        ? "account"
+        : "reservations";
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
 
   const { name, email, bookings, allHotels } = showSample
@@ -132,7 +145,7 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: P
         <h1 className="mt-1.5 font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px]">
           {activeTab === "saved"
               ? "Saved hotels"
-              : activeTab === "account" || (activeTab as string) === "details"
+              : activeTab === "account"
                   ? "Your account"
                   : first
                       ? `Welcome back, ${first}`
@@ -141,7 +154,7 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: P
         <p className="mt-2 text-base leading-6 text-slate">
           {activeTab === "saved"
               ? "Places you'd like to come back to."
-              : activeTab === "account" || (activeTab as string) === "details"
+              : activeTab === "account"
                   ? "Manage your details, rewards and payments."
                   : "Your upcoming and past reservations."}
         </p>
@@ -230,7 +243,7 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: P
                 </section>
             )}
 
-            {(activeTab === "account" || (activeTab as string) === "details") && (
+            {activeTab === "account" && (
                 <section aria-labelledby="account-heading">
                   <AccountTabContent name={name} email={email} transactions={transactions} />
                 </section>
@@ -240,7 +253,7 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: P
           <AccountSidebar
               name={name}
               email={email}
-              activeTab={activeTab === ("details" as any) ? "account" : activeTab}
+              activeTab={activeTab}
               className="max-w-sm lg:col-start-1 lg:row-start-1"
           />
         </div>

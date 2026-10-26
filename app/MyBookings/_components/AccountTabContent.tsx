@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
 
 export interface PaymentMethod {
     id: string;
@@ -9,7 +8,6 @@ export interface PaymentMethod {
     last4: string;
     expMonth: string;
     expYear: string;
-    isDefault?: boolean;
 }
 
 export interface Transaction {
@@ -26,19 +24,11 @@ interface AccountTabContentProps {
     transactions?: Transaction[];
 }
 
-const VALID_STREET_ENDINGS = [
-    "st", "street", "ave", "avenue", "blvd", "boulevard",
-    "ct", "court", "rd", "road", "dr", "drive", "ln", "lane",
-    "way", "pl", "place", "pkwy", "parkway", "cir", "circle", "ter", "terrace"
-];
-
 export function AccountTabContent({
                                       name,
                                       email,
                                       transactions = [],
                                   }: AccountTabContentProps) {
-    const supabase = createClient();
-
     const [loading, setLoading] = useState(true);
     const [isEditingAccount, setIsEditingAccount] = useState(false);
     const [accountError, setAccountError] = useState("");
@@ -71,92 +61,48 @@ export function AccountTabContent({
     useEffect(() => {
         async function loadAccountData() {
             setLoading(true);
-            let fetchedCards: PaymentMethod[] = [];
 
-            // Load profile from localStorage first for immediate rendering
             try {
-                const localProfile = JSON.parse(localStorage.getItem("likehome_user_profile") || "{}");
-                if (localProfile.phone) setPhone(localProfile.phone);
-                if (localProfile.street) setStreet(localProfile.street);
-                if (localProfile.city) setCity(localProfile.city);
-                if (localProfile.state) setState(localProfile.state);
-                if (localProfile.zip) setZip(localProfile.zip);
-            } catch (e) {
-                console.error("Local profile read error", e);
-            }
+                const response = await fetch("/api/saved-payment-methods");
+                const result = await response.json();
 
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-
-            if (user) {
-                // Fetch profile details from Supabase
-                const { data: profile } = await supabase
-                    .from("profiles")
-                    .select("phone, street, city, state, zip")
-                    .eq("id", user.id)
-                    .single();
-
-                if (profile) {
-                    const fetchedPhone = profile.phone || "";
-                    const fetchedStreet = profile.street || "";
-                    const fetchedCity = profile.city || "";
-                    const fetchedState = profile.state || "";
-                    const fetchedZip = profile.zip || "";
-
-                    setPhone(fetchedPhone);
-                    setStreet(fetchedStreet);
-                    setCity(fetchedCity);
-                    setState(fetchedState);
-                    setZip(fetchedZip);
-
-                    setSavedPhone(fetchedPhone);
-                    setSavedStreet(fetchedStreet);
-                    setSavedCity(fetchedCity);
-                    setSavedState(fetchedState);
-                    setSavedZip(fetchedZip);
+                if (!response.ok) {
+                    throw new Error(result.error ?? "Could not load payment methods.");
                 }
 
-                // Fetch saved payment methods from Supabase
-                const { data: pms } = await supabase
-                    .from("payment_methods")
-                    .select("id, brand, last4, exp_month, exp_year, is_default")
-                    .eq("user_id", user.id)
-                    .order("created_at", { ascending: true });
-
-                if (pms && pms.length > 0) {
-                    fetchedCards = pms.map((pm) => ({
+                const cards: PaymentMethod[] = (result.paymentMethods ?? []).map(
+                    (pm: {
+                        id: string;
+                        brand: string;
+                        last4: string;
+                        exp_month: number;
+                        exp_year: number;
+                    }) => ({
                         id: pm.id,
-                        brand: pm.brand as PaymentMethod["brand"],
+                        brand:
+                            pm.brand === "visa"
+                                ? "Visa"
+                                : pm.brand === "mastercard"
+                                    ? "Mastercard"
+                                    : pm.brand === "amex"
+                                        ? "Amex"
+                                        : "Discover",
                         last4: pm.last4,
-                        expMonth: pm.exp_month,
-                        expYear: pm.exp_year,
-                        isDefault: pm.is_default,
-                    }));
-                }
-            }
-
-            // Fallback / merge cards stored in localStorage
-            try {
-                const localCards: PaymentMethod[] = JSON.parse(
-                    localStorage.getItem("likehome_saved_cards") || "[]"
+                        expMonth: String(pm.exp_month).padStart(2, "0"),
+                        expYear: String(pm.exp_year),
+                    })
                 );
-                const existingLast4 = new Set(fetchedCards.map((c) => c.last4));
-                for (const lc of localCards) {
-                    if (!existingLast4.has(lc.last4)) {
-                        fetchedCards.push(lc);
-                    }
-                }
-            } catch (e) {
-                console.error("Local cards read error", e);
-            }
 
-            setPaymentMethods(fetchedCards);
-            setLoading(false);
+                setPaymentMethods(cards);
+            } catch (error) {
+                console.error("Failed to load payment methods:", error);
+            } finally {
+                setLoading(false);
+            }
         }
 
         loadAccountData();
-    }, [supabase]);
+    }, []);
 
     const getCardBrand = (num: string): PaymentMethod["brand"] => {
         const clean = num.replace(/\D/g, "");
@@ -249,41 +195,36 @@ export function AccountTabContent({
             return;
         }
 
-        const last4 = rawDigits.slice(-4);
-        const expMonth = monthStr.padStart(2, "0");
-        const expYear = `20${yearStr}`;
-        const isDefault = paymentMethods.length === 0;
+        const response = await fetch("/api/saved-payment-methods", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                card_number: rawDigits,
+                exp_month: month,
+                exp_year: 2000 + Number(yearStr),
+                cvc,
+                name_on_card: name ?? "Cardholder",
+            }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            setCardError(result.error ?? "Could not save payment method.");
+            return;
+        }
+
+        const saved = result.paymentMethod;
 
         const newCardObj: PaymentMethod = {
-            id: `card_${Date.now()}`,
+            id: saved.id,
             brand,
-            last4,
-            expMonth,
-            expYear,
-            isDefault,
+            last4: saved.last4,
+            expMonth: String(saved.exp_month).padStart(2, "0"),
+            expYear: String(saved.exp_year),
         };
-
-        try {
-            const localCards = JSON.parse(localStorage.getItem("likehome_saved_cards") || "[]");
-            localStorage.setItem("likehome_saved_cards", JSON.stringify([...localCards, newCardObj]));
-        } catch (err) {
-            console.error("Failed to write to localStorage", err);
-        }
-
-        const {
-            data: { user },
-        } = await supabase.auth.getUser();
-
-        if (user) {
-            await supabase.from("payment_methods").insert({
-                user_id: user.id,
-                brand,
-                last4,
-                exp_month: expMonth,
-                exp_year: expYear,
-                is_default: isDefault,
-            });
-        }
 
         setPaymentMethods([...paymentMethods, newCardObj]);
         setCardNumber("");
@@ -317,35 +258,6 @@ export function AccountTabContent({
         if (zip && !/^\d{5}$/.test(zip.trim())) {
             setAccountError("ZIP code must be exactly 5 numeric digits.");
             return;
-        }
-
-        try {
-            const profileData = { phone, street, city, state, zip };
-            localStorage.setItem("likehome_user_profile", JSON.stringify(profileData));
-        } catch (e) {
-            console.error("Local profile write error", e);
-        }
-
-        const {
-            data: { user },
-        } = await supabase.auth.getUser();
-
-        if (user) {
-            const { error } = await supabase.from("profiles").upsert({
-                id: user.id,
-                phone,
-                street,
-                city,
-                state,
-                zip,
-                updated_at: new Date().toISOString(),
-            });
-
-            if (error) {
-                console.error("Supabase Profile Upsert Error:", error);
-                setAccountError(`Saved locally. Supabase Error: ${error.message}`);
-                return;
-            }
         }
 
         setSavedPhone(phone);
@@ -394,7 +306,6 @@ export function AccountTabContent({
                             <p className="text-xs text-slate truncate">{email ?? ""}</p>
                         </div>
                     </div>
-
                     {isEditingAccount ? (
                         <form onSubmit={handleSaveAccountDetails} className="space-y-3 pt-3 border-t border-edge">
                             <div>
@@ -619,11 +530,6 @@ export function AccountTabContent({
                                                 </p>
                                             </div>
                                         </div>
-                                        {pm.isDefault && (
-                                            <span className="rounded-md border border-edge bg-paper px-2.5 py-1 text-[10px] font-medium text-slate">
-                                              Default
-                                            </span>
-                                        )}
                                     </div>
                                 ))
                             ) : (
