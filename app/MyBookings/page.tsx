@@ -4,10 +4,8 @@ import { Button } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { firstName, groupBookings, type Booking } from "@/lib/bookings";
 import { getAccount } from "@/utils/accounts";
-import { getHotelsByIds, getHotels } from "@/utils/hotels";
+import { getHotels } from "@/utils/hotels";
 import { guestToday } from "@/utils/guest-today";
-import { getReservationsByAccount } from "@/utils/reservations";
-import { getRoomsByIds } from "@/utils/rooms";
 import { getUserId } from "@/utils/user";
 import { STAYS } from "@/app/_data/stays";
 import { AccountSidebar, type AccountTab } from "./_components/AccountSidebar";
@@ -17,6 +15,11 @@ import { SampleNotice } from "./_components/SampleNotice";
 import { SavedHotelsList } from "./_components/SavedHotelsList";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
 import { getSampleBookings } from "./sampleBookings";
+import {
+  getBookingHistory,
+  getTransactionHistory,
+} from "@/utils/history";
+import { getPointsBalance } from "@/utils/points";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
 
@@ -24,46 +27,70 @@ async function loadMyBookings() {
   const { userId } = await getUserId();
   if (!userId) redirect(PAGE_ROUTES.LOGIN);
 
-  const [account, reservations, allHotelsRes] = await Promise.all([
+  const [
+    account,
+    bookingHistory,
+    transactionHistory,
+    allHotelsRes,
+    pointsResult,
+  ] = await Promise.all([
     getAccount(userId),
-    getReservationsByAccount(userId),
+    getBookingHistory(),
+    getTransactionHistory(),
     getHotels(),
+    getPointsBalance(userId),
   ]);
 
-  if (account.error) throw new Error(account.error.message);
+  if (account.error) {
+    throw new Error(account.error.message);
+  }
+
+  if (bookingHistory.error) {
+    throw new Error(bookingHistory.error.message);
+  }
+
+  if (transactionHistory.error) {
+    throw new Error(transactionHistory.error.message);
+  }
+
   if (allHotelsRes.error) {
     throw new Error(allHotelsRes.error.message);
   }
 
-  if (reservations.error) throw new Error(reservations.error.message);
-  const rows = reservations.data ?? [];
+  if (pointsResult.error) {
+    throw new Error(pointsResult.error.message);
+  }
 
-  const hotelIds = [...new Set(rows.map((r) => r.hotel_id))];
-  const roomIds = [...new Set(rows.map((r) => r.room_id))];
-  const [hotels, rooms] = await Promise.all([
-    hotelIds.length ? getHotelsByIds(hotelIds) : { data: [], error: null },
-    roomIds.length ? getRoomsByIds(roomIds) : { data: [], error: null },
-  ]);
+  const bookings: Booking[] = (bookingHistory.data ?? []).map((row) => ({
+    id: row.reservation_id,
+    checkIn: row.check_in,
+    checkOut: row.check_out,
+    guests: row.guests ?? null,
+    status: row.status ?? "confirmed",
+    hotelName: row.hotel_name ?? "Hotel no longer listed",
+    city: row.city ?? null,
+    photoUrl: row.photo_url ?? null,
+    roomType: row.room_type ?? null,
+  }));
 
-  if (hotels.error) throw new Error(hotels.error.message);
-  if (rooms.error) throw new Error(rooms.error.message);
-  const hotelById = new Map(hotels.data?.map((h) => [h.id, h]));
-  const roomById = new Map(rooms.data?.map((r) => [r.id, r]));
+  type TransactionHistoryRow = {
+    transaction_id: string;
+    created_at: string;
+    transaction_type: string;
+    status: string;
+    hotel_name: string | null;
+  };
 
-  const bookings: Booking[] = rows.map((r) => {
-    const hotel = hotelById.get(r.hotel_id);
-    return {
-      id: r.id,
-      checkIn: r.check_in,
-      checkOut: r.check_out,
-      guests: r.guests ?? null,
-      status: r.status ?? "confirmed",
-      hotelName: hotel?.name ?? "Hotel no longer listed",
-      city: hotel?.city ?? null,
-      photoUrl: hotel?.photo_urls?.find(Boolean) ?? null,
-      roomType: roomById.get(r.room_id)?.room_type ?? null,
-    };
-  });
+  const transactionRows =
+    (transactionHistory.data ?? []) as TransactionHistoryRow[];
+
+  const transactions: Transaction[] = transactionRows.map((row) => ({
+    id: row.transaction_id,
+    title: row.hotel_name ?? "Transaction",
+    subtitle: `${row.transaction_type} · ${row.created_at.slice(0, 10)}`,
+    status: row.status,
+    image: null,
+  }));
 
   // Create lookup map from STAYS static data for reliable price/image matching
   const staysByName = new Map(
@@ -95,7 +122,7 @@ const allHotels = (allHotelsRes.data ?? []).map((h) => {
   };
 });
 
-  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, allHotels };
+  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, transactions, allHotels, pointsBalance: pointsResult.balance };
 }
 
 export default async function MyBookingsPage({
@@ -118,20 +145,17 @@ export default async function MyBookingsPage({
         : "reservations";
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
 
-  const { name, email, bookings, allHotels } = showSample
-      ? { ...getSampleBookings(today, sample === "empty"), allHotels: [] }
-      : await loadMyBookings();
+  const { name, email, bookings, transactions, allHotels, pointsBalance } = showSample
+    ? {
+        ...getSampleBookings(today, sample === "empty"),
+        allHotels: [],
+        transactions: [],
+        pointsBalance: 0,
+      }
+    : await loadMyBookings();
 
   const { upcoming, past, cancelled } = groupBookings(bookings, today);
   const first = firstName(name);
-
-  const transactions: Transaction[] = bookings.map((b) => ({
-    id: b.id,
-    title: b.hotelName,
-    subtitle: "Transaction date · Booking payment",
-    status: b.status === "cancelled" ? "Refunded" : "Paid",
-    image: b.photoUrl,
-  }));
 
   return (
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
@@ -245,7 +269,7 @@ export default async function MyBookingsPage({
 
             {activeTab === "account" && (
                 <section aria-labelledby="account-heading">
-                  <AccountTabContent name={name} email={email} transactions={transactions} />
+                  <AccountTabContent name={name} email={email} transactions={transactions} pointsBalance={pointsBalance} />
                 </section>
             )}
           </div>
