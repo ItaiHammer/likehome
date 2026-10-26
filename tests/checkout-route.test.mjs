@@ -24,7 +24,7 @@ let roomResult
 const createReservation = mock.fn()
 const updateReservation = mock.fn()
 const createPayment = mock.fn()
-const createTransaction = mock.fn()
+const recordCheckoutCharge = mock.fn()
 const consoleError = mock.method(console, 'error', () => {})
 
 mock.module('next/headers', { namedExports: { cookies: async () => ({}) } })
@@ -38,7 +38,7 @@ mock.module('@/utils/supabase/server', {
 })
 mock.module('@/utils/reservations', { namedExports: { createReservation, updateReservation } })
 mock.module('@/utils/payments', { namedExports: { createPayment } })
-mock.module('@/utils/transactions', { namedExports: { createTransaction } })
+mock.module('@/utils/transactions', { namedExports: { recordCheckoutCharge } })
 
 const { POST } = await import('../app/api/checkout/route.ts')
 
@@ -83,12 +83,12 @@ const writes = () =>
   createReservation.mock.callCount() +
   updateReservation.mock.callCount() +
   createPayment.mock.callCount() +
-  createTransaction.mock.callCount()
+  recordCheckoutCharge.mock.callCount()
 
 beforeEach(() => {
   claims = { data: { claims: { sub: 'user-1' } }, error: null }
   roomResult = { data: { ...ROOM }, error: null }
-  for (const fn of [createReservation, updateReservation, createPayment, createTransaction, consoleError]) {
+  for (const fn of [createReservation, updateReservation, createPayment, recordCheckoutCharge, consoleError]) {
     fn.mock.resetCalls()
   }
   createReservation.mock.mockImplementation(async (r) => ({
@@ -97,7 +97,11 @@ beforeEach(() => {
   }))
   updateReservation.mock.mockImplementation(async () => ({ data: [{ id: 'res-1' }], error: null }))
   createPayment.mock.mockImplementation(async (p) => ({ data: [{ id: 'pay-1', ...p }], error: null }))
-  createTransaction.mock.mockImplementation(async (t) => ({ data: [{ id: 'txn-1', ...t }], error: null }))
+  // The database function prices the charge itself (audit F13); the mock mirrors the room price
+  recordCheckoutCharge.mock.mockImplementation(async (paymentId) => ({
+    data: [{ id: 'txn-1', payment_id: paymentId, amount: 389.97, transaction_type: 'charge', status: 'completed' }],
+    error: null,
+  }))
 })
 
 describe('auth', () => {
@@ -198,7 +202,8 @@ describe('pricing', () => {
     const r = await post({ ...validBody(), total_price: 1, price_per_night: 1 })
     assert.equal(r.status, 201)
     assert.equal(createReservation.mock.calls[0].arguments[0].total_price, 389.97)
-    assert.equal(createTransaction.mock.calls[0].arguments[0].amount, 389.97)
+    // The charge is priced by the database, so the route only passes the payment id
+    assert.deepEqual(recordCheckoutCharge.mock.calls[0].arguments, ['pay-1'])
     assert.equal(r.json.transaction.amount, 389.97)
   })
 
@@ -246,7 +251,7 @@ describe('saving the reservation', () => {
     const r = await post(validBody())
     assert.deepEqual(r, { status: 409, json: { error: 'Room is not available for those dates.' } })
     assert.equal(createPayment.mock.callCount(), 0)
-    assert.equal(createTransaction.mock.callCount(), 0)
+    assert.equal(recordCheckoutCharge.mock.callCount(), 0)
   })
 
   test('500 on any other insert error, no payment saved', async () => {
@@ -271,7 +276,7 @@ describe('rollback when the payment cannot be recorded', () => {
     createPayment.mock.mockImplementation(async () => ({ data: null, error: { code: '42501' } }))
     const r = await post(validBody())
     assert.deepEqual(r, { status: 500, json: failure })
-    assert.equal(createTransaction.mock.callCount(), 0)
+    assert.equal(recordCheckoutCharge.mock.callCount(), 0)
     assert.deepEqual(updateReservation.mock.calls[0].arguments, ['res-1', { status: 'cancelled' }])
   })
 
@@ -282,14 +287,14 @@ describe('rollback when the payment cannot be recorded', () => {
   })
 
   test('charge insert fails: reservation cancelled', async () => {
-    createTransaction.mock.mockImplementation(async () => ({ data: null, error: { code: '23514' } }))
+    recordCheckoutCharge.mock.mockImplementation(async () => ({ data: null, error: { code: '23514' } }))
     const r = await post(validBody())
     assert.deepEqual(r, { status: 500, json: failure })
     assert.deepEqual(updateReservation.mock.calls[0].arguments, ['res-1', { status: 'cancelled' }])
   })
 
   test('cancelling also fails: still 500, both errors logged', async () => {
-    createTransaction.mock.mockImplementation(async () => ({ data: null, error: { code: '23514' } }))
+    recordCheckoutCharge.mock.mockImplementation(async () => ({ data: null, error: { code: '23514' } }))
     updateReservation.mock.mockImplementation(async () => ({ data: null, error: { code: '23514' } }))
     const r = await post(validBody())
     assert.deepEqual(r, { status: 500, json: failure })
@@ -334,12 +339,7 @@ describe('success', () => {
       card_exp_month: 12,
       card_exp_year: 2030,
     })
-    assert.deepEqual(createTransaction.mock.calls[0].arguments[0], {
-      payment_id: 'pay-1',
-      amount: 389.97,
-      transaction_type: 'charge',
-      status: 'completed',
-    })
+    assert.deepEqual(recordCheckoutCharge.mock.calls[0].arguments, ['pay-1'])
     assert.equal(updateReservation.mock.callCount(), 0)
   })
 
@@ -377,7 +377,7 @@ describe('card data never leaks', () => {
     'payment insert fails': () =>
       createPayment.mock.mockImplementation(async () => ({ data: null, error: { code: 'x' } })),
     'charge insert fails': () =>
-      createTransaction.mock.mockImplementation(async () => ({ data: null, error: { code: 'x' } })),
+      recordCheckoutCharge.mock.mockImplementation(async () => ({ data: null, error: { code: 'x' } })),
     'reservation insert fails': () =>
       createReservation.mock.mockImplementation(async () => ({ data: null, error: { code: 'x' } })),
   }
@@ -391,7 +391,7 @@ describe('card data never leaks', () => {
         createReservation.mock.calls.map((c) => c.arguments),
         updateReservation.mock.calls.map((c) => c.arguments),
         createPayment.mock.calls.map((c) => c.arguments),
-        createTransaction.mock.calls.map((c) => c.arguments),
+        recordCheckoutCharge.mock.calls.map((c) => c.arguments),
         consoleError.mock.calls.map((c) => c.arguments),
       ])
       assert.equal(seen.includes(FULL_CARD), false)

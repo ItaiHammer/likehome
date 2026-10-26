@@ -5,7 +5,7 @@
 import { getUserId } from '@/utils/user'
 import { createReservation, updateReservation } from '@/utils/reservations'
 import { createPayment } from '@/utils/payments'
-import { createTransaction } from '@/utils/transactions'
+import { recordCheckoutCharge } from '@/utils/transactions'
 import {
   calculateTotalPrice,
   checkCapacity,
@@ -106,12 +106,7 @@ export async function POST(request: Request) {
   const savedPayment = payments?.[0]
 
   const { data: transactions, error: transactionError } = savedPayment
-    ? await createTransaction({
-        payment_id: savedPayment.id,
-        amount: total_price,
-        transaction_type: 'charge',
-        status: 'completed',
-      })
+    ? await recordCheckoutCharge(savedPayment.id)
     : { data: null, error: null }
   const transaction = transactions?.[0]
 
