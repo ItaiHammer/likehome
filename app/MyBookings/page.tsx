@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Button } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { firstName, groupBookings, type Booking } from "@/lib/bookings";
+import { firstName, groupBookings, money } from "@/lib/bookings";
 import { getAccount } from "@/utils/accounts";
 import { getHotels } from "@/utils/hotels";
 import { guestToday } from "@/utils/guest-today";
 import { getUserId } from "@/utils/user";
+import { STAYS } from "@/app/_data/stays";
 import { AccountSidebar, type AccountTab } from "./_components/AccountSidebar";
 import { AccountTabContent, type Transaction } from "./_components/AccountTabContent";
 import { PastBooking } from "./_components/PastBooking";
@@ -14,33 +15,92 @@ import { SampleNotice } from "./_components/SampleNotice";
 import { SavedHotelsList } from "./_components/SavedHotelsList";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
 import { getSampleBookings } from "./sampleBookings";
-import { getMyBookings } from "@/utils/history";
+import { getMyBookings, getTransactionHistory } from "@/utils/history";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
+
+type TransactionHistoryRow = {
+  id: string;
+  payment_id: string;
+  amount: number | string;
+  transaction_type: string;
+  status: string;
+  created_at: string;
+};
 
 async function loadMyBookings() {
   const { userId } = await getUserId();
   if (!userId) redirect(PAGE_ROUTES.LOGIN);
 
-  const [account, bookingHistory, hotelsResult] = await Promise.all([
+  const [account, bookingHistory, transactionHistory, hotelsResult] = await Promise.all([
     getAccount(userId),
     getMyBookings(),
+    getTransactionHistory(),
     getHotels(),
   ]);
 
+  if (account.error) throw new Error(account.error.message);
   if (bookingHistory.error) {
     throw new Error(bookingHistory.error.message);
+  }
+  if (transactionHistory.error) {
+    throw new Error(transactionHistory.error.message);
   }
   if (hotelsResult.error) {
     throw new Error(hotelsResult.error.message);
   }
 
+  const bookings = bookingHistory.data ?? [];
+
+  const transactions: Transaction[] = ((transactionHistory.data ?? []) as TransactionHistoryRow[]).map((tx) => ({
+    id: tx.id,
+    title:
+      tx.transaction_type === "charge"
+        ? "Booking payment"
+        : tx.transaction_type === "refund"
+          ? "Refund"
+          : tx.transaction_type,
+    subtitle: `${money(Number(tx.amount))} · ${new Date(tx.created_at).toLocaleDateString()}`,
+    status:
+      tx.status === "completed"
+        ? tx.transaction_type === "refund"
+          ? "Refunded"
+          : "Paid"
+        : tx.status,
+    image: null,
+  }));
+
+  // Create lookup map from STAYS static data for reliable price/image matching
+  const staysByName = new Map(
+    STAYS.map((stay) => [stay.name.toLowerCase().trim(), stay])
+  );
+
+  const allHotels = (hotelsResult.data ?? []).map((h) => {
+  const matchedStay = staysByName.get(h.name.toLowerCase().trim());
+
+  const staticPrices =
+    matchedStay?.rooms
+      .map((room) => room.nightly)
+      .filter((price) => Number.isFinite(price) && price > 0) ?? [];
+
+  const staticPrice =
+    staticPrices.length > 0 ? Math.min(...staticPrices) : null;
+
+  const price = staticPrice;
+
   return {
-    name: account.data?.full_name ?? null,
-    email: account.data?.email ?? null,
-    bookings: bookingHistory.data ?? [],
-    allHotels: hotelsResult.data ?? [],
+    id: h.id,
+    name: h.name,
+    city: h.city ?? matchedStay?.location ?? null,
+    region: h.region ?? null,
+    country: h.country ?? null,
+    photoUrl: h.photo_urls?.find(Boolean) ?? matchedStay?.photos?.[0] ?? null,
+    pricePerNight: price,
+    tags: h.tags ?? matchedStay?.tags ?? null,
   };
+});
+
+  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, transactions, allHotels };
 }
 
 export default async function MyBookingsPage({
@@ -63,20 +123,16 @@ export default async function MyBookingsPage({
         : "reservations";
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
 
-  const { name, email, bookings, allHotels } = showSample
-      ? { ...getSampleBookings(today, sample === "empty"), allHotels: [] }
-      : await loadMyBookings();
+  const { name, email, bookings, transactions, allHotels } = showSample
+    ? {
+        ...getSampleBookings(today, sample === "empty"),
+        allHotels: [],
+        transactions: [],
+      }
+    : await loadMyBookings();
 
   const { upcoming, past, cancelled } = groupBookings(bookings, today);
   const first = firstName(name);
-
-  const transactions: Transaction[] = bookings.map((b) => ({
-    id: b.id,
-    title: b.hotelName,
-    subtitle: "Transaction date · Booking payment",
-    status: b.status === "cancelled" ? "Refunded" : "Paid",
-    image: b.photoUrl,
-  }));
 
   return (
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
