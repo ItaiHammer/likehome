@@ -19,6 +19,7 @@ import {
   getBookingHistory,
   getTransactionHistory,
 } from "@/utils/history";
+import { getPointsBalance } from "@/utils/points";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
 
@@ -31,11 +32,13 @@ async function loadMyBookings() {
     bookingHistory,
     transactionHistory,
     allHotelsRes,
+    pointsResult,
   ] = await Promise.all([
     getAccount(userId),
     getBookingHistory(),
     getTransactionHistory(),
     getHotels(),
+    getPointsBalance(userId),
   ]);
 
   if (account.error) {
@@ -52,6 +55,10 @@ async function loadMyBookings() {
 
   if (allHotelsRes.error) {
     throw new Error(allHotelsRes.error.message);
+  }
+
+  if (pointsResult.error) {
+    throw new Error(pointsResult.error.message);
   }
 
   const bookings: Booking[] = (bookingHistory.data ?? []).map((row) => ({
@@ -115,7 +122,7 @@ const allHotels = (allHotelsRes.data ?? []).map((h) => {
   };
 });
 
-  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, transactions, allHotels };
+  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, transactions, allHotels, pointsBalance: pointsResult.balance };
 }
 
 export default async function MyBookingsPage({
@@ -138,11 +145,12 @@ export default async function MyBookingsPage({
         : "reservations";
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
 
-  const { name, email, bookings, transactions, allHotels } = showSample
+  const { name, email, bookings, transactions, allHotels, pointsBalance } = showSample
     ? {
         ...getSampleBookings(today, sample === "empty"),
         allHotels: [],
         transactions: [],
+        pointsBalance: 0,
       }
     : await loadMyBookings();
 
@@ -261,7 +269,7 @@ export default async function MyBookingsPage({
 
             {activeTab === "account" && (
                 <section aria-labelledby="account-heading">
-                  <AccountTabContent name={name} email={email} transactions={transactions} />
+                  <AccountTabContent name={name} email={email} transactions={transactions} pointsBalance={pointsBalance} />
                 </section>
             )}
           </div>
