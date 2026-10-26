@@ -16,27 +16,26 @@ import { SavedHotelsList } from "./_components/SavedHotelsList";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
 import { getSampleBookings } from "./sampleBookings";
 import { getMyBookings, getTransactionHistory } from "@/utils/history";
+import { getPointsBalance } from "@/utils/points";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
-
-type TransactionHistoryRow = {
-  id: string;
-  payment_id: string;
-  amount: number | string;
-  transaction_type: string;
-  status: string;
-  created_at: string;
-};
 
 async function loadMyBookings() {
   const { userId } = await getUserId();
   if (!userId) redirect(PAGE_ROUTES.LOGIN);
 
-  const [account, bookingHistory, transactionHistory, hotelsResult] = await Promise.all([
+  const [
+    account,
+    bookingHistory,
+    transactionHistory,
+    hotelsResult,
+    pointsResult,
+  ] = await Promise.all([
     getAccount(userId),
     getMyBookings(),
     getTransactionHistory(),
     getHotels(),
+    getPointsBalance(userId),
   ]);
 
   if (account.error) throw new Error(account.error.message);
@@ -50,23 +49,39 @@ async function loadMyBookings() {
     throw new Error(hotelsResult.error.message);
   }
 
+  if (pointsResult.error) {
+    throw new Error(pointsResult.error.message);
+  }
+
   const bookings = bookingHistory.data ?? [];
 
-  const transactions: Transaction[] = ((transactionHistory.data ?? []) as TransactionHistoryRow[]).map((tx) => ({
-    id: tx.id,
+  type TransactionHistoryRow = {
+    id: string;
+    payment_id: string;
+    amount: number | string;
+    transaction_type: string;
+    status: string;
+    created_at: string;
+  };
+
+  const transactionRows =
+    (transactionHistory.data ?? []) as TransactionHistoryRow[];
+
+  const transactions: Transaction[] = transactionRows.map((row) => ({
+    id: row.id,
     title:
-      tx.transaction_type === "charge"
+      row.transaction_type === "charge"
         ? "Booking payment"
-        : tx.transaction_type === "refund"
+        : row.transaction_type === "refund"
           ? "Refund"
-          : tx.transaction_type,
-    subtitle: `${money(Number(tx.amount))} · ${new Date(tx.created_at).toLocaleDateString()}`,
+          : row.transaction_type,
+    subtitle: `${money(Number(row.amount))} · ${row.created_at.slice(0, 10)}`,
     status:
-      tx.status === "completed"
-        ? tx.transaction_type === "refund"
+      row.status === "completed"
+        ? row.transaction_type === "refund"
           ? "Refunded"
           : "Paid"
-        : tx.status,
+        : row.status,
     image: null,
   }));
 
@@ -100,7 +115,7 @@ async function loadMyBookings() {
   };
 });
 
-  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, transactions, allHotels };
+  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, transactions, allHotels, pointsBalance: pointsResult.balance };
 }
 
 export default async function MyBookingsPage({
@@ -123,11 +138,12 @@ export default async function MyBookingsPage({
         : "reservations";
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
 
-  const { name, email, bookings, transactions, allHotels } = showSample
+  const { name, email, bookings, transactions, allHotels, pointsBalance } = showSample
     ? {
         ...getSampleBookings(today, sample === "empty"),
         allHotels: [],
         transactions: [],
+        pointsBalance: 0,
       }
     : await loadMyBookings();
 
@@ -246,7 +262,7 @@ export default async function MyBookingsPage({
 
             {activeTab === "account" && (
                 <section aria-labelledby="account-heading">
-                  <AccountTabContent name={name} email={email} transactions={transactions} />
+                  <AccountTabContent name={name} email={email} transactions={transactions} pointsBalance={pointsBalance} />
                 </section>
             )}
           </div>

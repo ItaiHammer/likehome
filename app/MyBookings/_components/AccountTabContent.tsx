@@ -22,12 +22,14 @@ interface AccountTabContentProps {
     name: string | null;
     email: string | null;
     transactions?: Transaction[];
+    pointsBalance: number;
 }
 
 export function AccountTabContent({
                                       name,
                                       email,
                                       transactions = [],
+                                      pointsBalance,
                                   }: AccountTabContentProps) {
     const [loading, setLoading] = useState(true);
     const [isEditingAccount, setIsEditingAccount] = useState(false);
@@ -426,7 +428,7 @@ export function AccountTabContent({
 
                     <div className="pt-1">
                         <p className="font-serif text-[32px] leading-9 font-bold tracking-tight text-ink">
-                            0 <span className="font-sans text-lg font-semibold">points</span>
+                            {pointsBalance} <span className="font-sans text-lg font-semibold">points</span>
                         </p>
                         <p className="text-xs text-slate mt-1">available</p>
                     </div>
