@@ -1,3 +1,6 @@
+// The POST /api/checkout body, built from the checkout form. No React or Next imports, so
+// tests/checkout-request.test.mjs can check it against the route's own validators.
+
 type CheckoutStay = {
   roomId: string;
   checkIn: string;
@@ -6,22 +9,23 @@ type CheckoutStay = {
   timeZone?: string;
 };
 
-export type CheckoutForm = CheckoutStay & (
-  {
-    cardNumber: string;
-    expiry: string;
-    cvc: string;
-    cardName: string;
-    savedPaymentMethodId?: never;
-  } |
-  {
-    savedPaymentMethodId: string;
-    cardNumber?: never;
-    expiry?: never;
-    cvc?: never;
-    cardName?: never;
-  }
-);
+export type CheckoutForm = CheckoutStay &
+  (
+    | {
+        cardNumber: string;
+        expiry: string;
+        cvc: string;
+        cardName: string;
+        savedPaymentMethodId?: never;
+      }
+    | {
+        savedPaymentMethodId: string;
+        cardNumber?: never;
+        expiry?: never;
+        cvc?: never;
+        cardName?: never;
+      }
+  );
 
 export function checkoutRequest(form: CheckoutForm) {
   const base = {
@@ -50,15 +54,14 @@ export function checkoutRequest(form: CheckoutForm) {
 
   const [expMonth, expYear] = cardForm.expiry.split("/").map(Number);
 
-
   return {
     ...base,
     payment: {
       card_number: cardForm.cardNumber.replace(/[\s-]/g, ""),
       exp_month: expMonth,
       exp_year: 2000 + expYear,
-      cvc: form.cvc,
-      name_on_card: form.cardName,
+      cvc: cardForm.cvc,
+      name_on_card: cardForm.cardName,
     },
   };
 }

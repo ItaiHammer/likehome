@@ -191,7 +191,7 @@ export function StayReservation({
   useEffect(() => {
     async function loadSavedPaymentMethods() {
       try {
-        const response = await fetch("/api/saved-payment-methods");
+        const response = await fetch("/api/saved-payment");
         const result = await response.json();
 
         if (!response.ok) {
@@ -455,14 +455,14 @@ export function StayReservation({
     saveRequest.current?.abort();
     const request = new AbortController();
     saveRequest.current = request;
-    void saveBooking(snapshot, payload, request.signal, text("expiry"));
+    void saveBooking(snapshot, payload, request.signal, saveCardForFuture && !selectedCard);
   }
 
   async function saveBooking(
-      snapshot: Omit<Booking, "confirmation" | "saved">,
-      payload: ReturnType<typeof checkoutRequest>,
-      signal: AbortSignal,
-      typedExpiry?: string
+    snapshot: Omit<Booking, "confirmation" | "saved">,
+    payload: ReturnType<typeof checkoutRequest>,
+    signal: AbortSignal,
+    saveCard: boolean
   ) {
     const fail = (message: string, signIn = false) => {
       setSubmitting(false);
@@ -500,6 +500,27 @@ export function StayReservation({
         return showDatesHere(`${body.error ?? "Those dates were just booked."} Pick other dates.`);
       }
       if (!res.ok || !body.reservation) return fail(body.error ?? "We couldn’t save your booking. Try again.");
+
+      if (saveCard && !("saved_payment_method_id" in payload.payment)) {
+        try {
+          const saveResponse = await fetch("/api/saved-payment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload.payment),
+            signal,
+          });
+
+          if (!saveResponse.ok) {
+            const saveResult = await saveResponse.json().catch(() => ({}));
+            console.error(
+              "Booking succeeded, but saving the payment method failed:",
+              saveResult.error
+            );
+          }
+        } catch (error) {
+          console.error("Booking succeeded, but saving the payment method failed.", error);
+        }
+      }
 
       const { id, total_price } = body.reservation;
       router.refresh();

@@ -65,7 +65,7 @@ export function AccountTabContent({
             setLoading(true);
 
             try {
-                const response = await fetch("/api/saved-payment-methods");
+                const response = await fetch("/api/saved-payment");
                 const result = await response.json();
 
                 if (!response.ok) {
@@ -197,7 +197,7 @@ export function AccountTabContent({
             return;
         }
 
-        const response = await fetch("/api/saved-payment-methods", {
+        const response = await fetch("/api/saved-payment", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

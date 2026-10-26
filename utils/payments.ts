@@ -10,6 +10,7 @@ export async function createPayment(payment: {
   card_number: string
   card_exp_month: number
   card_exp_year: number
+  saved_payment_method_id?: string
 }) {
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)
