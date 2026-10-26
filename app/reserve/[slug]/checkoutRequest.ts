@@ -6,6 +6,9 @@ export type CheckoutForm = {
   checkIn: string;
   checkOut: string;
   guests: number;
+  /** The party split, so the API can check the room's adult/child limits */
+  adults?: number;
+  children?: number;
   cardNumber: string;
   /** MM/YY, as typed */
   expiry: string;
@@ -22,6 +25,8 @@ export function checkoutRequest(form: CheckoutForm) {
     check_in: form.checkIn,
     check_out: form.checkOut,
     guests: form.guests,
+    adults: form.adults,
+    children: form.children,
     time_zone: form.timeZone,
     payment: {
       card_number: form.cardNumber.replace(/[\s-]/g, ""),

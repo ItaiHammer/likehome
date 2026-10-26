@@ -6,6 +6,9 @@ export type ReservationInput = {
   check_in: string // YYYY-MM-DD
   check_out: string // YYYY-MM-DD
   guests?: number
+  // The party breakdown, when the client sends it; checked against the room's own limits
+  adults?: number
+  children?: number
 }
 
 export type RoomForBooking = {
@@ -13,6 +16,9 @@ export type RoomForBooking = {
   hotel_id: string
   price_per_night: number | string
   capacity: number | null
+  // Per-room limits (null = no separate limit beyond capacity)
+  max_adults?: number | null
+  max_children?: number | null
 }
 
 export type ValidationResult =
@@ -133,13 +139,62 @@ export function validateReservationInput(
     guests = b.guests
   }
 
+  let adults: number | undefined
+  if (b.adults !== undefined) {
+    if (typeof b.adults !== 'number' || !Number.isInteger(b.adults) || b.adults < 1) {
+      return { ok: false, error: 'adults must be a whole number of at least 1.' }
+    }
+    adults = b.adults
+  }
+  let children: number | undefined
+  if (b.children !== undefined) {
+    if (typeof b.children !== 'number' || !Number.isInteger(b.children) || b.children < 0) {
+      return { ok: false, error: 'children must be a whole number (0 or more).' }
+    }
+    children = b.children
+  }
+  if (adults !== undefined || children !== undefined) {
+    const party = (adults ?? 0) + (children ?? 0)
+    if (guests === undefined) guests = party
+    else if (guests !== party) {
+      return { ok: false, error: 'guests must equal adults plus children.' }
+    }
+  }
+
   return {
     ok: true,
-    value: { room_id: b.room_id.trim(), check_in: checkIn, check_out: checkOut, guests },
+    value: {
+      room_id: b.room_id.trim(),
+      check_in: checkIn,
+      check_out: checkOut,
+      guests,
+      ...(adults !== undefined ? { adults } : {}),
+      ...(children !== undefined ? { children } : {}),
+    },
   }
 }
 
 /** Checks the requested guest count against the room's capacity. Returns an error message or null. */
+/**
+ * Checks the adults/children split against the room's own limits (a room can fit 4 people but
+ * only 2 adults, or be adults-only). Returns an error message or null. Skipped when the client
+ * didn't send the split, so older callers keep working with the total-capacity check alone.
+ */
+export function checkPartyLimits(
+  party: { adults?: number; children?: number },
+  room: RoomForBooking
+): string | null {
+  if (party.adults !== undefined && room.max_adults != null && party.adults > room.max_adults) {
+    return `This room allows up to ${room.max_adults} adult${room.max_adults === 1 ? '' : 's'}.`
+  }
+  if (party.children !== undefined && room.max_children != null && party.children > room.max_children) {
+    return room.max_children === 0
+      ? 'This room is for adults only.'
+      : `This room allows up to ${room.max_children} child${room.max_children === 1 ? '' : 'ren'}.`
+  }
+  return null
+}
+
 export function checkCapacity(guests: number | undefined, room: RoomForBooking): string | null {
   if (guests === undefined || room.capacity == null) return null
   if (guests > room.capacity) {

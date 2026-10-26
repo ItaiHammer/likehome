@@ -9,6 +9,7 @@ import { createTransaction } from '@/utils/transactions'
 import {
   calculateTotalPrice,
   checkCapacity,
+  checkPartyLimits,
   todayInTimeZone,
   validateReservationInput,
   type RoomForBooking,
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
   // 2. Look up the room and check capacity
   const { data: room, error: roomError } = await supabase
     .from('rooms')
-    .select('id, hotel_id, price_per_night, capacity')
+    .select('id, hotel_id, price_per_night, capacity, max_adults, max_children')
     .eq('id', input.room_id)
     .single<RoomForBooking>()
 
@@ -58,6 +59,11 @@ export async function POST(request: Request) {
   const capacityError = checkCapacity(input.guests, room)
   if (capacityError) {
     return Response.json({ error: capacityError }, { status: 400 })
+  }
+  // The room's own adult/child limits (e.g. adults-only), not just the total
+  const partyError = checkPartyLimits(input, room)
+  if (partyError) {
+    return Response.json({ error: partyError }, { status: 400 })
   }
 
   // 3. Price is always calculated here, never taken from the browser

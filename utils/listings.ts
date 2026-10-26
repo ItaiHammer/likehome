@@ -7,11 +7,12 @@ import {
   updateHotel,
 } from "@/utils/hotels";
 import {
-  AMENITIES,
   type Listing,
   type ListingDraft,
   type ListingRoom,
 } from "@/types/listing";
+import { PROPERTY_TYPES, type PropertyType } from "@/types/listing";
+import { amenitiesFromTags, countryFromStored, countryToStored, mergeAmenityTags } from "@/lib/listing-storage";
 
 type HotelRow = {
   id: string;
@@ -22,6 +23,8 @@ type HotelRow = {
   city: string;
   region: string | null;
   country: string | null;
+  property_type?: string | null;
+  postal_code?: string | null;
   photo_urls: string[] | null;
   tags: string[] | null;
 };
@@ -124,17 +127,20 @@ function toListing(hotel: HotelRow, rooms: RoomRow[]): Listing {
     ownerId: hotel.owner_id ?? "",
     name: hotel.name,
 
-    // Temporarily unsupported database fields.
-    propertyType: "hotel",
-    postalCode: "",
+    propertyType: PROPERTY_TYPES.includes(hotel.property_type as PropertyType)
+      ? (hotel.property_type as PropertyType)
+      : "hotel",
+    postalCode: hotel.postal_code ?? "",
 
     streetAddress: hotel.address,
     city: hotel.city,
     region: hotel.region ?? "",
-    country: hotel.country ?? "",
+    // Stored in search's spelling ("USA", "Canada"); the editor works with ISO codes
+    country: countryFromStored(hotel.country),
     description: hotel.description ?? "",
 
-    amenities: AMENITIES.filter((amenity) => tags.includes(amenity)),
+    // Stored as the tags search filters on ("Free Wi-Fi"); older saves used raw ids ("wifi")
+    amenities: amenitiesFromTags(tags),
 
     photos: (hotel.photo_urls ?? []).map((url, index) => ({
       id: `${hotel.id}-photo-${index}`,
@@ -161,8 +167,27 @@ function draftRoomToRows(hotelId: string, room: ListingRoom) {
   }));
 }
 
+// The rooms table rejects num_beds < 1 and capacity < 1. Checking before ANY write means a bad
+// room no longer leaves a half-saved listing (hotel updated, rooms deleted, insert rejected).
+function checkRooms(rooms: ListingRoom[]): Error | null {
+  for (const room of rooms) {
+    const bed = parseBedConfiguration(room.bedConfiguration);
+    if (!(bed.num_beds >= 1) || !(room.maxGuests >= 1) || !(room.nightlyRateCents > 0)) {
+      return new Error(`Room "${room.roomType}" needs at least 1 bed, 1 guest and a price.`);
+    }
+  }
+  return null;
+}
+
 async function replaceRooms(hotelId: string, rooms: ListingRoom[]) {
   const supabase = await getSupabase();
+
+  // Re-checked here as a last guard before the delete (create/update check first, before
+  // touching the hotel). Rooms are still deleted and re-created on save, which drops their
+  // bookings via the ON DELETE CASCADE foreign key: audit F1 needs an update-in-place redesign.
+  const roomError = checkRooms(rooms);
+  if (roomError) return { error: roomError };
+  const rows = rooms.flatMap((room) => draftRoomToRows(hotelId, room));
 
   const { error: deleteError } = await supabase
     .from("rooms")
@@ -170,8 +195,6 @@ async function replaceRooms(hotelId: string, rooms: ListingRoom[]) {
     .eq("hotel_id", hotelId);
 
   if (deleteError) return { error: deleteError };
-
-  const rows = rooms.flatMap((room) => draftRoomToRows(hotelId, room));
 
   if (rows.length === 0) return { error: null };
 
@@ -233,6 +256,9 @@ export async function createListing(
   ownerId: string,
   draft: ListingDraft
 ) {
+  const roomError = checkRooms(draft.rooms);
+  if (roomError) return { data: null, error: roomError };
+
   const { data, error } = await createHotel({
     owner_id: ownerId,
     name: draft.name,
@@ -240,8 +266,10 @@ export async function createListing(
     address: draft.streetAddress,
     city: draft.city,
     region: draft.region,
-    country: draft.country,
-    tags: draft.amenities,
+    country: countryToStored(draft.country),
+    property_type: draft.propertyType,
+    postal_code: draft.postalCode,
+    tags: mergeAmenityTags([], draft.amenities),
     photo_urls: draft.photos.map((photo) => photo.url),
   });
 
@@ -264,14 +292,23 @@ export async function updateListing(
   id: string,
   draft: ListingDraft
 ) {
+  const roomError = checkRooms(draft.rooms);
+  if (roomError) return { data: null, error: roomError };
+
+  // Keep tags the editor doesn't manage (e.g. imported "EV Charging") when saving amenities
+  const { data: current } = await getHotel(id);
+  const existingTags = ((current as HotelRow | null)?.tags ?? []) as string[];
+
   const { data, error } = await updateHotel(id, {
     name: draft.name,
     description: draft.description,
     address: draft.streetAddress,
     city: draft.city,
     region: draft.region,
-    country: draft.country,
-    tags: draft.amenities,
+    country: countryToStored(draft.country),
+    property_type: draft.propertyType,
+    postal_code: draft.postalCode,
+    tags: mergeAmenityTags(existingTags, draft.amenities),
     photo_urls: draft.photos.map((photo) => photo.url),
   });
 

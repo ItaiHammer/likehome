@@ -106,3 +106,8 @@ test('Back to stays keeps the original search through sign-in', () => {
   // Only search keys survive, so `from` can't put anything else into the link
   assert.equal(originalSearch({ from: 'next=https://evil.example&where=Paris' }), 'where=Paris')
 })
+
+// Audit F10: the guest's time zone survives search -> stay -> Back to stays
+test('searchQuery keeps tz', () => {
+  assert.equal(searchQuery({ where: 'Paris', tz: 'America/Los_Angeles' }), 'where=Paris&tz=America%2FLos_Angeles')
+})

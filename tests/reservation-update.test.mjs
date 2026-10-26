@@ -265,3 +265,13 @@ test('an invalid time zone falls back to UTC instead of erroring', async (t) => 
   const json = await res.json()
   assert.equal(json.error, 'check_in cannot be in the past.')
 })
+
+// Audit F7: a cancelled booking can't be edited (it would rewrite history without reactivating it)
+test('returns 409 and changes nothing for a cancelled reservation', async () => {
+  mockReservationResult.data.status = 'cancelled'
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(8) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 409)
+  const json = await res.json()
+  assert.equal(json.error, 'Only confirmed reservations can be changed.')
+})

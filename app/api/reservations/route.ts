@@ -6,6 +6,7 @@ import { createReservation, getReservationsByAccount } from '@/utils/reservation
 import {
   calculateTotalPrice,
   checkCapacity,
+  checkPartyLimits,
   datesOverlap,
   todayInTimeZone,
   validateReservationInput,
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   // 2. Look up the room (price, capacity, hotel)
   const { data: room, error: roomError } = await supabase
     .from('rooms')
-    .select('id, hotel_id, price_per_night, capacity')
+    .select('id, hotel_id, price_per_night, capacity, max_adults, max_children')
     .eq('id', input.room_id)
     .single<RoomForBooking>()
 
@@ -53,6 +54,11 @@ export async function POST(request: Request) {
   const capacityError = checkCapacity(input.guests, room)
   if (capacityError) {
     return Response.json({ error: capacityError }, { status: 400 })
+  }
+  // The room's own adult/child limits (e.g. adults-only), not just the total
+  const partyError = checkPartyLimits(input, room)
+  if (partyError) {
+    return Response.json({ error: partyError }, { status: 400 })
   }
 
   // 4. Availability (best-effort app check).

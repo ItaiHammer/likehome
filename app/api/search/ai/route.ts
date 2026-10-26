@@ -1,18 +1,34 @@
-import { streamText, Output, convertToModelMessages, createUIMessageStreamResponse, toUIMessageStream } from 'ai';
+import { streamText, Output, convertToModelMessages, createUIMessageStreamResponse, toUIMessageStream, type UIMessage } from 'ai';
 import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import { bedSizes, sorts, tags } from '../../../search/types';
 import { todayInTimeZone } from '@/utils/reservation-logic';
 
 export async function POST(req: Request) {
-    // tz: the guest's IANA time zone, sent by the search bar, so "today" is their today
-    const { messages, tz } = await req.json();
+    // Malformed input is the caller's mistake: answer 400, not an unhandled 500
+    let body: unknown;
+    try {
+        body = await req.json();
+    } catch {
+        return Response.json({ error: 'Invalid JSON body.' }, { status: 400 });
+    }
+    const { messages, tz } = (body ?? {}) as { messages?: unknown; tz?: unknown };
+    if (!Array.isArray(messages) || messages.length === 0) {
+        return Response.json({ error: 'messages must be a non-empty array.' }, { status: 400 });
+    }
+
+    let modelMessages;
+    try {
+        modelMessages = await convertToModelMessages(messages as UIMessage[]);
+    } catch {
+        return Response.json({ error: 'messages are not in the expected chat format.' }, { status: 400 });
+    }
 
     const textStream = streamText({
         model: google('gemini-3.1-flash-lite'),
         // Built per request so "today" is never stale on a long-running server
         instructions: getInstructions(todayInTimeZone(tz)),
-        messages: await convertToModelMessages(messages),
+        messages: modelMessages,
         temperature: 0,
         output: aiOutputFormat
     });

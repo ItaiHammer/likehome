@@ -338,6 +338,8 @@ export function StayReservation({
       checkIn,
       checkOut,
       guests: adults + children,
+      adults,
+      children,
       cardNumber: text("cardNumber"),
       expiry: text("expiry"),
       cvc: text("cvc"),

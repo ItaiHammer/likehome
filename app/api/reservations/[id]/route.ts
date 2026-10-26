@@ -4,6 +4,7 @@ import { updateReservation, getReservation } from '../../../../utils/reservation
 import {
   calculateTotalPrice,
   checkCapacity,
+  checkPartyLimits,
   validateReservationInput,
   type RoomForBooking,
   todayInTimeZone,
@@ -35,6 +36,12 @@ export async function PATCH(
   if (!curReservationAccount || curReservationAccount !== userId) {
     return Response.json({ error: 'Reservation change for another user is forbidden. '}, { status: 403 })
   }
+
+  // Only confirmed bookings can be changed: editing a cancelled (or completed) one would
+  // rewrite its history without bringing it back
+  if ((curReservation.status ?? 'confirmed') !== 'confirmed') {
+    return Response.json({ error: 'Only confirmed reservations can be changed.' }, { status: 409 })
+  }
  
   let body: unknown
   try {
@@ -65,7 +72,7 @@ export async function PATCH(
   // Look up the room (price, capacity, hotel)
   const { data: room, error: roomError } = await supabase
     .from('rooms')
-    .select('id, hotel_id, price_per_night, capacity')
+    .select('id, hotel_id, price_per_night, capacity, max_adults, max_children')
     .eq('id', input.room_id)
     .single<RoomForBooking>()
 
@@ -77,6 +84,11 @@ export async function PATCH(
   const capacityError = checkCapacity(input.guests, room)
   if (capacityError) {
     return Response.json({ error: capacityError }, { status: 400 })
+  }
+  // The room's own adult/child limits (e.g. adults-only), not just the total
+  const partyError = checkPartyLimits(input, room)
+  if (partyError) {
+    return Response.json({ error: partyError }, { status: 400 })
   }
 
   // Price

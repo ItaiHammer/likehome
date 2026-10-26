@@ -91,3 +91,17 @@ test('capacity check', () => {
   assert.notEqual(checkCapacity(3, room), null)
   assert.equal(checkCapacity(undefined, room), null)
 })
+
+// Audit F8: adult/child split
+test('adults/children: valid split fills in guests', () => {
+  const r = validateReservationInput({ room_id: 'r', check_in: '2099-01-01', check_out: '2099-01-02', adults: 2, children: 1 }, '2026-10-01')
+  assert.equal(r.ok, true)
+  assert.equal(r.value.guests, 3)
+})
+
+test('adults/children: invalid values and mismatches are rejected', () => {
+  const base = { room_id: 'r', check_in: '2099-01-01', check_out: '2099-01-02' }
+  assert.equal(validateReservationInput({ ...base, adults: 0 }, '2026-10-01').ok, false)
+  assert.equal(validateReservationInput({ ...base, adults: 1, children: -1 }, '2026-10-01').ok, false)
+  assert.equal(validateReservationInput({ ...base, guests: 4, adults: 2, children: 1 }, '2026-10-01').ok, false)
+})

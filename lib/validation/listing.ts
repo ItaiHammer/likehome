@@ -117,6 +117,8 @@ export function checkRoomForm(form: RoomForm): { errors: RoomFormErrors; room: O
   else if (roomType.length > 60) errors.roomType = "Keep this under 60 characters";
   if (!bedConfiguration) errors.bedConfiguration = "Describe the beds";
   else if (bedConfiguration.length > 60) errors.bedConfiguration = "Keep this under 60 characters";
+  // The database requires at least one bed; "0 queen beds" used to pass here and fail mid-save
+  else if (/^\s*0+\s/.test(bedConfiguration)) errors.bedConfiguration = "A room needs at least 1 bed";
   if (maxGuests === null) errors.maxGuests = "Enter a number from 1 to 20";
   if (roomCount === null) errors.roomCount = "Enter a number from 1 to 500";
   if (nightlyRateCents === null || nightlyRateCents < 100) errors.nightlyRate = "Enter a nightly rate of at least $1";

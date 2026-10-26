@@ -422,3 +422,33 @@ describe('guest time zone', () => {
     assert.equal(writes(), 0)
   })
 })
+
+// Audit F8: the room's own adult/child limits, not just total capacity
+describe('room adult/child limits', () => {
+  test('an adults-only room rejects a child even when total capacity fits', async () => {
+    roomResult = { data: { ...ROOM, capacity: 4, max_adults: 2, max_children: 0 }, error: null }
+    const r = await post({ ...validBody(), guests: 3, adults: 2, children: 1 })
+    assert.equal(r.status, 400)
+    assert.equal(r.json.error, 'This room is for adults only.')
+    assert.equal(writes(), 0)
+  })
+
+  test('too many adults is rejected', async () => {
+    roomResult = { data: { ...ROOM, capacity: 4, max_adults: 1, max_children: 3 }, error: null }
+    const r = await post({ ...validBody(), guests: 2, adults: 2, children: 0 })
+    assert.equal(r.status, 400)
+    assert.equal(r.json.error, 'This room allows up to 1 adult.')
+  })
+
+  test('guests must match adults + children', async () => {
+    const r = await post({ ...validBody(), guests: 2, adults: 2, children: 1 })
+    assert.equal(r.status, 400)
+    assert.equal(r.json.error, 'guests must equal adults plus children.')
+  })
+
+  test('a party within the limits books', async () => {
+    roomResult = { data: { ...ROOM, capacity: 4, max_adults: 2, max_children: 2 }, error: null }
+    const r = await post({ ...validBody(), guests: 3, adults: 2, children: 1 })
+    assert.equal(r.status, 201)
+  })
+})
