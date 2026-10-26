@@ -1,13 +1,31 @@
-// Mock photo upload, run in the browser. Real version: upload the file to a Supabase Storage bucket
-// and return its public URL.
-// - A sample photo (a URL from mocks/sample-photos.ts) "uploads" to its own URL, so it survives reloads.
-// - A file from the computer becomes a blob: URL, which only works in this browser tab until it's closed.
+// Listing photo upload, run in the browser (audit F3).
+// - A file from the computer goes to the public "listing-photos" Storage bucket, in the signed-in
+//   owner's own folder, and the photo keeps its public URL (supabase/migrations/20261026_f3_listing_photos_bucket.sql).
+// - A sample photo (a URL from mocks/sample-photos.ts) is already hosted, so it keeps its own URL.
+import { createClient } from "@/utils/supabase/client";
+import { PHOTO_EXTENSION, photoProblem } from "@/lib/listing-photos";
 
-// Set to true to make each upload fail on its first try, to see the "Upload failed" / Retry state.
-export const MOCK_UPLOAD_FAILS_FIRST_TRY = false;
+export const PHOTO_BUCKET = "listing-photos";
 
+// `attempt` is unused now (the mock used it to fail the first try); kept so retries call it the same way.
 export async function uploadPhoto(source: File | string, attempt: number): Promise<{ url: string } | { error: string }> {
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  if (MOCK_UPLOAD_FAILS_FIRST_TRY && attempt === 1) return { error: "Upload failed" };
-  return { url: typeof source === "string" ? source : URL.createObjectURL(source) };
+  void attempt;
+  if (typeof source === "string") return { url: source };
+
+  const problem = photoProblem(source);
+  if (problem) return { error: problem };
+
+  const supabase = createClient();
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return { error: "Sign in again to add photos." };
+
+  const path = `${auth.user.id}/${crypto.randomUUID()}.${PHOTO_EXTENSION[source.type]}`;
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, source, {
+    contentType: source.type,
+    cacheControl: "31536000",
+    upsert: false,
+  });
+  if (error) return { error: "Upload failed" };
+
+  return { url: supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl };
 }

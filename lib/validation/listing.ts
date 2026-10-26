@@ -155,8 +155,10 @@ export function readRooms(input: unknown): ListingRoom[] | null {
 
 // --- Photos ---
 
-// Site files (/listings/...), mock uploads (blob:) or https URLs. Anything else, like javascript:, is refused.
-const PHOTO_URL = /^(\/(?!\/)|blob:|https:\/\/)/;
+// Site files (/listings/...) or https URLs (uploads are on Supabase Storage). Anything else, like
+// javascript:, is refused. blob: URLs from the old mock upload only ever worked in one browser tab,
+// so they're dropped instead of saved (audit F3), and a listing that still has one can be saved.
+const PHOTO_URL = /^(\/(?!\/)|https:\/\/)/;
 
 export function readPhotos(input: unknown): ListingPhoto[] | null {
   if (!Array.isArray(input) || input.length > MAX_PHOTOS) return null;
@@ -165,6 +167,7 @@ export function readPhotos(input: unknown): ListingPhoto[] | null {
     const p = asRecord(item);
     const caption = asText(p.caption);
     if (typeof p.id !== "string" || !ID.test(p.id)) return null;
+    if (typeof p.url === "string" && p.url.startsWith("blob:")) continue;
     if (typeof p.url !== "string" || p.url.length > 2048 || !PHOTO_URL.test(p.url)) return null;
     if (caption.length > 80) return null;
     photos.push({ id: p.id, url: p.url, caption });
