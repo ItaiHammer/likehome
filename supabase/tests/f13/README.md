@@ -13,6 +13,5 @@ psql -d f13 -f supabase/migrations/20261025_f13_lock_down_transactions.sql
 psql -d f13 -f supabase/tests/f13/scenarios.sql        # after: A, B, D, F refused; checkout charge 202.00; balance 20200
 ```
 
-Step G still refunds as points because users can set `has_insurance` on their own reservation
-(reservations UPDATE policy). That is a separate follow-up; the refund is now capped at what was
-actually charged.
+Step G still refunds as points here because users could set `has_insurance` on their own
+reservation. `20261026_lock_reservation_fields.sql` closes that (see `supabase/tests/audit`).

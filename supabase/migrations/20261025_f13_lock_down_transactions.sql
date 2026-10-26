@@ -109,6 +109,6 @@ drop policy if exists "Users can add transactions to their own payments" on publ
 
 commit;
 
--- Still open (not changed here, needs a team decision): reservations INSERT/UPDATE policies let
--- users set has_insurance, total_price and status on their own bookings directly. With
--- has_insurance = true an uninsured booking gets the insured full refund (as points) on cancel.
+-- Users could also set has_insurance, total_price and status on their own bookings directly, which
+-- turned an uninsured booking into a full refund on cancel. 20261026_lock_reservation_fields.sql
+-- closes that; apply it after this file.
