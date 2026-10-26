@@ -1,6 +1,10 @@
 import { getHotel } from "@/utils/hotels";
 import { getRoomsByHotel } from "@/utils/rooms";
 import { roomAmenityList, stayOffers } from "@/lib/stay-filters";
+import { nightsByRoom } from "@/lib/room-availability";
+import { addDays } from "../../_components/dates";
+import { todayUTC } from "@/utils/reservation-logic";
+import { getBookedNights } from "@/utils/rooms";
 import type { Room, Stay } from "../../_data/stays";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,20 +53,48 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
   const rows = (roomsResult.data ?? []) as RoomRow[];
   if (!hotel || rows.length === 0) return null;
 
-  const rooms: Room[] = rows
-    .map((r) => ({
-      id: r.id,
-      name: r.room_type,
-      // The room's own amenities, the same tags search filters on
-      description: [bedLabel(r.num_beds, r.bed_size), ...roomAmenityList(r.tags)].filter(Boolean).join(" · "),
-      sleeps: r.capacity ?? 2,
-      maxAdults: r.max_adults ?? null,
-      maxChildren: r.max_children ?? null,
-      nightly: Number(r.price_per_night),
-      beds: r.num_beds ?? 1,
-      bedSize: r.bed_size,
-      tags: r.tags ?? [],
-    }))
+  // Which nights each room is booked (audit F9). A day before UTC today covers guests west of UTC.
+  // If the lookup fails, every night shows as open and checkout still refuses a booked room.
+  const from = addDays(todayUTC(), -1);
+  const booked = await getBookedNights(id, from, addDays(from, 400));
+  if (booked.error) console.error("get_booked_nights failed:", booked.error.message);
+  const bookedNights = nightsByRoom(booked.data ?? []);
+
+  // Identical rooms (same type, price, beds, limits and amenities) show as one card. Booking picks
+  // whichever of them is free for the guest's dates; the card's id is the first one's.
+  const groups = new Map<string, RoomRow[]>();
+  for (const row of rows) {
+    const key = JSON.stringify([
+      row.room_type,
+      Number(row.price_per_night),
+      row.capacity,
+      row.max_adults ?? null,
+      row.max_children ?? null,
+      row.num_beds,
+      row.bed_size,
+      [...(row.tags ?? [])].sort(),
+    ]);
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+
+  const rooms: Room[] = [...groups.values()]
+    .map((units) => {
+      const r = units[0];
+      return {
+        id: r.id,
+        name: r.room_type,
+        // The room's own amenities, the same tags search filters on
+        description: [bedLabel(r.num_beds, r.bed_size), ...roomAmenityList(r.tags)].filter(Boolean).join(" · "),
+        sleeps: r.capacity ?? 2,
+        maxAdults: r.max_adults ?? null,
+        maxChildren: r.max_children ?? null,
+        nightly: Number(r.price_per_night),
+        beds: r.num_beds ?? 1,
+        bedSize: r.bed_size,
+        tags: r.tags ?? [],
+        units: units.map((u) => ({ id: u.id, bookedNights: bookedNights.get(u.id) ?? [] })),
+      };
+    })
     .sort((a, b) => a.nightly - b.nightly);
 
   const rating = hotel.rating === null ? null : Number(hotel.rating);
@@ -79,7 +111,7 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
     cleaningFee: 0,
     // /api/reservations saves nights × nightly price, so the page shows that total instead of adding tax
     taxRate: 0,
-    // No booked-dates lookup exists yet, so every night shows as open
+    // Sold-out nights come from each room's units (lib/room-availability.ts), worked out in the browser
     blockedNights: [],
     rooms,
     bookable: true,

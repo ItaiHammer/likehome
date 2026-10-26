@@ -55,7 +55,7 @@ export function RoomOptions({
                   </Fragment>
                 ))}
               </p>
-              <p className="text-sm text-slate">{off ? "Sold out right now" : note(r)}</p>
+              <p className="text-sm text-slate">{off ? (r.bookedForDates ? "Booked for your dates" : "Sold out right now") : note(r)}</p>
             </div>
             <div className="shrink-0 text-right">
               <p className={`text-base font-semibold ${off ? "text-slate line-through" : "text-ink"}`}>{money(r.nightly)}</p>
@@ -67,7 +67,7 @@ export function RoomOptions({
                 off ? "border border-edge text-slate" : on ? "bg-blue text-on-blue" : "border border-edge bg-surface text-ink"
               }`}
             >
-              {off ? "Sold out" : on ? "Selected" : "Select"}
+              {off ? (r.bookedForDates ? "Booked" : "Sold out") : on ? "Selected" : "Select"}
             </span>
           </label>
         );

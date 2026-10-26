@@ -45,7 +45,8 @@ function readChoices(params: Record<string, string | string[] | undefined>, stay
   const children = count("children", 0, 10);
   // Without a picked room, the cheapest one that passes the search's filters, as the search matched it
   const room =
-    stay.rooms.find((r) => r.id === one("room") && !r.soldOut) ??
+    // A link can name any of a card's identical rooms
+    stay.rooms.find((r) => (r.id === one("room") || r.units?.some((u) => u.id === one("room"))) && !r.soldOut) ??
     matchingRoom(stay.rooms, stay.tags, readRoomFilters(params, (adults ?? 2) + (children ?? 0), { adults, children }));
 
   return {
