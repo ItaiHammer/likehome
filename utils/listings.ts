@@ -12,6 +12,7 @@ import {
   type ListingRoom,
 } from "@/types/listing";
 import { PROPERTY_TYPES, type PropertyType } from "@/types/listing";
+import { groupRoomRows, hasRoomChanges, parseBedConfiguration, planRoomChanges, type RoomRow } from "@/lib/listing-rooms";
 import { amenitiesFromTags, countryFromStored, countryToStored, mergeAmenityTags } from "@/lib/listing-storage";
 
 type HotelRow = {
@@ -29,84 +30,8 @@ type HotelRow = {
   tags: string[] | null;
 };
 
-type RoomRow = {
-  id: string;
-  hotel_id: string;
-  room_type: string;
-  price_per_night: number | string;
-  capacity: number | string;
-  num_beds: number;
-  bed_size: string | null;
-  tags: string[] | null;
-  created_at: string;
-};
-
 async function getSupabase() {
   return createClient(await cookies());
-}
-
-function parseBedConfiguration(text: string) {
-  const match = text.trim().match(
-    /^(\d+)\s+(Twin XL|Twin|Double|Queen|King)\s+bed(?:s)?$/i
-  );
-
-  if (!match) {
-    return {
-      num_beds: 1,
-      bed_size: null as string | null,
-    };
-  }
-
-  const normalizedBedSize =
-    match[2].toLowerCase() === "twin xl"
-      ? "Twin XL"
-      : match[2].charAt(0).toUpperCase() +
-        match[2].slice(1).toLowerCase();
-
-  return {
-    num_beds: Number(match[1]),
-    bed_size: normalizedBedSize,
-  };
-}
-
-function roomRowToListingRoom(room: RoomRow): ListingRoom {
-  const price = Number(room.price_per_night);
-
-  return {
-    id: room.id,
-    roomType: room.room_type,
-    bedConfiguration: `${room.num_beds} ${
-      room.bed_size?.toLowerCase() ?? "bed"
-    } bed${room.num_beds === 1 ? "" : "s"}`,
-    maxGuests: Number(room.capacity),
-    roomCount: 1,
-    nightlyRateCents: Math.round(price * 100),
-    description: "",
-  };
-}
-
-function groupRooms(rows: RoomRow[]): ListingRoom[] {
-  const groups = new Map<string, ListingRoom>();
-
-  for (const row of rows) {
-    const key = [
-      row.room_type,
-      row.price_per_night,
-      row.capacity,
-      row.num_beds,
-      row.bed_size ?? "",
-    ].join("|");
-
-    const existing = groups.get(key);
-
-    if (existing) {
-      existing.roomCount += 1;
-    } else {
-      groups.set(key, roomRowToListingRoom(row));
-    }
-  }
-
-  return [...groups.values()];
 }
 
 async function getRoomsForHotel(hotelId: string) {
@@ -148,23 +73,8 @@ function toListing(hotel: HotelRow, rooms: RoomRow[]): Listing {
       caption: "",
     })),
 
-    rooms: groupRooms(rooms),
+    rooms: groupRoomRows(rooms).map((g) => g.room),
   };
-}
-
-function draftRoomToRows(hotelId: string, room: ListingRoom) {
-  const bed = parseBedConfiguration(room.bedConfiguration);
-  const count = Math.max(1, room.roomCount);
-
-  return Array.from({ length: count }, () => ({
-    hotel_id: hotelId,
-    room_type: room.roomType,
-    price_per_night: room.nightlyRateCents / 100,
-    capacity: room.maxGuests,
-    num_beds: bed.num_beds,
-    bed_size: bed.bed_size,
-    tags: [],
-  }));
 }
 
 // The rooms table rejects num_beds < 1 and capacity < 1. Checking before ANY write means a bad
@@ -179,30 +89,22 @@ function checkRooms(rooms: ListingRoom[]): Error | null {
   return null;
 }
 
-async function replaceRooms(hotelId: string, rooms: ListingRoom[]) {
-  const supabase = await getSupabase();
-
-  // Re-checked here as a last guard before the delete (create/update check first, before
-  // touching the hotel). Rooms are still deleted and re-created on save, which drops their
-  // bookings via the ON DELETE CASCADE foreign key: audit F1 needs an update-in-place redesign.
+// Saves the editor's rooms in place (audit F1): rooms keep their ids, so their bookings are kept.
+// Rooms with bookings are never deleted; save_listing_rooms refuses the save instead.
+async function saveRooms(hotelId: string, rooms: ListingRoom[]) {
+  // Re-checked here as a last guard (create/update check first, before touching the hotel)
   const roomError = checkRooms(rooms);
   if (roomError) return { error: roomError };
-  const rows = rooms.flatMap((room) => draftRoomToRows(hotelId, room));
 
-  const { error: deleteError } = await supabase
-    .from("rooms")
-    .delete()
-    .eq("hotel_id", hotelId);
+  const current = await getRoomsForHotel(hotelId);
+  if (current.error) return { error: current.error };
 
-  if (deleteError) return { error: deleteError };
+  const changes = planRoomChanges((current.data ?? []) as RoomRow[], rooms);
+  if (!hasRoomChanges(changes)) return { error: null };
 
-  if (rows.length === 0) return { error: null };
-
-  const { error: insertError } = await supabase
-    .from("rooms")
-    .insert(rows);
-
-  return { error: insertError };
+  const supabase = await getSupabase();
+  const { error } = await supabase.rpc("save_listing_rooms", { p_hotel_id: hotelId, p_changes: changes });
+  return { error };
 }
 
 export async function getMyListings(ownerId: string) {
@@ -279,7 +181,7 @@ export async function createListing(
     return { data: null, error };
   }
 
-  const roomsResult = await replaceRooms(hotel.id, draft.rooms);
+  const roomsResult = await saveRooms(hotel.id, draft.rooms);
 
   if (roomsResult.error) {
     return { data: null, error: roomsResult.error };
@@ -318,7 +220,7 @@ export async function updateListing(
     return { data: null, error };
   }
 
-  const roomsResult = await replaceRooms(id, draft.rooms);
+  const roomsResult = await saveRooms(id, draft.rooms);
 
   if (roomsResult.error) {
     return { data: null, error: roomsResult.error };
