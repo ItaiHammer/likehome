@@ -8,7 +8,6 @@ import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
 import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
-import { createClient } from "@/utils/supabase/client";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Card, Field, Stars } from "../../_components/ui";
@@ -123,7 +122,6 @@ export function StayReservation({
   search?: string;
 }) {
   const router = useRouter();
-  const supabase = createClient();
 
   const [checkIn, setCheckIn] = useState(initial.checkIn ?? "");
   const [checkOut, setCheckOut] = useState(initial.checkOut ?? "");
@@ -190,58 +188,53 @@ export function StayReservation({
 
   const detectedBrand = getCardBrand(cardNumber);
 
-  // Load saved payment methods from Supabase & LocalStorage
   useEffect(() => {
     async function loadSavedPaymentMethods() {
-      let fetchedCards: PaymentMethod[] = [];
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        const { data: pms } = await supabase
-            .from("payment_methods")
-            .select("id, brand, last4, exp_month, exp_year, is_default")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: true });
-
-        if (pms && pms.length > 0) {
-          fetchedCards = pms.map((pm) => ({
-            id: pm.id,
-            brand: pm.brand as PaymentMethod["brand"],
-            last4: pm.last4,
-            expMonth: pm.exp_month,
-            expYear: pm.exp_year,
-            isDefault: pm.is_default,
-          }));
-        }
-      }
-
-      // Merge cards stored in localStorage
       try {
-        const localCards: PaymentMethod[] = JSON.parse(
-            localStorage.getItem("likehome_saved_cards") || "[]"
-        );
-        const existingLast4 = new Set(fetchedCards.map((c) => c.last4));
-        for (const lc of localCards) {
-          if (!existingLast4.has(lc.last4)) {
-            fetchedCards.push(lc);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to load local cards", e);
-      }
+        const response = await fetch("/api/saved-payment-methods");
+        const result = await response.json();
 
-      if (fetchedCards.length > 0) {
-        setSavedCards(fetchedCards);
-        const defaultCard = fetchedCards.find((c) => c.isDefault) || fetchedCards[0];
-        if (defaultCard) setSelectedCardId(defaultCard.id);
+        if (!response.ok) {
+            throw new Error(result.error ?? "Could not load payment methods.");
+        }
+
+        const cards: PaymentMethod[] = (result.paymentMethods ?? []).map(
+          (pm: {
+            id: string;
+            brand: string;
+            last4: string;
+            exp_month: number;
+            exp_year: number;
+            is_default?: boolean;
+          }) => ({
+            id: pm.id,
+            brand:
+              pm.brand === "visa"
+                ? "Visa"
+                : pm.brand === "mastercard"
+                  ? "Mastercard"
+                  : pm.brand === "amex"
+                    ? "Amex"
+                    : "Discover",
+            last4: pm.last4,
+            expMonth: String(pm.exp_month).padStart(2, "0"),
+            expYear: String(pm.exp_year),
+            isDefault: pm.is_default,
+          })
+        );
+
+        setSavedCards(cards);
+
+        const defaultCard = cards.find((card) => card.isDefault) ?? cards[0];
+        if (defaultCard) {
+          setSelectedCardId(defaultCard.id);
+        }
+      } catch (error) {
+        console.error("Failed to load saved payment methods:", error);
       }
     }
-
     loadSavedPaymentMethods();
-  }, [supabase]);
+  }, []);
 
   const setDatesOpen = useCallback((open: boolean) => setPopover((p) => (open ? "dates" : p === "dates" ? null : p)), []);
   const setGuestsOpen = useCallback((open: boolean) => setPopover((p) => (open ? "guests" : p === "guests" ? null : p)), []);
@@ -434,18 +427,30 @@ export function StayReservation({
     const snapshot = { email: text("email"), roomName: room.name, checkIn, checkOut, adults, children, total };
     setSubmitting(true);
 
-    const selectedCard = savedCards.find((c) => c.id === selectedCardId);
-    const payload = checkoutRequest({
-      roomId: room.id,
-      checkIn,
-      checkOut,
-      guests: adults + children,
-      cardNumber: selectedCard ? `•••• •••• •••• ${selectedCard.last4}` : text("cardNumber"),
-      expiry: selectedCard ? `${selectedCard.expMonth}/${selectedCard.expYear.slice(-2)}` : text("expiry"),
-      cvc: selectedCard ? "123" : text("cvc"),
-      cardName: selectedCard ? text("firstName") : text("cardName"),
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
+    const selectedCard = savedCards.find(
+      (card) => card.id === selectedCardId
+    );
+
+    const payload = selectedCard
+      ? checkoutRequest({
+        roomId: room.id,
+        checkIn,
+        checkOut,
+        guests: adults + children,
+        savedPaymentMethodId: selectedCard.id,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      })
+      : checkoutRequest({
+        roomId: room.id,
+        checkIn,
+        checkOut,
+        guests: adults + children,
+        cardNumber: text("cardNumber"),
+        expiry: text("expiry"),
+        cvc: text("cvc"),
+        cardName: text("cardName"),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
 
     saveRequest.current?.abort();
     const request = new AbortController();
@@ -465,48 +470,6 @@ export function StayReservation({
     };
 
     try {
-      // ALWAYS Save payment method if "saveCardForFuture" is checked on a new card
-      if (selectedCardId === "new" && saveCardForFuture) {
-        const rawDigits = cardNumber.replace(/\D/g, "");
-        const last4 = rawDigits.slice(-4);
-        const [monthStr = "", yearStr = ""] = (typedExpiry || "").split("/");
-        const expMonth = monthStr.padStart(2, "0");
-        const expYear = `20${yearStr}`;
-
-        const newCardObj: PaymentMethod = {
-          id: `card_${Date.now()}`,
-          brand: detectedBrand,
-          last4,
-          expMonth,
-          expYear,
-          isDefault: savedCards.length === 0,
-        };
-
-        // Instant local persistence update
-        try {
-          const localCards = JSON.parse(localStorage.getItem("likehome_saved_cards") || "[]");
-          localStorage.setItem("likehome_saved_cards", JSON.stringify([...localCards, newCardObj]));
-        } catch (e) {
-          console.error("Failed to write card to localStorage", e);
-        }
-
-        // Supabase database insert
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (user) {
-          await supabase.from("payment_methods").insert({
-            user_id: user.id,
-            brand: detectedBrand,
-            last4,
-            exp_month: expMonth,
-            exp_year: expYear,
-            is_default: savedCards.length === 0,
-          });
-        }
-      }
-
       if (!stay.bookable) {
         window.clearTimeout(confirmTimer.current);
         confirmTimer.current = window.setTimeout(() => {
