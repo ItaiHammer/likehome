@@ -38,19 +38,18 @@ export function SavedHotelsList({ allHotels }: { allHotels: Hotel[] }) {
         return <p className="text-sm text-slate">Loading saved hotels...</p>;
     }
 
-    const savedHotelsRaw: Hotel[] = savedIds
-        .map((id) => {
+    const savedHotelsRaw = savedIds
+        .map((id): Hotel | null => {
             const strId = String(id);
 
             let staticStay = STAYS.find(
-                (s: any) => String(s.id) === strId || String(s.hotelId) === strId || String(s.slug) === strId
+                (stay) => stay.slug === strId
             );
-
             const dbHotel = allHotels.find((h) => String(h.id) === strId);
 
             if (!staticStay && dbHotel) {
                 const cleanDbName = dbHotel.name.toLowerCase().trim();
-                staticStay = STAYS.find((s: any) => {
+                staticStay = STAYS.find((s) => {
                     const cleanStayName = s.name.toLowerCase().trim();
                     return cleanDbName.includes(cleanStayName) || cleanStayName.includes(cleanDbName);
                 });
@@ -72,15 +71,18 @@ export function SavedHotelsList({ allHotels }: { allHotels: Hotel[] }) {
             return {
                 id: strId,
                 name,
-                city: staticStay?.city || matchedDbHotel?.city || null,
-                region: staticStay?.region || matchedDbHotel?.region || null,
-                country: staticStay?.country || matchedDbHotel?.country || null,
+                city: staticStay?.location ?? matchedDbHotel?.city ?? null,
+                region: matchedDbHotel?.region ?? null,
+                country: matchedDbHotel?.country ?? null,
                 photoUrl:
-                    (staticStay as any)?.photoUrl ||
-                    (staticStay as any)?.image ||
-                    matchedDbHotel?.photoUrl ||
+                    staticStay?.photos?.[0] ??
+                    matchedDbHotel?.photoUrl ??
                     null,
-                pricePerNight: matchedDbHotel?.pricePerNight ?? null,
+                pricePerNight:
+                    matchedDbHotel?.pricePerNight ??
+                    (staticStay
+                        ? Math.min(...staticStay.rooms.map((room) => room.nightly))
+                        : null),
                 tags: staticStay?.tags || matchedDbHotel?.tags || null,
             };
         })
@@ -119,7 +121,9 @@ export function SavedHotelsList({ allHotels }: { allHotels: Hotel[] }) {
                 <div className="relative inline-block text-left">
                     <select
                         value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value as any)}
+                        onChange={(e) =>
+                            setSortBy(e.target.value as typeof sortBy)
+                        }
                         className="appearance-none rounded-control border border-edge bg-surface px-3 py-1.5 pr-8 text-xs font-medium text-slate shadow-sm transition-colors hover:border-slate/40 focus:outline-none cursor-pointer"
                     >
                         <option value="recent">Recently saved</option>
