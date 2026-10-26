@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
+import { freeUnitId, soldOutNights } from "@/lib/room-availability";
 import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
@@ -106,14 +107,21 @@ export function StayReservation({
   // After Reserve, the room list is locked until the guest goes back to their stay
   const roomsLocked = step !== "stay";
 
-  const room = stay.rooms.find((r) => r.id === roomId)!;
   const nights = nightsBetween(checkIn, checkOut);
+  // A room card is booked for these dates when every one of its identical rooms is (audit F9)
+  const rooms = useMemo(
+    () =>
+      stay.rooms.map((r) =>
+        !r.soldOut && nights > 0 && freeUnitId(r, checkIn, checkOut) === null ? { ...r, soldOut: true, bookedForDates: true } : r,
+      ),
+    [stay.rooms, checkIn, checkOut, nights],
+  );
+  const room = rooms.find((r) => r.id === roomId)!;
   const subtotal = room.nightly * nights;
   const cleaning = nights ? stay.cleaningFee : 0;
   const taxes = Math.round((subtotal + cleaning) * (stay.taxRate ?? TAX_RATE));
   const total = subtotal + cleaning + taxes;
   const guests = adults + children;
-  // Free cancellation ends 2 days before check-in; for a stay that starts sooner, it's already over.
   // Today is "" while rendering on the server, so the server and the browser agree on first render.
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
   // Nights the guest already has booked at other hotels, as days from today, so the calendar crosses
@@ -129,12 +137,15 @@ export function StayReservation({
     });
   }, [otherStays, today]);
 
-  const blockedOffsets = [
-    ...new Set([...stay.blockedNights, ...userBookingBlockedOffsets]),
-  ];
+  // Nights when every room here is booked. Also from `today`, so it fills in once in the browser.
+  const soldOutOffsets = useMemo(
+    () => (today ? soldOutNights(stay.rooms).filter((night) => night >= today).map((night) => nightsBetween(today, night)) : []),
+    [stay.rooms, today],
+  );
 
-  const cancelBy = checkIn ? addDays(checkIn, -2) : "";
-  const freeCancel = !checkIn || !today || cancelBy > today;
+  const blockedOffsets = [
+    ...new Set([...stay.blockedNights, ...soldOutOffsets, ...userBookingBlockedOffsets]),
+  ];
 
   const setDatesOpen = useCallback((open: boolean) => setPopover((p) => (open ? "dates" : p === "dates" ? null : p)), []);
   const setGuestsOpen = useCallback((open: boolean) => setPopover((p) => (open ? "guests" : p === "guests" ? null : p)), []);
@@ -197,6 +208,7 @@ export function StayReservation({
     if (stay.bookable && checkIn < todayISO()) return { field: "dates", message: "That check-in date is too soon to book. Pick a later date." };
     const clash = stay.bookable ? findOverlap(otherStays, checkIn, checkOut) : null;
     if (clash) return { field: "dates", message: overlapMessage(clash) };
+    if (room.bookedForDates) return { field: "guests", message: `${room.name} is booked for those dates. Pick another room or change your dates.` };
     if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     return null;
@@ -334,7 +346,8 @@ export function StayReservation({
     }
 
     const payload = checkoutRequest({
-      roomId: room.id,
+      // Whichever of the identical rooms is free for these dates
+      roomId: freeUnitId(room, checkIn, checkOut) ?? room.id,
       checkIn,
       checkOut,
       guests: adults + children,
@@ -582,10 +595,9 @@ export function StayReservation({
 
             {checkIn && (
               <Card tone="tint" padding="none" className="mt-5 p-4 text-sm">
-                <p className="font-semibold text-ink">{freeCancel ? `Free cancellation until ${formatDate(cancelBy)}` : "No free cancellation"}</p>
-                <p className="mt-1 text-slate">
-                  {freeCancel ? "After that, the first night is non-refundable." : "This booking can’t be cancelled for free. The first night is non-refundable."}
-                </p>
+                {/* The rule cancel_reservation applies (audit F4): only insured bookings are refunded */}
+                <p className="font-semibold text-ink">Non-refundable</p>
+                <p className="mt-1 text-slate">You can cancel any time before check-in, but without cancellation insurance there’s no refund.</p>
               </Card>
             )}
 
@@ -659,14 +671,14 @@ export function StayReservation({
             </p>
           )}
           <RoomOptions
-            rooms={stay.rooms}
+            rooms={rooms}
             selectedId={roomId}
             onSelect={(id) => {
               setRoomId(id);
               clear("guests");
             }}
             locked={roomsLocked}
-            note={() => (freeCancel ? "Free cancellation" : "No free cancellation")}
+            note={() => "Non-refundable"}
           />
         </fieldset>
 
