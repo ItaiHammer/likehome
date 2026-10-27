@@ -164,9 +164,12 @@ export function validateReservationInput(
     else if (guests !== party) {
       return { ok: false, error: 'guests must equal adults plus children.' }
     }
-  } else if (children !== undefined && children > 0 && (guests === undefined || children >= guests)) {
-    // Without adults, the children are counted in guests
-    return { ok: false, error: 'children are counted in guests, and every booking needs an adult.' }
+  } else if (children !== undefined) {
+    // Without adults (a booking change sends only these), the children are counted in guests
+    if (children > 0 && (guests === undefined || children >= guests)) {
+      return { ok: false, error: 'children are counted in guests, and every booking needs an adult.' }
+    }
+    if (guests !== undefined) adults = guests - children
   }
 
   return {

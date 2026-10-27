@@ -7,6 +7,7 @@ import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
 import { freeUnitId, soldOutNights } from "@/lib/room-availability";
+import { roomFits } from "@/lib/stay-filters";
 import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
@@ -184,9 +185,10 @@ export function StayReservation({
   }, [priceKey, initialKey, liveKey, stay.slug]);
 
   // Nights when every room here is booked. Also from `today`, so it fills in once in the browser.
+  // Not for LiteAPI hotels: LiteAPI can offer a party rooms the hotel hasn't saved yet.
   const soldOutOffsets = useMemo(
-    () => (today ? soldOutNights(stay.rooms).filter((night) => night >= today).map((night) => nightsBetween(today, night)) : []),
-    [stay.rooms, today],
+    () => (today ? soldOutNights(stay.liteapiId ? [] : stay.rooms).filter((night) => night >= today).map((night) => nightsBetween(today, night)) : []),
+    [stay.rooms, stay.liteapiId, today],
   );
 
   const blockedOffsets = [
@@ -255,6 +257,7 @@ export function StayReservation({
     const clash = stay.bookable ? findOverlap(otherStays, checkIn, checkOut) : null;
     if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
+    if (!roomFits(room, guests, adults, children)) return { field: "guests", message: `${room.name} is too small for ${guestLabel(adults, children)}. Pick another room.` };
     if (room.bookedForDates) return { field: "guests", message: `${room.name} is booked for those dates. Pick another room or change your dates.` };
     if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     return null;
