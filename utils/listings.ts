@@ -8,6 +8,7 @@ import {
 } from "@/types/listing";
 import { PROPERTY_TYPES, type PropertyType } from "@/types/listing";
 import { groupRoomRows, parseBedConfiguration, planRoomChanges, type RoomRow } from "@/lib/listing-rooms";
+import { removedPhotoPaths } from "@/lib/listing-photos";
 import { amenitiesFromTags, countryFromStored, countryToStored, mergeAmenityTags } from "@/lib/listing-storage";
 
 type HotelRow = {
@@ -183,10 +184,25 @@ export async function updateListing(
   id: string,
   draft: ListingDraft
 ) {
-  const { data: current } = await getHotel(id);
-  const existingTags = ((current as HotelRow | null)?.tags ?? []) as string[];
+  const { data } = await getHotel(id);
+  const current = data as HotelRow | null;
+  const existingTags = (current?.tags ?? []) as string[];
 
   const { error } = await saveListing(id, draft, existingTags);
   if (error) return { data: null, error };
+
+  // Photos removed by this save: delete their uploaded files too, so they stop being public.
+  // Only after the save worked; a failed delete is logged and doesn't fail the save.
+  const removed = removedPhotoPaths(
+    current?.photo_urls ?? [],
+    draft.photos.map((photo) => photo.url),
+    current?.owner_id ?? "",
+  );
+  if (removed.length > 0) {
+    const supabase = await getSupabase();
+    const { error: removeError } = await supabase.storage.from("listing-photos").remove(removed);
+    if (removeError) console.error("Removing listing photos failed:", removeError.message);
+  }
+
   return getListing(id);
 }

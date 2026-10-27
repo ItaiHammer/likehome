@@ -6,8 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
-import { freeUnitId, markBookedRooms, mergeBookedNights, outsideWindow, soldOutNights } from "@/lib/room-availability";
-import { createClient } from "@/utils/supabase/client";
+import { freeUnitId, markBookedRooms, mergeBookedNights, soldOutNights } from "@/lib/room-availability";
 import { matchingRoom } from "@/lib/stay-filters";
 import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
@@ -22,6 +21,7 @@ import { GuestsField, guestLabel } from "./GuestsField";
 import { PhotoGallery } from "./PhotoGallery";
 import { RoomOptions } from "./RoomOptions";
 import { StayOffers } from "./StayOffers";
+import { useBookedNightsLookup } from "./useBookedNightsLookup";
 
 type Step = "stay" | "details" | "done";
 type Errors = Partial<Record<string, string>>;
@@ -110,39 +110,13 @@ export function StayReservation({
   const roomsLocked = step !== "stay";
 
   const nights = nightsBetween(checkIn, checkOut);
-  // The page looked up booked nights for about the next 400 days. Dates after that are looked up
-  // for those exact nights, so a room booked then isn't shown as free.
-  const lookupKey =
-    stay.bookable && nights > 0 && nights <= MAX_NIGHTS && outsideWindow(stay.bookedWindow, checkIn, checkOut)
-      ? `${checkIn}|${checkOut}`
-      : "";
-  const [extraNights, setExtraNights] = useState<{ key: string; rows: { room_id: string; night: string }[] } | null>(null);
-  const lookingUp = lookupKey !== "" && extraNights?.key !== lookupKey;
-  useEffect(() => {
-    if (!lookupKey) return;
-    let cancelled = false;
-    const [from, to] = lookupKey.split("|");
-    createClient()
-      .rpc("get_booked_nights", { p_hotel_id: stay.slug, p_from: from, p_to: to })
-      .then(
-        ({ data, error }) => {
-          if (error) console.error("get_booked_nights failed:", error.message);
-          // A failed lookup doesn't block booking: the database still refuses a booked room
-          if (!cancelled) setExtraNights({ key: lookupKey, rows: (data ?? []) as { room_id: string; night: string }[] });
-        },
-        () => {
-          if (!cancelled) setExtraNights({ key: lookupKey, rows: [] });
-        },
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [lookupKey, stay.slug]);
+  // Dates after the page's ~400-day lookup are looked up for their exact nights
+  const { rows: extraNights, lookingUp } = useBookedNightsLookup(stay.slug, stay.bookedWindow, checkIn, checkOut, !!stay.bookable);
   // A room card is booked for these dates when every one of its identical rooms is (audit F9)
-  const rooms = useMemo(() => {
-    const known = extraNights && extraNights.key === lookupKey ? mergeBookedNights(stay.rooms, extraNights.rows) : stay.rooms;
-    return markBookedRooms(known, checkIn, checkOut);
-  }, [stay.rooms, extraNights, lookupKey, checkIn, checkOut]);
+  const rooms = useMemo(
+    () => markBookedRooms(mergeBookedNights(stay.rooms, extraNights), checkIn, checkOut),
+    [stay.rooms, extraNights, checkIn, checkOut],
+  );
   const guests = adults + children;
   // While choosing, a room that's booked for the dates isn't kept selected: the cheapest open room
   // that fits the party takes its place (audit R5). The guest's own pick comes back if the dates

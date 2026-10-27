@@ -99,3 +99,30 @@ test('nights looked up later are added to the right rooms, so a room booked then
   assert.notEqual(dated[1].soldOut, true)
   assert.equal(mergeBookedNights(rooms, []), rooms)
 })
+
+// Retest: switching rooms on a booking
+test('a booking being changed: its own room is free for its own nights, other guests\' rooms are not', async () => {
+  const { cardsForBooking, freeUnitId, markBookedRooms, withoutStay } = await import('../lib/room-availability.ts')
+  // Rooms A and B booked for the same dates; this booking holds B
+  const rooms = [
+    { id: 'A', units: [{ id: 'A', bookedNights: ['2027-05-01', '2027-05-02'] }] },
+    { id: 'B1', units: [{ id: 'B1', bookedNights: [] }, { id: 'B2', bookedNights: ['2027-05-01', '2027-05-02'] }] },
+  ]
+  const cards = withoutStay(cardsForBooking(rooms, 'B2'), 'B2', '2027-05-01', '2027-05-03')
+  assert.equal(cards[1].id, 'B2') // the card is named by the booked room
+  assert.deepEqual(cards[1].units.map((u) => u.id), ['B2', 'B1'])
+  const dated = markBookedRooms(cards, '2027-05-01', '2027-05-03')
+  assert.equal(dated[0].bookedForDates, true) // A shows as unavailable
+  assert.notEqual(dated[1].soldOut, true)
+  assert.equal(freeUnitId(dated[1], '2027-05-01', '2027-05-03'), 'B2') // keeps its own room
+})
+
+test('photos removed by a save: only the owner\'s uploaded files are deleted', async () => {
+  const { removedPhotoPaths } = await import('../lib/listing-photos.ts')
+  const base = 'https://x.supabase.co/storage/v1/object/public/listing-photos/'
+  const before = [`${base}u1/a.jpg`, `${base}u1/b.png`, '/listings/samples/exterior.svg', `${base}u2/c.jpg`, 'https://elsewhere.com/d.jpg']
+  const after = [`${base}u1/b.png`]
+  assert.deepEqual(removedPhotoPaths(before, after, 'u1'), ['u1/a.jpg'])
+  assert.deepEqual(removedPhotoPaths(before, before, 'u1'), [])
+  assert.deepEqual(removedPhotoPaths([`${base}u1/../u2/x.jpg`], [], 'u1'), [])
+})

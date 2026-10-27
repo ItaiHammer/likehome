@@ -17,3 +17,23 @@ export function photoProblem(file: { type: string; size: number }): string | nul
   if (file.size > MAX_PHOTO_BYTES) return "Photos can be up to 5 MB.";
   return null;
 }
+
+const PUBLIC_PATH = "/storage/v1/object/public/listing-photos/";
+
+/**
+ * Storage paths of uploaded photos a save removed from a listing, so their files can be deleted
+ * too (audit retest: a removed photo stayed publicly reachable). Only files in the owner's own
+ * folder of the listing-photos bucket; sample photos and other hosts are never touched.
+ */
+export function removedPhotoPaths(before: readonly string[], after: readonly string[], ownerId: string): string[] {
+  const kept = new Set(after);
+  const paths: string[] = [];
+  for (const url of new Set(before)) {
+    if (kept.has(url)) continue;
+    const at = url.indexOf(PUBLIC_PATH);
+    if (at === -1) continue;
+    const path = decodeURIComponent(url.slice(at + PUBLIC_PATH.length).split("?")[0]);
+    if (path.startsWith(`${ownerId}/`) && !path.includes("..")) paths.push(path);
+  }
+  return paths;
+}
