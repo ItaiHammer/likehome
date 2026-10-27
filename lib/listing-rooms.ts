@@ -2,7 +2,7 @@
 // The listing editor shows rooms grouped by type ("3 × Coastal king"), but the rooms table has one row
 // per physical room, and bookings point at those rows. Saving used to delete every row and insert new
 // ones, which deleted every booking with them (audit F1). planRoomChanges works out what actually
-// changed so the database can update rooms in place (save_listing_rooms).
+// changed so the database can update rooms in place (save_listing).
 import type { ListingRoom } from "../types/listing.ts";
 
 export type RoomRow = {

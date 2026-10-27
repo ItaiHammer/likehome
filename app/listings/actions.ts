@@ -11,7 +11,7 @@ export type SaveResult =
   | { status: "invalid"; errors: HotelInfoErrors }
   | { status: "failed"; message?: string };
 
-// save_listing_rooms says why rooms couldn't be removed (they have bookings): show that, not a generic error
+// save_listing says why rooms couldn't be removed (they have bookings): show that, not a generic error
 function failed(error: unknown): SaveResult {
   const e = error as { code?: string; message?: string } | null;
   return e?.code === "P0001" && e.message ? { status: "failed", message: e.message } : { status: "failed" };

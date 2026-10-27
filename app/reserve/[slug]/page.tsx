@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { getOtherStays } from "@/lib/other-stays";
+import { markBookedRooms } from "@/lib/room-availability";
 import { matchingRoom, originalSearch, readRoomFilters } from "@/lib/stay-filters";
 import { countNights, MAX_NIGHTS, parseDate, todayUTC } from "@/utils/reservation-logic";
 import { createClient } from "@/utils/supabase/server";
@@ -43,11 +44,13 @@ function readChoices(params: Record<string, string | string[] | undefined>, stay
     countNights(checkIn, checkOut) <= MAX_NIGHTS;
   const adults = count("adults", 1, 16);
   const children = count("children", 0, 10);
-  // Without a picked room, the cheapest one that passes the search's filters, as the search matched it
+  // Rooms fully booked for the linked dates count as sold out, so neither choice below lands on one (audit R5)
+  const rooms = datesOk ? markBookedRooms(stay.rooms, checkIn, checkOut) : stay.rooms;
+  // Without a picked room, the cheapest open one that passes the search's filters, as the search matched it
   const room =
     // A link can name any of a card's identical rooms
-    stay.rooms.find((r) => (r.id === one("room") || r.units?.some((u) => u.id === one("room"))) && !r.soldOut) ??
-    matchingRoom(stay.rooms, stay.tags, readRoomFilters(params, (adults ?? 2) + (children ?? 0), { adults, children }));
+    rooms.find((r) => (r.id === one("room") || r.units?.some((u) => u.id === one("room"))) && !r.soldOut) ??
+    matchingRoom(rooms, stay.tags, readRoomFilters(params, (adults ?? 2) + (children ?? 0), { adults, children }));
 
   return {
     ...(datesOk ? { checkIn, checkOut } : {}),

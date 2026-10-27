@@ -331,6 +331,7 @@ describe('success', () => {
       check_out: validBody().check_out,
       total_price: 389.97,
       guests: 2,
+      children: 0,
     })
     assert.deepEqual(createPayment.mock.calls[0].arguments[0], {
       reservation_id: 'res-1',

@@ -6,7 +6,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
-import { freeUnitId, soldOutNights } from "@/lib/room-availability";
+import { freeUnitId, markBookedRooms, soldOutNights } from "@/lib/room-availability";
+import { matchingRoom } from "@/lib/stay-filters";
 import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
@@ -109,19 +110,20 @@ export function StayReservation({
 
   const nights = nightsBetween(checkIn, checkOut);
   // A room card is booked for these dates when every one of its identical rooms is (audit F9)
-  const rooms = useMemo(
-    () =>
-      stay.rooms.map((r) =>
-        !r.soldOut && nights > 0 && freeUnitId(r, checkIn, checkOut) === null ? { ...r, soldOut: true, bookedForDates: true } : r,
-      ),
-    [stay.rooms, checkIn, checkOut, nights],
-  );
-  const room = rooms.find((r) => r.id === roomId)!;
+  const rooms = useMemo(() => markBookedRooms(stay.rooms, checkIn, checkOut), [stay.rooms, checkIn, checkOut]);
+  const guests = adults + children;
+  // While choosing, a room that's booked for the dates isn't kept selected: the cheapest open room
+  // that fits the party takes its place (audit R5). The guest's own pick comes back if the dates
+  // change back. Once past "Reserve", the room stays put and the checks below catch any problem.
+  const chosen = rooms.find((r) => r.id === roomId)!;
+  const room =
+    chosen.soldOut && step === "stay"
+      ? (matchingRoom(rooms, stay.tags, { guests, adults, children, tags: [] }) ?? chosen)
+      : chosen;
   const subtotal = room.nightly * nights;
   const cleaning = nights ? stay.cleaningFee : 0;
   const taxes = Math.round((subtotal + cleaning) * (stay.taxRate ?? TAX_RATE));
   const total = subtotal + cleaning + taxes;
-  const guests = adults + children;
   // Today is "" while rendering on the server, so the server and the browser agree on first render.
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
   // Nights the guest already has booked at other hotels, as days from today, so the calendar crosses
@@ -280,6 +282,8 @@ export function StayReservation({
     if (!account) return router.push(signInHref());
     setErrors({});
     setPopover(null);
+    // Keep the room shown as selected (it may have stood in for a booked pick) for the next steps
+    setRoomId(room.id);
     goTo("details");
   }
 
@@ -672,7 +676,7 @@ export function StayReservation({
           )}
           <RoomOptions
             rooms={rooms}
-            selectedId={roomId}
+            selectedId={room.id}
             onSelect={(id) => {
               setRoomId(id);
               clear("guests");

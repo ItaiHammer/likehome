@@ -88,6 +88,8 @@ export async function POST(request: Request) {
     check_out: input.check_out,
     total_price,
     guests: input.guests,
+    // Saved so the booking keeps its child count (audit R4)
+    children: input.children,
   })
 
   if (error) {

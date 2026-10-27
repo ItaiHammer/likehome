@@ -51,3 +51,24 @@ test('photos must be an accepted image type and at most 5 MB', () => {
   assert.match(photoProblem({ type: 'application/pdf', size: 10 }), /Only JPG/)
   assert.match(photoProblem({ type: 'image/png', size: 6 * 1024 * 1024 }), /5 MB/)
 })
+
+// Audit R5: the room picked for a stay must be free for its dates
+test('the cheapest room booked for the dates is skipped; a free one is picked', async () => {
+  const { markBookedRooms } = await import('../lib/room-availability.ts')
+  const { matchingRoom } = await import('../lib/stay-filters.ts')
+  const rooms = [
+    { id: 'cheap', nightly: 101, sleeps: 2, units: [{ id: 'cheap', bookedNights: ['2027-04-10', '2027-04-11'] }] },
+    { id: 'pricey', nightly: 202, sleeps: 2, units: [{ id: 'pricey', bookedNights: [] }] },
+  ]
+  const dated = markBookedRooms(rooms, '2027-04-10', '2027-04-12')
+  assert.equal(dated[0].soldOut, true)
+  assert.equal(dated[0].bookedForDates, true)
+  assert.equal(matchingRoom(dated, [], { guests: 1, tags: [] }).id, 'pricey')
+  // Other dates: the cheap room is open again
+  assert.equal(matchingRoom(markBookedRooms(rooms, '2027-04-12', '2027-04-14'), [], { guests: 1, tags: [] }).id, 'cheap')
+  // Every room booked: nothing is offered as bookable
+  const allBooked = markBookedRooms([rooms[0]], '2027-04-10', '2027-04-12')
+  assert.equal(matchingRoom(allBooked, [], { guests: 1, tags: [] }), null)
+  // A sample room already sold out stays as it was
+  assert.deepEqual(markBookedRooms([{ id: 'v', soldOut: true }], '2027-04-10', '2027-04-12'), [{ id: 'v', soldOut: true }])
+})

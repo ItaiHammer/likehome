@@ -3,8 +3,8 @@
 -- Run after setup.sql and the migrations (see README.md). Each step says what should happen.
 reset role;
 truncate public.points_transactions, public.points_balances, public.transactions, public.payments, public.reservations, public.rooms, public.hotels cascade;
-insert into public.hotels (id, owner_id, name) values
-  ('00000000-0000-0000-0000-0000000000a1', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'Owner hotel');
+insert into public.hotels (id, owner_id, name, description, address, city) values
+  ('00000000-0000-0000-0000-0000000000a1', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'Owner hotel', 'Original', '1 Main', 'San Jose');
 insert into public.rooms (id, hotel_id, room_type, price_per_night, capacity, num_beds, bed_size, created_at) values
   ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', 'Coastal king', 100, 2, 1, 'King', now() - interval '3 min'),
   ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000a1', 'Coastal king', 100, 2, 1, 'King', now() - interval '2 min'),
@@ -74,30 +74,46 @@ select count(*) from public.get_booked_nights('00000000-0000-0000-0000-000000000
 \echo '--- 16. returns only room ids and nights'
 select proargnames from pg_proc where proname = 'get_booked_nights';
 
-\echo '=== F1 save_listing_rooms'
+\echo '=== F1 / R3 save_listing'
 set role authenticated;
 set test.uid = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 \echo '--- 17. not the owner: REFUSED'
-select public.save_listing_rooms('00000000-0000-0000-0000-0000000000a1', '{"remove":[{"ids":["00000000-0000-0000-0000-000000000009"],"count":1,"room_type":"Twin"}]}');
+select public.save_listing('00000000-0000-0000-0000-0000000000a1', '{"name":"Owner hotel","description":"Original","address":"1 Main","city":"San Jose","tags":[],"photo_urls":[]}', '{"remove":[{"ids":["00000000-0000-0000-0000-000000000009"],"count":1,"room_type":"Twin"}]}');
 set test.uid = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 \echo '--- 18. owner reprices the 3 kings in place: same ids, bookings kept'
-select public.save_listing_rooms('00000000-0000-0000-0000-0000000000a1', '{"update":[{"ids":["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002","00000000-0000-0000-0000-000000000003"],"room_type":"Ocean king","price_per_night":120,"capacity":2,"num_beds":1,"bed_size":"King"}]}');
+select public.save_listing('00000000-0000-0000-0000-0000000000a1', '{"name":"Owner hotel","description":"Original","address":"1 Main","city":"San Jose","tags":[],"photo_urls":[]}', '{"update":[{"ids":["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002","00000000-0000-0000-0000-000000000003"],"room_type":"Ocean king","price_per_night":120,"capacity":2,"num_beds":1,"bed_size":"King"}]}');
 reset role;
 select id, room_type, price_per_night from public.rooms order by id;
 select count(*) as reservations_kept from public.reservations;
 set role authenticated;
 \echo '--- 19. owner goes from 3 kings to 1: rooms 1 and 3 are booked, so REFUSED with a message'
-select public.save_listing_rooms('00000000-0000-0000-0000-0000000000a1', '{"remove":[{"ids":["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002","00000000-0000-0000-0000-000000000003"],"count":2,"room_type":"Ocean king"}]}');
+select public.save_listing('00000000-0000-0000-0000-0000000000a1', '{"name":"Owner hotel","description":"Original","address":"1 Main","city":"San Jose","tags":[],"photo_urls":[]}', '{"remove":[{"ids":["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002","00000000-0000-0000-0000-000000000003"],"count":2,"room_type":"Ocean king"}]}');
 \echo '--- 20. 3 kings to 2: removes the unbooked room 2 only'
-select public.save_listing_rooms('00000000-0000-0000-0000-0000000000a1', '{"remove":[{"ids":["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002","00000000-0000-0000-0000-000000000003"],"count":1,"room_type":"Ocean king"}]}');
+select public.save_listing('00000000-0000-0000-0000-0000000000a1', '{"name":"Owner hotel","description":"Original","address":"1 Main","city":"San Jose","tags":[],"photo_urls":[]}', '{"remove":[{"ids":["00000000-0000-0000-0000-000000000001","00000000-0000-0000-0000-000000000002","00000000-0000-0000-0000-000000000003"],"count":1,"room_type":"Ocean king"}]}');
 reset role;
 select id from public.rooms order by id;
 set role authenticated;
 \echo '--- 21. remove the unbooked Twin type and add 2 suites'
-select public.save_listing_rooms('00000000-0000-0000-0000-0000000000a1', '{"remove":[{"ids":["00000000-0000-0000-0000-000000000009"],"count":1,"room_type":"Twin"}],"insert":[{"room_type":"Suite","price_per_night":300,"capacity":4,"num_beds":2,"bed_size":"Queen"},{"room_type":"Suite","price_per_night":300,"capacity":4,"num_beds":2,"bed_size":"Queen"}]}');
+select public.save_listing('00000000-0000-0000-0000-0000000000a1', '{"name":"Owner hotel","description":"Original","address":"1 Main","city":"San Jose","tags":[],"photo_urls":[]}', '{"remove":[{"ids":["00000000-0000-0000-0000-000000000009"],"count":1,"room_type":"Twin"}],"insert":[{"room_type":"Suite","price_per_night":300,"capacity":4,"num_beds":2,"bed_size":"Queen"},{"room_type":"Suite","price_per_night":300,"capacity":4,"num_beds":2,"bed_size":"Queen"}]}');
 reset role;
 select room_type, count(*) from public.rooms group by 1 order by 1;
 select count(*) as reservations_kept from public.reservations;
+
+\echo '--- 22. R3: description change + removing a booked room in one save: REFUSED, and the description is NOT saved'
+set role authenticated;
+select public.save_listing('00000000-0000-0000-0000-0000000000a1', '{"name":"Owner hotel","description":"Changed","address":"1 Main","city":"San Jose","tags":[],"photo_urls":[]}', '{"remove":[{"ids":["00000000-0000-0000-0000-000000000001"],"count":1,"room_type":"Ocean king"}]}');
+reset role;
+select description from public.hotels where id = '00000000-0000-0000-0000-0000000000a1';
+\echo '--- 22b. R3: creating a listing with a bad room (0 beds): REFUSED, and no hotel is left behind'
+set role authenticated;
+select public.save_listing(null, '{"name":"Half hotel","address":"2 Main","city":"San Jose"}', '{"insert":[{"room_type":"Bad","price_per_night":50,"capacity":2,"num_beds":0,"bed_size":"King"}]}');
+reset role;
+select count(*) as half_hotels from public.hotels where name = 'Half hotel';
+\echo '--- 22c. creating a listing with a room: the caller owns it'
+set role authenticated;
+select public.save_listing(null, '{"name":"New hotel","address":"3 Main","city":"San Jose","property_type":"apartment","postal_code":"95112"}', '{"insert":[{"room_type":"Studio","price_per_night":90,"capacity":2,"num_beds":1,"bed_size":"Queen"}]}') is not null as created;
+reset role;
+select owner_id, property_type, postal_code, (select count(*) from public.rooms r where r.hotel_id = h.id) as rooms from public.hotels h where name = 'New hotel';
 
 \echo '=== F3 listing-photos bucket'
 select id, public, file_size_limit, allowed_mime_types from storage.buckets;

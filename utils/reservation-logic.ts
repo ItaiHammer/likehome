@@ -153,8 +153,33 @@ export function validateReservationInput(
     }
     children = b.children
   }
-  if (adults !== undefined || children !== undefined) {
-    const party = (adults ?? 0) + (children ?? 0)
+  // Always end with a full party (guests, adults and children) whenever any of them is given, so the
+  // room's adult/child limits are always checked and the child count is always saved (audit R2, R4).
+  // - No split at all: everyone counts as an adult, the strictest reading of the room's limits.
+  // - Only children (e.g. a saved booking, which stores guests and children but not adults):
+  //   adults are the rest of the guests.
+  // - Only adults: children are the rest of the guests (0 without a guest count).
+  if (adults === undefined && children === undefined) {
+    if (guests !== undefined) {
+      adults = guests
+      children = 0
+    }
+  } else if (adults === undefined) {
+    if (guests === undefined) {
+      return { ok: false, error: 'adults is required with children.' }
+    }
+    adults = guests - (children as number)
+    if (adults < 1) {
+      return { ok: false, error: 'Every booking needs at least 1 adult.' }
+    }
+  } else if (children === undefined) {
+    children = guests === undefined ? 0 : guests - adults
+    if (children < 0) {
+      return { ok: false, error: 'guests must equal adults plus children.' }
+    }
+  }
+  if (adults !== undefined && children !== undefined) {
+    const party = adults + children
     if (guests === undefined) guests = party
     else if (guests !== party) {
       return { ok: false, error: 'guests must equal adults plus children.' }
@@ -174,11 +199,10 @@ export function validateReservationInput(
   }
 }
 
-/** Checks the requested guest count against the room's capacity. Returns an error message or null. */
 /**
  * Checks the adults/children split against the room's own limits (a room can fit 4 people but
- * only 2 adults, or be adults-only). Returns an error message or null. Skipped when the client
- * didn't send the split, so older callers keep working with the total-capacity check alone.
+ * only 2 adults, or be adults-only). Returns an error message or null. validateReservationInput
+ * always fills in the split when a guest count is given (no split = all adults).
  */
 export function checkPartyLimits(
   party: { adults?: number; children?: number },
@@ -195,6 +219,7 @@ export function checkPartyLimits(
   return null
 }
 
+/** Checks the requested guest count against the room's capacity. Returns an error message or null. */
 export function checkCapacity(guests: number | undefined, room: RoomForBooking): string | null {
   if (guests === undefined || room.capacity == null) return null
   if (guests > room.capacity) {

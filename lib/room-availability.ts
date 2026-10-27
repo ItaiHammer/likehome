@@ -40,3 +40,16 @@ export function nightsByRoom(rows: { room_id: string; night: string }[]): Map<st
   }
   return byRoom;
 }
+
+/**
+ * The rooms with every card that's fully booked for these dates marked sold out (bookedForDates),
+ * so pickers and "cheapest open room" choices skip it (audit R5). Without dates nothing changes.
+ */
+export function markBookedRooms<R extends WithUnits & { soldOut?: boolean; bookedForDates?: boolean }>(
+  rooms: R[],
+  checkIn: string,
+  checkOut: string,
+): R[] {
+  if (!checkIn || !checkOut || checkOut <= checkIn) return rooms;
+  return rooms.map((r) => (!r.soldOut && freeUnitId(r, checkIn, checkOut) === null ? { ...r, soldOut: true, bookedForDates: true } : r));
+}

@@ -59,8 +59,24 @@ export async function PATCH(
     return Response.json({ error: 'Reservation for past dates cannot be changed. '}, { status: 422 })
   }
 
-  // Merge current and requested for validation
-  const requestedReservation = curReservation ? { ...curReservation, ...(body as object) } : body
+  // Merge current and requested for validation. The saved row has guests and children but no
+  // adults column, so validation works adults out from those. A new guest count with no split
+  // (the Change booking page sends only `guests`) keeps the saved children, as long as at least
+  // one adult is left (audit R2).
+  const changes = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
+  const savedChildren = Number(curReservation.children ?? 0) || 0
+  const party =
+    changes.guests !== undefined && changes.adults === undefined && changes.children === undefined
+      ? typeof changes.guests === 'number' && Number.isInteger(changes.guests)
+        ? { children: Math.max(0, Math.min(savedChildren, changes.guests - 1)) }
+        : {}
+      : {}
+  const saved: Record<string, unknown> = { ...curReservation, children: savedChildren }
+  // A new split without a guest count sets the guest count
+  if (changes.guests === undefined && (changes.adults !== undefined || changes.children !== undefined)) {
+    delete saved.guests
+  }
+  const requestedReservation = { ...saved, ...party, ...changes }
 
   // Validate input
   const result = validateReservationInput(requestedReservation, today)
@@ -100,6 +116,7 @@ export async function PATCH(
       room_id: room.id,
       hotel_id: room.hotel_id,
       guests: input.guests,
+      children: input.children,
       check_in: input.check_in,
       check_out: input.check_out,
       total_price,

@@ -1,18 +1,13 @@
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
-import {
-  createHotel,
-  getHotel,
-  getHotelsByOwner,
-  updateHotel,
-} from "@/utils/hotels";
+import { getHotel, getHotelsByOwner } from "@/utils/hotels";
 import {
   type Listing,
   type ListingDraft,
   type ListingRoom,
 } from "@/types/listing";
 import { PROPERTY_TYPES, type PropertyType } from "@/types/listing";
-import { groupRoomRows, hasRoomChanges, parseBedConfiguration, planRoomChanges, type RoomRow } from "@/lib/listing-rooms";
+import { groupRoomRows, parseBedConfiguration, planRoomChanges, type RoomRow } from "@/lib/listing-rooms";
 import { amenitiesFromTags, countryFromStored, countryToStored, mergeAmenityTags } from "@/lib/listing-storage";
 
 type HotelRow = {
@@ -89,22 +84,41 @@ function checkRooms(rooms: ListingRoom[]): Error | null {
   return null;
 }
 
-// Saves the editor's rooms in place (audit F1): rooms keep their ids, so their bookings are kept.
-// Rooms with bookings are never deleted; save_listing_rooms refuses the save instead.
-async function saveRooms(hotelId: string, rooms: ListingRoom[]) {
-  // Re-checked here as a last guard (create/update check first, before touching the hotel)
-  const roomError = checkRooms(rooms);
-  if (roomError) return { error: roomError };
+// Saves the hotel details and its rooms in ONE database transaction (save_listing, audit F1/R3):
+// rooms are updated in place so their bookings are kept, booked rooms are never deleted, and if
+// anything fails nothing is saved (no half-saved listing). Returns the hotel id.
+async function saveListing(hotelId: string | null, draft: ListingDraft, existingTags: string[]) {
+  const roomError = checkRooms(draft.rooms);
+  if (roomError) return { id: null, error: roomError };
 
-  const current = await getRoomsForHotel(hotelId);
-  if (current.error) return { error: current.error };
+  let rows: RoomRow[] = [];
+  if (hotelId) {
+    const current = await getRoomsForHotel(hotelId);
+    if (current.error) return { id: null, error: current.error };
+    rows = (current.data ?? []) as RoomRow[];
+  }
 
-  const changes = planRoomChanges((current.data ?? []) as RoomRow[], rooms);
-  if (!hasRoomChanges(changes)) return { error: null };
+  const hotel = {
+    name: draft.name,
+    description: draft.description,
+    address: draft.streetAddress,
+    city: draft.city,
+    region: draft.region,
+    country: countryToStored(draft.country),
+    property_type: draft.propertyType,
+    postal_code: draft.postalCode,
+    // Keep tags the editor doesn't manage (e.g. imported "EV Charging")
+    tags: mergeAmenityTags(existingTags, draft.amenities),
+    photo_urls: draft.photos.map((photo) => photo.url),
+  };
 
   const supabase = await getSupabase();
-  const { error } = await supabase.rpc("save_listing_rooms", { p_hotel_id: hotelId, p_changes: changes });
-  return { error };
+  const { data, error } = await supabase.rpc("save_listing", {
+    p_hotel_id: hotelId,
+    p_hotel: hotel,
+    p_changes: planRoomChanges(rows, draft.rooms),
+  });
+  return { id: (data as string | null) ?? null, error };
 }
 
 export async function getMyListings(ownerId: string) {
@@ -158,73 +172,21 @@ export async function createListing(
   ownerId: string,
   draft: ListingDraft
 ) {
-  const roomError = checkRooms(draft.rooms);
-  if (roomError) return { data: null, error: roomError };
-
-  const { data, error } = await createHotel({
-    owner_id: ownerId,
-    name: draft.name,
-    description: draft.description,
-    address: draft.streetAddress,
-    city: draft.city,
-    region: draft.region,
-    country: countryToStored(draft.country),
-    property_type: draft.propertyType,
-    postal_code: draft.postalCode,
-    tags: mergeAmenityTags([], draft.amenities),
-    photo_urls: draft.photos.map((photo) => photo.url),
-  });
-
-  const hotel = Array.isArray(data) ? data[0] : data;
-
-  if (error || !hotel) {
-    return { data: null, error };
-  }
-
-  const roomsResult = await saveRooms(hotel.id, draft.rooms);
-
-  if (roomsResult.error) {
-    return { data: null, error: roomsResult.error };
-  }
-
-  return getListing(hotel.id);
+  // The database makes the caller the owner (save_listing uses auth.uid())
+  void ownerId;
+  const { id, error } = await saveListing(null, draft, []);
+  if (error || !id) return { data: null, error };
+  return getListing(id);
 }
 
 export async function updateListing(
   id: string,
   draft: ListingDraft
 ) {
-  const roomError = checkRooms(draft.rooms);
-  if (roomError) return { data: null, error: roomError };
-
-  // Keep tags the editor doesn't manage (e.g. imported "EV Charging") when saving amenities
   const { data: current } = await getHotel(id);
   const existingTags = ((current as HotelRow | null)?.tags ?? []) as string[];
 
-  const { data, error } = await updateHotel(id, {
-    name: draft.name,
-    description: draft.description,
-    address: draft.streetAddress,
-    city: draft.city,
-    region: draft.region,
-    country: countryToStored(draft.country),
-    property_type: draft.propertyType,
-    postal_code: draft.postalCode,
-    tags: mergeAmenityTags(existingTags, draft.amenities),
-    photo_urls: draft.photos.map((photo) => photo.url),
-  });
-
-  const hotel = Array.isArray(data) ? data[0] : data;
-
-  if (error || !hotel) {
-    return { data: null, error };
-  }
-
-  const roomsResult = await saveRooms(id, draft.rooms);
-
-  if (roomsResult.error) {
-    return { data: null, error: roomsResult.error };
-  }
-
+  const { error } = await saveListing(id, draft, existingTags);
+  if (error) return { data: null, error };
   return getListing(id);
 }
