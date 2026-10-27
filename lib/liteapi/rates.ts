@@ -190,7 +190,10 @@ async function requestRates(hotelIds: string[], q: StayQuery, nights: number, mo
   }
 }
 
-export const liveRatesEnabled = () => Boolean(process.env.LITEAPI_KEY)
+// A live price is saved with the server key (the reservations trigger reprices a signed-in user's own booking from
+// the stored rate), so without SUPABASE_SECRET_KEY nothing is quoted live and every page shows the stored price
+// checkout charges
+export const liveRatesEnabled = () => Boolean(process.env.LITEAPI_KEY && process.env.SUPABASE_SECRET_KEY)
 
 // The ages in order, so the same children listed differently share a quote
 const cacheKey = (mode: Mode, id: string, q: StayQuery) =>
@@ -208,6 +211,7 @@ async function ratesFor(mode: Mode, liteapiIds: string[], q: StayQuery): Promise
   const nights = countNights(q.checkIn, q.checkOut)
   if (
     !apiKey ||
+    !liveRatesEnabled() ||
     nights < 1 ||
     nights > MAX_NIGHTS ||
     countNights(todayUTC(), q.checkIn) > MAX_DAYS_AHEAD ||

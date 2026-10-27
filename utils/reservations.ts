@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 
 // check_in / check_out are timestamptz in the db, so reads come back like "2099-01-01T00:00:00+00:00".
 // The rest of the app (validation, pricing, UI) works with YYYY-MM-DD, so reads are normalized to that.
@@ -76,6 +77,37 @@ export async function createReservation(reservation: {
   const { data, error } = await supabase
     .from('reservations')
     .insert(reservation)
+    .select()
+  return { data: data?.map(normalizeReservationDates) ?? data, error }
+}
+
+// A booking priced live by LiteAPI. The reservations trigger reprices a signed-in user's own writes from the room's
+// stored rate, so these two write with the server key; the routes have already checked the account, room and party.
+const NO_SERVER_KEY = { message: 'SUPABASE_SECRET_KEY is not set.', code: 'NO_SERVER_KEY' }
+
+export async function createLiveReservation(reservation: Parameters<typeof createReservation>[0]) {
+  const supabase = createAdminClient()
+  if (!supabase) return { data: null, error: NO_SERVER_KEY }
+  const { data, error } = await supabase
+    .from('reservations')
+    .insert(reservation)
+    .select()
+  return { data: data?.map(normalizeReservationDates) ?? data, error }
+}
+
+export async function updateLiveReservation(
+  id: string,
+  accountId: string,
+  updates: Parameters<typeof updateReservation>[1]
+) {
+  const supabase = createAdminClient()
+  if (!supabase) return { data: null, error: NO_SERVER_KEY }
+  const { data, error } = await supabase
+    .from('reservations')
+    .update(updates)
+    .eq('id', id)
+    .eq('account_id', accountId)
+    .eq('status', 'confirmed')
     .select()
   return { data: data?.map(normalizeReservationDates) ?? data, error }
 }

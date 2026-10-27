@@ -1,6 +1,6 @@
 //   PATCH /api/reservations/[id]  -> update a reservation for the logged-in user
 import { getUserId } from '../../../../utils/user.ts'
-import { updateReservation, getReservation } from '../../../../utils/reservations.ts'
+import { updateLiveReservation, updateReservation, getReservation } from '../../../../utils/reservations.ts'
 import {
   bookingParty,
   calculateTotalPrice,
@@ -101,6 +101,7 @@ export async function PATCH(
     && input.check_out === curReservation.check_out && input.guests === curReservation.guests
     && children === (curReservation.children ?? 0)
   let nightly: number | string = room.price_per_night
+  let pricedLive = false
   if (!unchanged && room.hotels?.liteapi_id) {
     const live = await liveRoomPrice(
       { liteapiHotelId: room.hotels.liteapi_id, liteapiRoomId: room.liteapi_room_id ?? null, roomType: room.room_type ?? '' },
@@ -109,23 +110,29 @@ export async function PATCH(
     if (live.status === 'sold_out') {
       return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
     }
-    if (live.status === 'live') nightly = live.value.perNight
+    if (live.status === 'live') {
+      nightly = live.value.perNight
+      pricedLive = true
+    }
   }
   const total_price = unchanged
     ? Number(curReservation.total_price)
     : calculateTotalPrice(input.check_in, input.check_out, nightly)
 
-  const { data, error } = await updateReservation(
-    reservationId,
-    {
-      room_id: room.id,
-      hotel_id: room.hotel_id,
-      guests: input.guests,
-      children: input.children,
-      check_in: input.check_in,
-      check_out: input.check_out,
-      total_price,
-    })
+  const changes = {
+    room_id: room.id,
+    hotel_id: room.hotel_id,
+    guests: input.guests,
+    children: input.children,
+    check_in: input.check_in,
+    check_out: input.check_out,
+    total_price,
+  }
+  // A live price is saved with the server key: the reservations trigger puts a signed-in user's own change
+  // back at the stored price
+  const { data, error } = pricedLive
+    ? await updateLiveReservation(reservationId, userId, changes)
+    : await updateReservation(reservationId, changes)
 
   if (error) {
     if (error.code === EXCLUSION_VIOLATION) {

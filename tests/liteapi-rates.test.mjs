@@ -14,6 +14,7 @@ register(
 )
 
 process.env.LITEAPI_KEY = 'test'
+process.env.SUPABASE_SECRET_KEY = 'test'
 
 const { parseRatesResponse, quoteForRoom, getRoomRates, getFromPrices, liveRoomPrice, __clearLiteApiCache } = await import(
   '../lib/liteapi/rates.ts'
@@ -50,6 +51,7 @@ beforeEach(() => {
   fetchMock.mock.mockImplementation(async () => priced())
   warn.mock.resetCalls()
   process.env.LITEAPI_KEY = 'test'
+  process.env.SUPABASE_SECRET_KEY = 'test'
 })
 
 afterEach(() => {
@@ -424,6 +426,16 @@ describe('unavailable', () => {
     const one = await liveRoomPrice({ liteapiHotelId: 'lp1', liteapiRoomId: '1', roomType: 'King' }, Q)
 
     assert.deepEqual(rooms.get('lp1'), { status: 'unavailable' })
+    assert.deepEqual(from.get('lp1'), { status: 'unavailable' })
+    assert.deepEqual(one, { status: 'unavailable' })
+    assert.equal(fetchMock.mock.callCount(), 0)
+  })
+
+  test('without the server key nothing is quoted live, since checkout could only charge the stored price', async () => {
+    delete process.env.SUPABASE_SECRET_KEY
+    const from = await getFromPrices(['lp1'], Q)
+    const one = await liveRoomPrice({ liteapiHotelId: 'lp1', liteapiRoomId: '1', roomType: 'King' }, Q)
+
     assert.deepEqual(from.get('lp1'), { status: 'unavailable' })
     assert.deepEqual(one, { status: 'unavailable' })
     assert.equal(fetchMock.mock.callCount(), 0)

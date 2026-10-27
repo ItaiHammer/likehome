@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 
 // Transactions are append-only: corrections are new rows, never updates or deletes.
 // amount is always positive; transaction_type says which direction the value moved.
@@ -34,6 +35,20 @@ export async function recordCheckoutCharge(paymentId: string) {
   const supabase = createClient(cookieStore)
   const { data, error } = await supabase.rpc('record_checkout_charge', { p_payment_id: paymentId })
   return { data: (data ?? null) as { id: string; amount: number | string; status: string }[] | null, error }
+}
+
+/**
+ * Records the checkout charge for a booking priced live by LiteAPI, at that price. record_checkout_charge would charge
+ * the room's stored rate, so this writes with the server key; clients still can't write transactions.
+ */
+export async function recordLiveCharge(paymentId: string, amount: number) {
+  const supabase = createAdminClient()
+  if (!supabase) return { data: null, error: { message: 'SUPABASE_SECRET_KEY is not set.', code: 'NO_SERVER_KEY' } }
+  const { data, error } = await supabase
+    .from('transactions')
+    .insert({ payment_id: paymentId, amount, transaction_type: 'charge', status: 'completed' })
+    .select('id, amount, status')
+  return { data: data as { id: string; amount: number | string; status: string }[] | null, error }
 }
 
 export async function getTransactionsByPayment(paymentId: string) {
