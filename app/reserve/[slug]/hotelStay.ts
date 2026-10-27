@@ -56,7 +56,8 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
   // Which nights each room is booked (audit F9). A day before UTC today covers guests west of UTC.
   // If the lookup fails, every night shows as open and checkout still refuses a booked room.
   const from = addDays(todayUTC(), -1);
-  const booked = await getBookedNights(id, from, addDays(from, 400));
+  const to = addDays(from, 400);
+  const booked = await getBookedNights(id, from, to);
   if (booked.error) console.error("get_booked_nights failed:", booked.error.message);
   const bookedNights = nightsByRoom(booked.data ?? []);
 
@@ -113,6 +114,8 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
     taxRate: 0,
     // Sold-out nights come from each room's units (lib/room-availability.ts), worked out in the browser
     blockedNights: [],
+    // Stays with nights after this are looked up for their own dates (page.tsx, StayReservation)
+    bookedWindow: { from, to },
     rooms,
     bookable: true,
   };

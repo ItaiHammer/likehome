@@ -2,7 +2,8 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { getOtherStays } from "@/lib/other-stays";
-import { markBookedRooms } from "@/lib/room-availability";
+import { markBookedRooms, mergeBookedNights, outsideWindow } from "@/lib/room-availability";
+import { getBookedNights } from "@/utils/rooms";
 import { matchingRoom, originalSearch, readRoomFilters } from "@/lib/stay-filters";
 import { countNights, MAX_NIGHTS, parseDate, todayUTC } from "@/utils/reservation-logic";
 import { createClient } from "@/utils/supabase/server";
@@ -60,6 +61,22 @@ function readChoices(params: Record<string, string | string[] | undefined>, stay
   };
 }
 
+// The page first looks up booked nights for about the next 400 days. A link with dates after that
+// (stays can be booked further ahead) looks those exact nights up too, so a booked room isn't
+// offered as free.
+async function withLinkedDates(stay: Stay, params: Record<string, string | string[] | undefined>): Promise<Stay> {
+  const checkIn = typeof params.checkIn === "string" ? params.checkIn : "";
+  const checkOut = typeof params.checkOut === "string" ? params.checkOut : "";
+  if (!stay.bookable || !parseDate(checkIn) || !parseDate(checkOut)) return stay;
+  if (countNights(checkIn, checkOut) > MAX_NIGHTS || !outsideWindow(stay.bookedWindow, checkIn, checkOut)) return stay;
+  const extra = await getBookedNights(stay.slug, checkIn, checkOut);
+  if (extra.error) {
+    console.error("get_booked_nights failed:", extra.error.message);
+    return stay;
+  }
+  return { ...stay, rooms: mergeBookedNights(stay.rooms, extra.data) };
+}
+
 export async function generateMetadata(props: PageProps<"/reserve/[slug]">) {
   const { slug } = await props.params;
   const stay = await findStay(slug);
@@ -77,16 +94,17 @@ export default async function ReservePage(props: PageProps<"/reserve/[slug]">) {
   const account = claims?.sub ? { email: typeof claims.email === "string" ? claims.email : "" } : null;
   const otherStays = claims?.sub && stay.bookable ? await getOtherStays(claims.sub, stay.slug) : [];
   const params = await props.searchParams;
+  const datedStay = await withLinkedDates(stay, params);
 
   return (
     <div className="relative isolate flex flex-1 flex-col">
       <PageBackdrop />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
         <StayReservation
-          stay={stay}
+          stay={datedStay}
           account={account}
           otherStays={otherStays}
-          initial={readChoices(params, stay)}
+          initial={readChoices(params, datedStay)}
           search={originalSearch(params)}
         />
       </main>

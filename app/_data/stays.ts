@@ -50,6 +50,8 @@ export type Stay = {
   cleaningFee: number;
   /** Nights already booked, as days from today. Placeholder until availability comes from the backend. */
   blockedNights: number[];
+  /** Database hotels: the nights the rooms' booked nights were looked up for (see units) */
+  bookedWindow?: { from: string; to: string };
   rooms: Room[];
 };
 
