@@ -7,6 +7,7 @@ import { ListingCover } from "./ListingCover";
 import { PanelHeading } from "./PanelHeading";
 import { PhotoMenu } from "./PhotoMenu";
 import type { Upload } from "./usePhotoUploads";
+import { photoProblem } from "@/lib/listing-photos";
 
 type View = { kind: "gallery" } | { kind: "choose" } | { kind: "uploads" } | { kind: "coverUpdated"; photoId: string };
 
@@ -47,10 +48,12 @@ export function PhotosPanel({ photos, uploads, onStartUploads, onRetryUpload, on
 
   function addFiles(files: FileList | null) {
     const all = Array.from(files ?? []);
-    const images = all.filter((file) => file.type.startsWith("image/"));
+    // Only what the photo bucket accepts: JPG, PNG, WebP, GIF or AVIF, up to 5 MB
+    const images = all.filter((file) => photoProblem(file) === null);
     if (fileInput.current) fileInput.current.value = ""; // lets the same file be picked again
     if (images.length < all.length) {
-      setSkipped(images.length === 0 ? "Only image files can be added (JPG, PNG, WebP…)." : "Some files were skipped: only images can be added.");
+      const reason = photoProblem(all.find((file) => photoProblem(file) !== null)!);
+      setSkipped(images.length === 0 ? reason : `Some files were skipped. ${reason}`);
     } else {
       setSkipped(null);
     }
@@ -73,7 +76,7 @@ export function PhotosPanel({ photos, uploads, onStartUploads, onRetryUpload, on
   );
 
   const picker = (
-    <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => addFiles(e.target.files)} />
+    <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" multiple hidden onChange={(e) => addFiles(e.target.files)} />
   );
   const backToGallery = (
     <Button variant="secondary" className="mt-8" onClick={() => setView({ kind: "gallery" })}>

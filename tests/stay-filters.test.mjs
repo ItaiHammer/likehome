@@ -116,3 +116,8 @@ test('roomFits goes by what the room sleeps and, where it lists them, its own ad
   assert.equal(roomFits({ nightly: 150, sleeps: 3, maxAdults: null, maxChildren: null }, 3, 2, 1), true, 'no limits listed')
   assert.equal(roomFits({ ...queen, sleeps: 3 }, 3), true, 'only the head count when the split is unknown')
 })
+
+// Audit F10: the guest's time zone survives search -> stay -> Back to stays
+test('searchQuery keeps tz', () => {
+  assert.equal(searchQuery({ where: 'Paris', tz: 'America/Los_Angeles' }), 'where=Paris&tz=America%2FLos_Angeles')
+})

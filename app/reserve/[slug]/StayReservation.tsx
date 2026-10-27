@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
+import { freeUnitId, soldOutNights } from "@/lib/room-availability";
 import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
@@ -121,7 +122,11 @@ export function StayReservation({
   const priceKey = stay.liteapiId && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${adults}|${children}` : null;
   const liveKey = livePrices?.key;
   const listed = [...stay.rooms, ...addedRooms.filter((r) => !stay.rooms.some((s) => s.id === r.id))];
-  const rooms = livePrices && livePrices.key === priceKey ? listed.map((r) => ({ ...r, ...livePrices.byId[r.id] })) : listed;
+  const priced = livePrices && livePrices.key === priceKey ? listed.map((r) => ({ ...r, ...livePrices.byId[r.id] })) : listed;
+  // A room card is booked for these dates when every one of its identical rooms is (audit F9)
+  const rooms = priced.map((r) =>
+    !r.soldOut && nights > 0 && freeUnitId(r, checkIn, checkOut) === null ? { ...r, soldOut: true, bookedForDates: true } : r,
+  );
   const pricesPending = !!priceKey && priceKey !== initialKey && liveKey !== priceKey;
 
   const room = rooms.find((r) => r.id === roomId)!;
@@ -178,11 +183,15 @@ export function StayReservation({
     };
   }, [priceKey, initialKey, liveKey, stay.slug]);
 
-  const blockedOffsets = [
-    ...new Set([...stay.blockedNights, ...userBookingBlockedOffsets]),
-  ];
+  // Nights when every room here is booked. Also from `today`, so it fills in once in the browser.
+  const soldOutOffsets = useMemo(
+    () => (today ? soldOutNights(stay.rooms).filter((night) => night >= today).map((night) => nightsBetween(today, night)) : []),
+    [stay.rooms, today],
+  );
 
-  const terms = cancelTerms(stay, room, checkIn, today);
+  const blockedOffsets = [
+    ...new Set([...stay.blockedNights, ...soldOutOffsets, ...userBookingBlockedOffsets]),
+  ];
 
   const setDatesOpen = useCallback((open: boolean) => setPopover((p) => (open ? "dates" : p === "dates" ? null : p)), []);
   const setGuestsOpen = useCallback((open: boolean) => setPopover((p) => (open ? "guests" : p === "guests" ? null : p)), []);
@@ -246,6 +255,7 @@ export function StayReservation({
     const clash = stay.bookable ? findOverlap(otherStays, checkIn, checkOut) : null;
     if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
+    if (room.bookedForDates) return { field: "guests", message: `${room.name} is booked for those dates. Pick another room or change your dates.` };
     if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     return null;
   }
@@ -384,7 +394,8 @@ export function StayReservation({
     }
 
     const payload = checkoutRequest({
-      roomId: room.id,
+      // Whichever of the identical rooms is free for these dates
+      roomId: freeUnitId(room, checkIn, checkOut) ?? room.id,
       checkIn,
       checkOut,
       adults,
@@ -630,13 +641,11 @@ export function StayReservation({
             )}
             {dueAtProperty > 0 && <p className="mt-2 text-sm text-slate">{dueAtPropertyText(dueAtProperty)}</p>}
 
-            {checkIn && terms && (
+            {checkIn && (
               <Card tone="tint" padding="none" className="mt-5 p-4 text-sm">
-                {cancelText(terms, !!stay.liteapiId).map((text, i) => (
-                  <p key={i} className={i === 0 ? "font-semibold text-ink" : "mt-1 text-slate"}>
-                    {text}
-                  </p>
-                ))}
+                {/* The rule cancel_reservation applies (audit F4): only insured bookings are refunded */}
+                <p className="font-semibold text-ink">Non-refundable</p>
+                <p className="mt-1 text-slate">You can cancel any time before check-in, but without cancellation insurance there’s no refund.</p>
               </Card>
             )}
 
@@ -719,7 +728,7 @@ export function StayReservation({
               clear("guests");
             }}
             locked={roomsLocked}
-            note={(r) => cancelNote(cancelTerms(stay, r, checkIn, today))}
+            note={() => "Non-refundable"}
             party={{ adults, children }}
           />
         </fieldset>
@@ -856,39 +865,6 @@ export function StayReservation({
       </div>
     </>
   );
-}
-
-type CancelTerms = { refundable: boolean; free: boolean; /** "" when there's no date to show */ until: string };
-
-// Owner hotels and the sample stays follow the site's own rule: free cancellation until 2 days before check-in.
-// A LiteAPI room follows its rate, so it promises nothing (null) until LiteAPI has quoted it.
-function cancelTerms(stay: Stay, room: Room, checkIn: string, today: string): CancelTerms | null {
-  if (stay.liteapiId) {
-    if (room.refundable == null) return null;
-    if (!room.refundable) return { refundable: false, free: false, until: "" };
-  }
-  const until = stay.liteapiId ? (room.cancelBy ?? "") : checkIn ? addDays(checkIn, -2) : "";
-  return { refundable: true, free: !until || !today || until > today, until };
-}
-
-function cancelNote(t: CancelTerms | null) {
-  if (!t) return "";
-  return !t.refundable ? "Non-refundable" : t.free ? "Free cancellation" : "No free cancellation";
-}
-
-/** The heading and the line under it, for the checkout summary */
-function cancelText(t: CancelTerms, liteapi: boolean): [string, string] {
-  if (!t.refundable) return ["Non-refundable", "This rate can’t be refunded if you cancel."];
-  if (!t.free) {
-    return liteapi
-      ? ["No free cancellation", "Free cancellation for this rate has ended, so the hotel charges a fee if you cancel."]
-      : ["No free cancellation", "This booking can’t be cancelled for free. The first night is non-refundable."];
-  }
-  if (!t.until) return ["Free cancellation", "This rate can be cancelled without a fee."];
-  return [
-    `Free cancellation until ${formatDate(t.until)}`,
-    liteapi ? "After that, the hotel charges a cancellation fee." : "After that, the first night is non-refundable.",
-  ];
 }
 
 const dueAtPropertyText = (amount: number) => `Plus ${money(amount)} in hotel fees, paid at the property.`;

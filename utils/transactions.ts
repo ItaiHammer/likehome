@@ -24,6 +24,18 @@ export async function createTransaction(transaction: {
   return { data, error }
 }
 
+/**
+ * Records the checkout charge for a payment. Clients can't insert transactions directly
+ * (audit F13): the record_checkout_charge database function checks the payment is the
+ * caller's, prices the stay from the room's nightly rate, and refuses a second charge.
+ */
+export async function recordCheckoutCharge(paymentId: string) {
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+  const { data, error } = await supabase.rpc('record_checkout_charge', { p_payment_id: paymentId })
+  return { data: (data ?? null) as { id: string; amount: number | string; status: string }[] | null, error }
+}
+
 export async function getTransactionsByPayment(paymentId: string) {
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)

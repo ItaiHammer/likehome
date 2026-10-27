@@ -5,6 +5,7 @@ export type CheckoutForm = {
   roomId: string;
   checkIn: string;
   checkOut: string;
+  /** The party split, so the API can check the room's adult/child limits */
   adults: number;
   children: number;
   cardNumber: string;
@@ -24,6 +25,7 @@ export function checkoutRequest(form: CheckoutForm) {
     check_out: form.checkOut,
     // Capacity counts every guest; LiteAPI prices children apart from adults
     guests: form.adults + form.children,
+    adults: form.adults,
     children: form.children,
     time_zone: form.timeZone,
     payment: {

@@ -26,7 +26,7 @@ test('the checkout body passes the /api/checkout stay and card checks', () => {
   const body = checkoutRequest(form())
   const stay = validateReservationInput(body, TODAY)
   assert.equal(stay.ok, true, stay.error)
-  assert.deepEqual(stay.value, { room_id: form().roomId, check_in: '2026-11-02', check_out: '2026-11-05', guests: 3, children: 1 })
+  assert.deepEqual(stay.value, { room_id: form().roomId, check_in: '2026-11-02', check_out: '2026-11-05', guests: 3, adults: 2, children: 1 })
   const card = validatePaymentInput(body.payment, NOW)
   assert.equal(card.ok, true, card.error)
 })

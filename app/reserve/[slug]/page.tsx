@@ -68,7 +68,8 @@ function readChoices(params: SearchParams, stay: Stay, dates: StayDates): StayCh
   const { adults, children } = dates;
   // Without a picked room, the cheapest one that passes the search's filters, as the search matched it
   const room =
-    stay.rooms.find((r) => r.id === one(params, "room") && !r.soldOut) ??
+    // A link can name any of a card's identical rooms
+    stay.rooms.find((r) => (r.id === one(params, "room") || r.units?.some((u) => u.id === one(params, "room"))) && !r.soldOut) ??
     matchingRoom(stay.rooms, stay.tags, readRoomFilters(params, (adults ?? 2) + (children ?? 0), { adults, children }));
 
   return { ...dates, roomId: room?.id };

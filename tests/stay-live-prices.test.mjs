@@ -22,7 +22,9 @@ const roomRow = (id, liteapiRoomId, price, capacity = 4) => ({
 let hotel
 let rooms
 mock.module('@/utils/hotels', { namedExports: { getHotel: async () => ({ data: hotel, error: null }) } })
-mock.module('@/utils/rooms', { namedExports: { getRoomsByHotel: async () => ({ data: rooms, error: null }) } })
+mock.module('@/utils/rooms', {
+  namedExports: { getRoomsByHotel: async () => ({ data: rooms, error: null }), getBookedNights: async () => ({ data: [], error: null }) },
+})
 
 const quote = (perNight, more = {}) => ({
   total: perNight * 2, perNight, offerId: 'o', rateName: 'King Room - Mobility Accessible', boardType: 'RO',
@@ -91,6 +93,7 @@ test('rooms LiteAPI offers a family that the hotel wasn’t saved with are saved
   assert.deepEqual(saveOfferedRooms.mock.calls[0].arguments, [HOTEL_ID, 'lp1', new Map([['201', 180.4], ['202', 350]])])
   assert.deepEqual(stay.rooms.map((r) => [r.id, r.nightly, !!r.soldOut]), [['tatami', 180.4, false], ['king', 199, false], ['suite', 350, false]])
   assert.deepEqual([stay.rooms[0].sleeps, stay.rooms[0].maxAdults, stay.rooms[0].maxChildren, stay.rooms[0].liteapiRoomId], [6, 4, 4, '201'])
+  assert.deepEqual(stay.rooms[0].units, [{ id: 'tatami', bookedNights: [] }], 'a room saved just now has no bookings')
 })
 
 test('nothing is saved when the hotel has every offered room, or its offers don’t name rooms', async () => {
@@ -105,6 +108,14 @@ test('a room that couldn’t be saved isn’t listed, and the saved ones still a
   const stay = await withLiveRoomPrices(await getHotelStay(HOTEL_ID), Q)
   assert.equal(saveOfferedRooms.mock.callCount(), 1)
   assert.deepEqual(stay.rooms.map((r) => [r.id, !!r.soldOut]), [['king', false], ['twin', true]])
+})
+
+test('LiteAPI rooms with the same name and price stay separate cards, each with its own quote', async () => {
+  // The import holds every LiteAPI room at the hotel's typical cheapest night, so a name can repeat at one price
+  rooms = [{ ...roomRow('a', '101', 150), room_type: 'Standard Room' }, { ...roomRow('b', '102', 150), room_type: 'Standard Room' }]
+  rates.value.byRoom = { 101: quote(99), 102: quote(140) }
+  const stay = await withLiveRoomPrices(await getHotelStay(HOTEL_ID), Q)
+  assert.deepEqual(stay.rooms.map((r) => [r.id, r.nightly]), [['a', 99], ['b', 140]])
 })
 
 const get = async (query) => {

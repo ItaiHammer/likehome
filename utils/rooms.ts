@@ -117,3 +117,16 @@ export async function getRoomsByIds(ids: string[]) {
     .in('id', ids)
   return { data, error }
 }
+
+// Which room is booked on which night (YYYY-MM-DD), from `from` up to, not including, `to`.
+// Room ids and dates only; see supabase/migrations/20261026_f9_booked_nights.sql.
+export async function getBookedNights(hotelId: string, from: string, to: string) {
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+  const { data, error } = await supabase.rpc('get_booked_nights', {
+    p_hotel_id: hotelId,
+    p_from: from,
+    p_to: to,
+  })
+  return { data: (data ?? []) as { room_id: string; night: string }[], error }
+}

@@ -32,7 +32,7 @@ export function RoomOptions({
         const on = r.id === selectedId;
         const off = !!r.soldOut;
         const tooSmall = off && !roomFits(r, party.adults + party.children, party.adults, party.children);
-        const line = tooSmall ? `Too small for ${guestLabel(party.adults, party.children)}` : off ? "Sold out right now" : note(r);
+        const line = tooSmall ? `Too small for ${guestLabel(party.adults, party.children)}` : off ? (r.bookedForDates ? "Booked for your dates" : "Sold out right now") : note(r);
         return (
           <label
             key={r.id}
@@ -68,7 +68,7 @@ export function RoomOptions({
               {!off && !!r.dueAtProperty && <p className="text-sm text-slate">Plus {money(r.dueAtProperty)} in hotel fees at the property</p>}
             </div>
             {/* A sold-out LiteAPI room has no live quote, and its stored price is only a sample */}
-            {!(off && r.liteapiRoomId) && (
+            {!(off && r.liteapiRoomId && !r.bookedForDates) && (
               <div className="shrink-0 text-right">
                 <p className={`text-base font-semibold ${off ? "text-slate line-through" : "text-ink"}`}>{money(r.nightly)}</p>
                 <p className="text-sm text-slate">per night</p>
@@ -80,7 +80,7 @@ export function RoomOptions({
                 off ? "border border-edge text-slate" : on ? "bg-blue text-on-blue" : "border border-edge bg-surface text-ink"
               }`}
             >
-              {tooSmall ? "Too small" : off ? "Sold out" : on ? "Selected" : "Select"}
+              {tooSmall ? "Too small" : off ? (r.bookedForDates ? "Booked" : "Sold out") : on ? "Selected" : "Select"}
             </span>
           </label>
         );

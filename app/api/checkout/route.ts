@@ -5,11 +5,12 @@
 import { getUserId } from '@/utils/user'
 import { createReservation, updateReservation } from '@/utils/reservations'
 import { createPayment } from '@/utils/payments'
-import { createTransaction } from '@/utils/transactions'
+import { recordCheckoutCharge } from '@/utils/transactions'
 import {
   bookingParty,
   calculateTotalPrice,
   checkCapacity,
+  checkPartyLimits,
   todayInTimeZone,
   validateReservationInput,
   type RoomForBooking,
@@ -62,6 +63,11 @@ export async function POST(request: Request) {
   const capacityError = checkCapacity(input.guests, room)
   if (capacityError) {
     return Response.json({ error: capacityError }, { status: 400 })
+  }
+  // The room's own adult/child limits (e.g. adults-only), not just the total
+  const partyError = checkPartyLimits(input, room)
+  if (partyError) {
+    return Response.json({ error: partyError }, { status: 400 })
   }
 
   // 3. Price is always calculated here, never taken from the browser. LiteAPI hotels are charged the
@@ -121,12 +127,7 @@ export async function POST(request: Request) {
   const savedPayment = payments?.[0]
 
   const { data: transactions, error: transactionError } = savedPayment
-    ? await createTransaction({
-        payment_id: savedPayment.id,
-        amount: total_price,
-        transaction_type: 'charge',
-        status: 'completed',
-      })
+    ? await recordCheckoutCharge(savedPayment.id)
     : { data: null, error: null }
   const transaction = transactions?.[0]
 

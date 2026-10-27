@@ -10,6 +10,10 @@ export type Room = {
   sleeps: number;
   nightly: number;
   soldOut?: boolean;
+  /** Set on the stay page when every room of this type is booked for the chosen dates */
+  bookedForDates?: boolean;
+  /** Database rooms only: the identical rooms behind this card and the nights each is booked */
+  units?: { id: string; bookedNights: string[] }[];
   /** Database rooms only: what the search filters check per room */
   maxAdults?: number | null;
   maxChildren?: number | null;
