@@ -6,8 +6,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
-import { freeUnitId, soldOutNights } from "@/lib/room-availability";
-import { roomFits } from "@/lib/stay-filters";
+import { freeUnitId, markBookedRooms, mergeBookedNights, outsideWindow, soldOutNights } from "@/lib/room-availability";
+import { createClient } from "@/utils/supabase/client";
+import { matchingRoom, roomFits } from "@/lib/stay-filters";
 import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
@@ -124,13 +125,47 @@ export function StayReservation({
   const liveKey = livePrices?.key;
   const listed = [...stay.rooms, ...addedRooms.filter((r) => !stay.rooms.some((s) => s.id === r.id))];
   const priced = livePrices && livePrices.key === priceKey ? listed.map((r) => ({ ...r, ...livePrices.byId[r.id] })) : listed;
-  // A room card is booked for these dates when every one of its identical rooms is (audit F9)
-  const rooms = priced.map((r) =>
-    !r.soldOut && nights > 0 && freeUnitId(r, checkIn, checkOut) === null ? { ...r, soldOut: true, bookedForDates: true } : r,
-  );
   const pricesPending = !!priceKey && priceKey !== initialKey && liveKey !== priceKey;
 
-  const room = rooms.find((r) => r.id === roomId)!;
+  // The page looked up booked nights for about the next 400 days. Dates after that are looked up
+  // for those exact nights, so a room booked then isn't shown as free.
+  const lookupKey =
+    stay.bookable && nights > 0 && nights <= MAX_NIGHTS && outsideWindow(stay.bookedWindow, checkIn, checkOut)
+      ? `${checkIn}|${checkOut}`
+      : "";
+  const [extraNights, setExtraNights] = useState<{ key: string; rows: { room_id: string; night: string }[] } | null>(null);
+  const lookingUp = lookupKey !== "" && extraNights?.key !== lookupKey;
+  useEffect(() => {
+    if (!lookupKey) return;
+    let cancelled = false;
+    const [from, to] = lookupKey.split("|");
+    createClient()
+      .rpc("get_booked_nights", { p_hotel_id: stay.slug, p_from: from, p_to: to })
+      .then(
+        ({ data, error }) => {
+          if (error) console.error("get_booked_nights failed:", error.message);
+          // A failed lookup doesn't block booking: the database still refuses a booked room
+          if (!cancelled) setExtraNights({ key: lookupKey, rows: (data ?? []) as { room_id: string; night: string }[] });
+        },
+        () => {
+          if (!cancelled) setExtraNights({ key: lookupKey, rows: [] });
+        },
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [lookupKey, stay.slug]);
+  // A room card is booked for these dates when every one of its identical rooms is (audit F9)
+  const known = extraNights && extraNights.key === lookupKey ? mergeBookedNights(priced, extraNights.rows) : priced;
+  const rooms = markBookedRooms(known, checkIn, checkOut);
+  // While choosing, a room that's booked for the dates isn't kept selected: the cheapest open room
+  // that fits the party takes its place (audit R5). The guest's own pick comes back if the dates
+  // change back. Once past "Reserve", the room stays put and the checks below catch any problem.
+  const chosen = rooms.find((r) => r.id === roomId)!;
+  const room =
+    chosen.soldOut && step === "stay"
+      ? (matchingRoom(rooms, stay.tags, { guests, adults, children, tags: [] }) ?? chosen)
+      : chosen;
   const subtotal = room.nightly * nights;
   const cleaning = nights ? stay.cleaningFee : 0;
   const taxes = Math.round((subtotal + cleaning) * (stay.taxRate ?? TAX_RATE));
@@ -252,6 +287,7 @@ export function StayReservation({
     if (nights > MAX_NIGHTS) return { field: "dates", message: `Stays can be up to ${MAX_NIGHTS} nights.` };
     const booked = blockedOffsets.map((offset) => addDays(todayISO(), offset));
     if (booked.some((night) => night >= checkIn && night < checkOut)) return { field: "dates", message: "Some of those nights are already booked." };
+    if (lookingUp) return { field: "dates", message: "Still checking which rooms are free on those dates. Try again in a moment." };
     // The booking API judges "today" in the guest's time zone (sent with the booking), so this uses the local date
     if (stay.bookable && checkIn < todayISO()) return { field: "dates", message: "That check-in date is too soon to book. Pick a later date." };
     const clash = stay.bookable ? findOverlap(otherStays, checkIn, checkOut) : null;
@@ -330,6 +366,8 @@ export function StayReservation({
     if (!account) return router.push(signInHref());
     setErrors({});
     setPopover(null);
+    // Keep the room shown as selected (it may have stood in for a booked pick) for the next steps
+    setRoomId(room.id);
     goTo("details");
   }
 
@@ -725,7 +763,7 @@ export function StayReservation({
           )}
           <RoomOptions
             rooms={rooms}
-            selectedId={roomId}
+            selectedId={room.id}
             onSelect={(id) => {
               setRoomId(id);
               clear("guests");

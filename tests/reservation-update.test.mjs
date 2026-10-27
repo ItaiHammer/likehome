@@ -22,6 +22,7 @@ let mockReservationResult = {
     check_out: getDateFromToday(5), 
     total_price: 300,
     guests: 2, 
+    children: 0,
     status: 'confirmed', 
   },
   error: null,
@@ -95,6 +96,8 @@ beforeEach(() => {
       check_out: getDateFromToday(5),
       total_price: 300,
       guests: 2,
+      // Like the real table: a children column, no adults column
+      children: 0,
       status: 'confirmed',
     },
     error: null,
@@ -233,6 +236,7 @@ test('successfully updates reservation and returns 200', async () => {
     check_out: getDateFromToday(9),
     total_price: 400,
     guests: 2,
+    children: 0,
   })
   assert.equal(liveRoomPrice.mock.callCount(), 0)
 })
@@ -372,6 +376,54 @@ test('a children change alone is not "unchanged"', async () => {
   assert.equal(res.status, 200)
   assert.equal((await res.json()).reservation.total_price, 270)
   assert.equal(liveRoomPrice.mock.callCount(), 1)
+})
+
+// Audit R2: saved bookings have guests + children but no adults column
+test('a dates-only change to a booking with a child keeps the party (no "guests must equal" error)', async () => {
+  mockReservationResult.data.guests = 3
+  mockReservationResult.data.children = 1
+  mockRoomResult.data.capacity = 4
+  const req = createMockRequest({ check_in: getDateFromToday(6), check_out: getDateFromToday(8) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 200)
+  const json = await res.json()
+  assert.equal(json.reservation.guests, 3)
+  assert.equal(json.reservation.children, 1)
+})
+
+test('a room-only change keeps the party', async () => {
+  mockReservationResult.data.guests = 1
+  const req = createMockRequest({ room_id: 'room-2' })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 200)
+  const json = await res.json()
+  assert.equal(json.reservation.guests, 1)
+  assert.equal(json.reservation.children, 0)
+})
+
+test('a guest count alone keeps the saved children while at least 1 adult is left', async () => {
+  mockReservationResult.data.guests = 3
+  mockReservationResult.data.children = 2
+  mockRoomResult.data.capacity = 4
+  let res = await PATCH(createMockRequest({ guests: 4 }), { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 200)
+  assert.equal((await res.json()).reservation.children, 2)
+  res = await PATCH(createMockRequest({ guests: 1 }), { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 200)
+  const json = await res.json()
+  assert.equal(json.reservation.guests, 1)
+  assert.equal(json.reservation.children, 0)
+})
+
+test('room adult/child limits apply to edits even without a split', async () => {
+  mockRoomResult.data = { id: 'room-1', hotel_id: 'hotel-1', price_per_night: 100, capacity: 4, max_adults: 1, max_children: 0 }
+  const res = await PATCH(createMockRequest({ guests: 3 }), { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 400)
+})
+
+test('an invalid split is still rejected', async () => {
+  const res = await PATCH(createMockRequest({ guests: 2, adults: 2, children: 1 }), { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 400)
 })
 
 // "Today" is the guest's today (from time_zone), not UTC's.

@@ -477,7 +477,9 @@ describe('success', () => {
 
   test('guests is optional (database default applies)', async () => {
     const body = validBody()
+    // A child count needs a guest or adult count to go with it
     delete body.guests
+    delete body.children
     assert.equal((await post(body)).status, 201)
     assert.equal(createReservation.mock.calls[0].arguments[0].guests, undefined)
   })
