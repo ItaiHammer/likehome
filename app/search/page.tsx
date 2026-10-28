@@ -4,9 +4,7 @@ import { formatShort } from "../_components/dates";
 import { SearchExperience } from "../_components/SearchExperience";
 import { SkyBackground } from "../_components/SkyBackground";
 import { Button } from "../_components/ui";
-import { search } from "./search";
-import { priceSearchResults, quotePage } from "./livePrices";
-import { mergeLiveResults, withoutDates } from "./liveSearch";
+import { LIVE_CANDIDATES, PAGE_SIZE, searchResults } from "./results";
 import type { SearchRequest } from "./types";
 import { Pagination } from "./components/Pagination";
 import { searchQuery } from "@/lib/stay-filters";
@@ -14,15 +12,11 @@ import { SearchResultCard, type HotelSearchResult } from "./components/SearchRes
 import { SortSelect } from "./components/SortSelect";
 import { FilterSheetButton, FilterSidebar, type FilterValues } from "./components/FilterSidebar";
 import { catalogEnabled, facilityNames, findPlace, hotelsInPlace } from "@/lib/liteapi/catalog";
-import { savedLiteapiIds } from "@/utils/liteapi-hotels";
 import {parseDate, todayInTimeZone} from "@/utils/reservation-logic";
 
 type RawParams = Record<string, string | string[] | undefined>;
 type SortValue = "recommended" | "price-low" | "price-high";
 
-const PAGE_SIZE = 21;
-// search_hotels caps p_limit at 100
-const LIVE_CANDIDATES = 100;
 // The bar and the AI's reply to it sit 84px inside the results on wide screens; lined up edge to edge,
 // the page read as one flat column. 84px keeps the bar at 1152px where the results reach 1400px.
 const barColumn = "xl:mx-[84px]";
@@ -65,77 +59,12 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     let searchError = "";
     // The page's LiteAPI prices, streamed in after its hotels show
     let quoted: Promise<HotelSearchResult[]> | null = null;
+    let capped = false;
 
     if (shouldSearch && !validationError) {
         try {
-            const live = Boolean(params.checkIn && params.checkOut);
-            const page = positiveInt(params.page, 1);
-            const request = toSearchRequest(params);
-            const pageRows = (list: HotelSearchResult[]) => list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
             const listing = params.where?.trim() ? await liveListing(params.where, params.place) : null;
-            if (listing) {
-                const ids = listing.hotels.map((hotel) => hotel.id);
-                const [found, savedIds] = await Promise.all([
-                    search(request, {page: 1, pageSize: LIVE_CANDIDATES}, ids),
-                    savedLiteapiIds(ids),
-                ]);
-                if (found.results.error) {
-                    throw found.results.error;
-                }
-                const std = found.params;
-                const rows = rowsOf(found.results.data);
-                const complete = Number(found.results.total ?? rows.length) <= rows.length;
-                const merged = mergeLiveResults(rows, listing.hotels, savedIds, listing.names, std, complete);
-                if (!std.dates) {
-                    const shown = withoutDates(merged, std);
-                    data = pageRows(shown);
-                    total = data.length ? shown.length : 0;
-                } else if (std.price || std.sort === "price-low" || std.sort === "price-high") {
-                    // Only live prices can order or range these, so the page waits for them
-                    const priced = await priceSearchResults(merged, std);
-                    data = pageRows(priced);
-                    total = data.length ? priced.length : 0;
-                } else {
-                    const shown = pageRows(merged);
-                    quoted = quotePage(shown, std);
-                    data = shown.map((row): HotelSearchResult => (row.liteapi_id ? { ...row, min_price: null, price_status: "checking" } : row));
-                    total = data.length ? merged.length : 0;
-                }
-            } else {
-                // Live prices can drop, filter and reorder LiteAPI hotels, so with dates the page takes
-                // the SQL cap of 100 candidates and paginates them here
-                const found = await search(request, live ? {page: 1, pageSize: LIVE_CANDIDATES} : {page, pageSize: PAGE_SIZE});
-                const std = found.params;
-                let results = found.results;
-                const rows = rowsOf(results.data);
-                const matches = Number(results.total ?? 0);
-                if (!live || results.error) {
-                    data = rows;
-                    total = matches;
-                } else if (rows.some((row) => row.liteapi_id)) {
-                    if (matches > LIVE_CANDIDATES) {
-                        console.warn(`[search] live pricing saw only the first ${LIVE_CANDIDATES} matches`);
-                    }
-                    const priced = await priceSearchResults(rows, std);
-                    data = pageRows(priced);
-                    // A page past the end reads "0 stays found", as the SQL paging did
-                    total = data.length ? priced.length : 0;
-                } else if (matches > LIVE_CANDIDATES) {
-                    // No LiteAPI hotel among the candidates, so page through every match in SQL. Pricing the page
-                    // still filters any LiteAPI hotel further down, which the SQL let past the price range.
-                    results = (await search(request, {page, pageSize: PAGE_SIZE})).results;
-                    const sqlPage = rowsOf(results.data);
-                    data = results.error ? sqlPage : await priceSearchResults(sqlPage, std);
-                    total = Number(results.total ?? 0);
-                } else {
-                    data = pageRows(rows);
-                    total = data.length ? matches : 0;
-                }
-                if (results.error) {
-                    console.error("Search failed", results.error);
-                    searchError = "We couldn't load stays right now. Please try again.";
-                }
-            }
+            ({ data, total, quoted, capped } = await searchResults(toSearchRequest(params), positiveInt(params.page, 1), listing));
         } catch (error) {
             console.error("Search failed", error);
             searchError = "We couldn't load stays right now. Please try again.";
@@ -204,7 +133,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               <p className="text-sm font-semibold text-blue">Search results</p>
               <h1 className="mt-1 font-serif text-[36px] leading-[44px] text-ink wrap-break-word sm:text-[44px] sm:leading-[52px]">{locationHeading}</h1>
               <p className="mt-2 text-sm text-slate">
-                {validationError ? "Check your search" : searchError ? "Results unavailable" : `${total} ${total === 1 ? "stay" : "stays"} found`}
+                {validationError ? "Check your search" : searchError ? "Results unavailable" : `${total} ${total === 1 ? "stay" : "stays"} found${capped ? ` in the first ${LIVE_CANDIDATES} matches` : ""}`}
                 {activeFilterCount > 0 &&
                   ` · ${activeFilterCount} ${aiPrompt ? "AI " : ""}${activeFilterCount === 1 ? "filter" : "filters"} applied`}
               </p>
@@ -556,10 +485,6 @@ async function liveListing(where: string, placeId?: string) {
   if (!id) return null;
   const [hotels, names] = await Promise.all([hotelsInPlace(id), facilityNames()]);
   return hotels ? { hotels, names } : null;
-}
-
-function rowsOf(data: unknown): HotelSearchResult[] {
-  return Array.isArray(data) ? (data as HotelSearchResult[]) : [];
 }
 
 function StatePanel({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
