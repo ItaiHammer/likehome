@@ -14,7 +14,7 @@ import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
 import { guestLabel } from "../../reserve/[slug]/GuestsField";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
 import { useBookedNightsLookup } from "../../reserve/[slug]/useBookedNightsLookup";
-import { freeUnitId, markBookedRooms, mergeBookedNights, withoutStay, type BookedWindow } from "@/lib/room-availability";
+import { freeUnitId, markBookedRooms, mergeBookedNights, withAddedRooms, withoutStay, type BookedWindow } from "@/lib/room-availability";
 import { HotelPhoto } from "../_components/HotelPhoto";
 
 export type BookingToChange = {
@@ -103,7 +103,7 @@ export function ChangeBooking({
   const pricesPending = !!priceKey && priceKey !== initialKey && livePrices?.key !== priceKey;
   const sameGuests = guests === current.guests && children === current.children;
   const sameStay = checkIn === current.checkIn && checkOut === current.checkOut && sameGuests;
-  const listed = [...listedRooms, ...addedRooms.filter((r) => !listedRooms.some((l) => l.id === r.id))];
+  const listed = withAddedRooms(listedRooms, addedRooms, priceKey === initialKey);
   const priced =
     livePrices && livePrices.key === priceKey
       ? listed.map((r) => {

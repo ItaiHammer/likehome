@@ -54,6 +54,16 @@ export function markBookedRooms<R extends WithUnits & { soldOut?: boolean; booke
   return rooms.map((r) => (!r.soldOut && freeUnitId(r, checkIn, checkOut) === null ? { ...r, soldOut: true, bookedForDates: true } : r));
 }
 
+/**
+ * The page's rooms, then the ones the prices route listed after the page loaded (offered for other dates or guests),
+ * kept so a picked one stays listed. Back on the dates and guests the page was priced for, those added rooms are sold
+ * out: LiteAPI didn't offer them for these, or the page would have listed them.
+ */
+export function withAddedRooms<R extends { id: string; soldOut?: boolean }>(pageRooms: R[], addedRooms: R[], onPagePrices: boolean): R[] {
+  const added = addedRooms.filter((r) => !pageRooms.some((p) => p.id === r.id));
+  return [...pageRooms, ...(onPagePrices ? added.map((r) => ({ ...r, soldOut: true })) : added)];
+}
+
 /** The nights already looked up for a stay page: from (inclusive) up to to (exclusive). */
 export type BookedWindow = { from: string; to: string };
 
