@@ -21,6 +21,8 @@ const CVC = '987'
 
 let claims
 let roomResult
+// Reservation rows (with their payments and transactions) the guest's own-booking lookup filters
+let savedReservations
 const createReservation = mock.fn()
 const updateReservation = mock.fn()
 const createPayment = mock.fn()
@@ -29,12 +31,31 @@ const createLiveReservation = mock.fn()
 const recordLiveCharge = mock.fn()
 const consoleError = mock.method(console, 'error', () => {})
 
+function reservationsQuery() {
+  const filters = []
+  const query = {
+    select: () => query,
+    eq: (column, value) => {
+      filters.push([column, value])
+      return query
+    },
+    maybeSingle: async () => ({
+      data: savedReservations.find((r) => filters.every(([column, value]) => r[column] === value)) ?? null,
+      error: null,
+    }),
+  }
+  return query
+}
+
 mock.module('next/headers', { namedExports: { cookies: async () => ({}) } })
 mock.module('@/utils/supabase/server', {
   namedExports: {
     createClient: () => ({
       auth: { getClaims: async () => claims },
-      from: () => ({ select: () => ({ eq: () => ({ single: async () => roomResult }) }) }),
+      from: (table) =>
+        table === 'reservations'
+          ? reservationsQuery()
+          : { select: () => ({ eq: () => ({ single: async () => roomResult }) }) },
     }),
   },
 })
@@ -67,6 +88,28 @@ const validBody = () => ({
   },
 })
 
+// The guest's paid booking of the room for validBody()'s dates, as the lookup reads it back
+const ownBooking = (patch = {}) => ({
+  id: 'res-1',
+  account_id: 'user-1',
+  room_id: 'room-1',
+  check_in: validBody().check_in,
+  check_out: validBody().check_out,
+  status: 'confirmed',
+  guests: 2,
+  total_price: 389.97,
+  payments: [
+    {
+      id: 'pay-1',
+      card_number: '4242',
+      transactions: [{ id: 'txn-1', amount: 389.97, status: 'completed', transaction_type: 'charge' }],
+    },
+  ],
+  ...patch,
+})
+
+const clash = async () => ({ data: null, error: { code: '23P01' } })
+
 const withCard = (card_number, extra = {}) => {
   const body = validBody()
   body.payment = { ...body.payment, card_number, ...extra }
@@ -95,6 +138,7 @@ const writes = () =>
 beforeEach(() => {
   claims = { data: { claims: { sub: 'user-1' } }, error: null }
   roomResult = { data: { ...ROOM }, error: null }
+  savedReservations = []
   for (const fn of [createReservation, updateReservation, createPayment, recordCheckoutCharge, consoleError, liveRoomPrice, createLiveReservation, recordLiveCharge]) {
     fn.mock.resetCalls()
   }
@@ -339,6 +383,21 @@ describe('LiteAPI hotels', () => {
     assert.equal(createPayment.mock.callCount(), 0)
   })
 
+  test('a retry of a live booking that went through gets that booking at its saved price, not charged again', async () => {
+    // The quote has moved since the first attempt
+    liveRoomPrice.mock.mockImplementation(async () => live(171.3, 3))
+    createLiveReservation.mock.mockImplementation(clash)
+    const paid = { id: 'txn-1', amount: 163.66, status: 'completed', transaction_type: 'charge' }
+    savedReservations = [ownBooking({ total_price: 163.66, payments: [{ id: 'pay-1', card_number: '4242', transactions: [paid] }] })]
+    const r = await post(validBody())
+    assert.equal(r.status, 200)
+    assert.equal(r.json.reservation.id, 'res-1')
+    assert.equal(r.json.reservation.total_price, 163.66)
+    assert.deepEqual(r.json.transaction, { id: 'txn-1', amount: 163.66, status: 'completed' })
+    assert.equal(writes(), 1)
+    assert.equal(createLiveReservation.mock.callCount(), 1)
+  })
+
   test('an owner hotel (no liteapi_id) never calls LiteAPI', async () => {
     for (const hotels of [null, { liteapi_id: null }]) {
       roomResult = { data: { ...LITE_ROOM, liteapi_room_id: null, hotels }, error: null }
@@ -391,6 +450,69 @@ describe('saving the reservation', () => {
     createReservation.mock.mockImplementation(async () => ({ data: [], error: null }))
     assert.equal((await post(validBody())).status, 500)
     assert.equal(createPayment.mock.callCount(), 0)
+  })
+})
+
+// The first checkout went through but its response never reached the guest, who sends it again
+describe('retry after a lost response', () => {
+  const taken = { status: 409, json: { error: 'Room is not available for those dates.' } }
+
+  test('the guest’s own paid booking: the first response again, nothing new saved, charged or cancelled', async () => {
+    const first = await post(validBody())
+    assert.equal(first.status, 201)
+    savedReservations = [ownBooking()]
+    createReservation.mock.mockImplementation(clash)
+    for (const fn of [createReservation, createPayment, recordCheckoutCharge, updateReservation]) fn.mock.resetCalls()
+
+    const retry = await post(validBody())
+    assert.deepEqual(retry, { status: 200, json: first.json })
+    // Only the insert the database refused
+    assert.equal(writes(), 1)
+    assert.equal(createReservation.mock.callCount(), 1)
+  })
+
+  test('another guest’s booking of the room for those dates is still a 409', async () => {
+    createReservation.mock.mockImplementation(clash)
+    savedReservations = [ownBooking({ account_id: 'user-2' })]
+    assert.deepEqual(await post(validBody()), taken)
+    assert.equal(writes(), 1)
+  })
+
+  test('the guest’s own booking of the room for other dates is still a 409', async () => {
+    createReservation.mock.mockImplementation(clash)
+    for (const dates of [
+      { check_in: future(11), check_out: future(14) },
+      { check_in: future(10), check_out: future(12) },
+      { check_in: future(9), check_out: future(13) },
+    ]) {
+      savedReservations = [ownBooking(dates)]
+      assert.deepEqual(await post(validBody()), taken, JSON.stringify(dates))
+    }
+    assert.equal(createPayment.mock.callCount() + updateReservation.mock.callCount(), 0)
+  })
+
+  test('the guest’s own booking of another room, a cancelled one, or one that isn’t paid is still a 409', async () => {
+    createReservation.mock.mockImplementation(clash)
+    const charge = { id: 'txn-1', amount: 389.97, status: 'completed', transaction_type: 'charge' }
+    for (const patch of [
+      { room_id: 'room-2' },
+      { status: 'cancelled' },
+      { payments: [] },
+      { payments: [{ id: 'pay-1', card_number: '4242', transactions: [] }] },
+      { payments: [{ id: 'pay-1', card_number: '4242', transactions: [{ ...charge, status: 'failed' }] }] },
+      { payments: [{ id: 'pay-1', card_number: '4242', transactions: [{ ...charge, transaction_type: 'credit' }] }] },
+    ]) {
+      savedReservations = [ownBooking(patch)]
+      assert.deepEqual(await post(validBody()), taken, JSON.stringify(patch))
+    }
+  })
+
+  test('a retry with another card still gets the booking, with the card that paid for it', async () => {
+    createReservation.mock.mockImplementation(clash)
+    savedReservations = [ownBooking()]
+    const r = await post(withCard('5555 5555 5555 4444'))
+    assert.equal(r.status, 200)
+    assert.deepEqual(r.json.payment, { id: 'pay-1', brand: null, last4: '4242' })
   })
 })
 
