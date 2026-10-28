@@ -117,6 +117,18 @@ test('a booking being changed: its own room is free for its own nights, other gu
   assert.equal(freeUnitId(dated[1], '2027-05-01', '2027-05-03'), 'B2') // keeps its own room
 })
 
+test('a live quote\'s rooms count the booking\'s own nights again; taking them off again keeps the room', async () => {
+  const { freeUnitId, markBookedRooms, withoutStay } = await import('../lib/room-availability.ts')
+  // A LiteAPI room is its own card. The prices route sends fresh units, which still hold this booking (May 1-3).
+  const quoted = [{ id: 'L1', units: [{ id: 'L1', bookedNights: ['2027-05-01', '2027-05-02'] }] }]
+  assert.equal(markBookedRooms(quoted, '2027-05-01', '2027-05-04')[0].bookedForDates, true)
+  const mine = withoutStay(quoted, 'L1', '2027-05-01', '2027-05-03')
+  const dated = markBookedRooms(mine, '2027-05-01', '2027-05-04') // one night longer
+  assert.notEqual(dated[0].soldOut, true)
+  assert.equal(freeUnitId(dated[0], '2027-05-01', '2027-05-04'), 'L1')
+  assert.deepEqual(withoutStay(mine, 'L1', '2027-05-01', '2027-05-03'), mine) // running it twice changes nothing
+})
+
 test('photos removed by a save: only the owner\'s uploaded files are deleted', async () => {
   const { removedPhotoPaths } = await import('../lib/listing-photos.ts')
   const base = 'https://x.supabase.co/storage/v1/object/public/listing-photos/'

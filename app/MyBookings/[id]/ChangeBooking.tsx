@@ -114,10 +114,11 @@ export function ChangeBooking({
         })
       : listed;
   // Rooms other guests hold on the new dates show as unavailable (audit retest). Dates after the
-  // page's ~400-day lookup are looked up for their exact nights, minus this booking's own.
+  // page's ~400-day lookup are looked up for their exact nights. Those and a live quote's rooms both
+  // count this booking's own nights again, so they come off every time.
   const { rows: extraNights, lookingUp } = useBookedNightsLookup(hotelId ?? "", bookedWindow, checkIn, checkOut, !!hotelId && !sample);
   const known = mergeBookedNights(priced, extraNights);
-  const mine = extraNights.length ? withoutStay(known, booking.roomId, booking.checkIn, booking.checkOut) : known;
+  const mine = withoutStay(known, booking.roomId, booking.checkIn, booking.checkOut);
   const rooms = markBookedRooms(mine, checkIn, checkOut);
   const room = rooms.find((r) => r.id === roomId) ?? rooms[0];
   const currentRoom = rooms.find((r) => r.id === current.roomId);
