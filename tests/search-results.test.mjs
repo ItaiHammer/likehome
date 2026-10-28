@@ -165,3 +165,12 @@ test('without dates or a place, past 100 matches a price sort pages in SQL and p
     assert.deepEqual(keys(result.data.slice(0, owners.length)), keys(owners));
     assert.ok(result.data.slice(owners.length).every((row) => row.price_status === 'needs-dates' && row.min_price === null));
 });
+
+test('a minimum price of 0 is no filter: LiteAPI hotels still show without dates, with or without a place', async () => {
+    hotels = [owner('o1', 2), lite(1, 1)];
+    for (const listing of [null, place(1)]) {
+        const { data, total } = await searchResults({ minPrice: '0' }, 1, listing);
+        assert.deepEqual(keys(data).sort(), ['h1', 'o1'], String(listing));
+        assert.equal(total, 2);
+    }
+});

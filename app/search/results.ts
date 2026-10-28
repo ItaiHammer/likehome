@@ -1,6 +1,6 @@
 import { getSearchParams, search } from './search.ts';
 import { priceSearchResults, quotePage } from './livePrices.ts';
-import { mergeLiveResults, withoutDates } from './liveSearch.ts';
+import { mergeLiveResults, narrowsPrice, withoutDates } from './liveSearch.ts';
 import { savedLiteapiIds } from '../../utils/liteapi-hotels.ts';
 import type { LiteHotelListing } from '../../lib/liteapi/types.ts';
 import type { HotelSearchResult } from './components/SearchResultCard';
@@ -33,7 +33,7 @@ const checking = (row: HotelSearchResult): HotelSearchResult => (row.liteapi_id 
 export async function searchResults(request: SearchRequest, page: number, listing: LiveListing | null): Promise<SearchResults> {
     const p = getSearchParams(request);
     // A LiteAPI hotel's price is live (with dates) or unknown (without), which the SQL can't range or sort by
-    const byPrice = Boolean(p.price) || p.sort === 'price-low' || p.sort === 'price-high';
+    const byPrice = narrowsPrice(p.price) || p.sort === 'price-low' || p.sort === 'price-high';
     const candidates = { page: 1, pageSize: LIVE_CANDIDATES };
     const pageOf = (list: HotelSearchResult[]) => list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     // A page past the end reads "0 stays found", as the SQL paging does
