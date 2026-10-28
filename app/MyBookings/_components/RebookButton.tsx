@@ -133,7 +133,7 @@ export function RebookButton({
       {open && (
         <div id={panelId} className="basis-full border-t border-edge pt-4">
           <div className="max-w-lg space-y-4">
-            <p className="text-sm text-slate">Same room and guests as last time. Pick your new dates.</p>
+            <p className="text-sm text-slate">Same hotel and room type as last time. Pick your new dates.</p>
 
             {/* Locked while checking (and while checkout loads), so the answer is for the dates shown */}
             <fieldset disabled={checking} className="min-w-0">
