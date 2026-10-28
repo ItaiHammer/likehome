@@ -2,18 +2,18 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Button } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { firstName, groupBookings, type Booking } from "@/lib/bookings";
+import { firstName, groupBookings, toCancellationQuote, type Booking, type CancellationQuote } from "@/lib/bookings";
 import { getAccount } from "@/utils/accounts";
 import { getHotelsByIds } from "@/utils/hotels";
 import { guestToday } from "@/utils/guest-today";
-import { getReservationsByAccount } from "@/utils/reservations";
+import { getCancellationQuote, getReservationsByAccount } from "@/utils/reservations";
 import { getRoomsByIds } from "@/utils/rooms";
 import { getUserId } from "@/utils/user";
 import { AccountSidebar } from "./_components/AccountSidebar";
 import { PastBooking } from "./_components/PastBooking";
 import { SampleNotice } from "./_components/SampleNotice";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
-import { getSampleBookings } from "./sampleBookings";
+import { getSampleBookings, getSampleQuote } from "./sampleBookings";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
 
@@ -57,6 +57,18 @@ async function loadMyBookings() {
   return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings };
 }
 
+// What cancelling each upcoming stay would cost. A quote that fails only leaves that cancel button unavailable.
+async function loadQuotes(bookings: Booking[]) {
+  const quotes = await Promise.all(
+    bookings.map(async (b) => {
+      const { data, error } = await getCancellationQuote(b.id);
+      if (error) console.error("getCancellationQuote failed:", error);
+      return [b.id, toCancellationQuote(data)] as const;
+    }),
+  );
+  return new Map<string, CancellationQuote | null>(quotes);
+}
+
 export default async function MyBookingsPage({ searchParams }: { searchParams: Promise<{ sample?: string }> }) {
   // The guest's today (from their time zone cookie), not UTC's
   const today = await guestToday();
@@ -65,6 +77,7 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: P
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
   const { name, email, bookings } = showSample ? getSampleBookings(today, sample === "empty") : await loadMyBookings();
   const { upcoming, past, cancelled } = groupBookings(bookings, today);
+  const quotes = showSample ? new Map(upcoming.map((b) => [b.id, getSampleQuote(b, today)])) : await loadQuotes(upcoming);
   const first = firstName(name);
 
   return (
@@ -94,6 +107,8 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: P
                     <UpcomingBooking
                       booking={booking}
                       href={`${PAGE_ROUTES.MY_BOOKINGS}/${booking.id}${showSample ? "?sample" : ""}`}
+                      cancellation={quotes.get(booking.id) ?? null}
+                      sample={showSample}
                       priority={i === 0}
                     />
                   </li>

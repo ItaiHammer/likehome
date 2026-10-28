@@ -64,6 +64,35 @@ export const money = (n: number) => {
   return `$${cents.toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(cents) ? 0 : 2, maximumFractionDigits: 2 })}`
 }
 
+/** What cancelling would cost right now (get_cancellation_quote). Insured: what was paid comes back as points. */
+export type CancellationQuote = {
+  hasInsurance: boolean
+  canCancel: boolean
+  bookingPaid: number
+  insurancePaid: number
+  refund: number
+  refundPoints: number
+}
+
+const amount = (value: unknown) => {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+// Postgres numerics can arrive as strings, so every amount goes through Number()
+export function toCancellationQuote(row: unknown): CancellationQuote | null {
+  if (!row || typeof row !== 'object') return null
+  const r = row as Record<string, unknown>
+  return {
+    hasInsurance: r.has_insurance === true,
+    canCancel: r.can_cancel === true,
+    bookingPaid: amount(r.booking_paid),
+    insurancePaid: amount(r.insurance_paid),
+    refund: amount(r.refund),
+    refundPoints: amount(r.refund_points),
+  }
+}
+
 /** One of the guest's confirmed bookings at another hotel. The database refuses a stay that overlaps one. */
 export type OtherStay = { checkIn: string; checkOut: string; hotelName: string }
 
