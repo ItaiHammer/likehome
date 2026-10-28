@@ -100,10 +100,13 @@ export function ChangeBooking({
   // The page priced the rooms for the booked dates and guests; anything else needs a fresh quote
   const initialKey = `${booking.checkIn}|${booking.checkOut}|${booking.guests - booking.children}|${booking.children}`;
   const priceKey = booking.livePrices && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${adults}|${children}` : null;
-  const pricesPending = !!priceKey && priceKey !== initialKey && livePrices?.key !== priceKey;
+  // Rooms saved after the page loaded aren't in its own prices, so then the booking's dates and guests are fetched too
+  const pagePriced = priceKey === initialKey && !addedRooms.some((r) => !listedRooms.some((l) => l.id === r.id));
+  const pricesPending = !!priceKey && !pagePriced && livePrices?.key !== priceKey;
   const sameGuests = guests === current.guests && children === current.children;
   const sameStay = checkIn === current.checkIn && checkOut === current.checkOut && sameGuests;
-  const listed = withAddedRooms(listedRooms, addedRooms, priceKey === initialKey);
+  const unquoted = priceKey === initialKey && livePrices?.key === priceKey && Object.keys(livePrices.byId).length === 0;
+  const listed = withAddedRooms(listedRooms, addedRooms, unquoted);
   const priced =
     livePrices && livePrices.key === priceKey
       ? listed.map((r) => {
@@ -148,7 +151,7 @@ export function ChangeBooking({
   );
 
   useEffect(() => {
-    if (!priceKey || priceKey === initialKey || livePrices?.key === priceKey) return;
+    if (!priceKey || pagePriced || livePrices?.key === priceKey) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       const query = new URLSearchParams({ checkIn, checkOut, adults: String(adults), children: String(children) });
@@ -173,7 +176,7 @@ export function ChangeBooking({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [priceKey, initialKey, livePrices?.key, booking.hotelId, checkIn, checkOut, adults, children]);
+  }, [priceKey, pagePriced, livePrices?.key, booking.hotelId, checkIn, checkOut, adults, children]);
 
   if (blocker || !room || !currentRoom) {
     return (

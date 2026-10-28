@@ -123,9 +123,12 @@ export function StayReservation({
   const initialKey = `${initial.checkIn ?? ""}|${initial.checkOut ?? ""}|${initial.adults ?? 2}|${initial.children ?? 0}`;
   const priceKey = stay.liteapiId && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${adults}|${children}` : null;
   const liveKey = livePrices?.key;
-  const listed = withAddedRooms(stay.rooms, addedRooms, priceKey === initialKey);
+  // Rooms saved after the page loaded aren't in its own prices, so then the link's dates and guests are fetched too
+  const pagePriced = priceKey === initialKey && !addedRooms.some((r) => !stay.rooms.some((s) => s.id === r.id));
+  const unquoted = priceKey === initialKey && liveKey === priceKey && Object.keys(livePrices?.byId ?? {}).length === 0;
+  const listed = withAddedRooms(stay.rooms, addedRooms, unquoted);
   const priced = livePrices && livePrices.key === priceKey ? listed.map((r) => ({ ...r, ...livePrices.byId[r.id] })) : listed;
-  const pricesPending = !!priceKey && priceKey !== initialKey && liveKey !== priceKey;
+  const pricesPending = !!priceKey && !pagePriced && liveKey !== priceKey;
 
   // Dates after the page's ~400-day lookup are looked up for their exact nights
   const { rows: extraNights, lookingUp } = useBookedNightsLookup(stay.slug, stay.bookedWindow, checkIn, checkOut, !!stay.bookable);
@@ -161,7 +164,7 @@ export function StayReservation({
   }, [otherStays, today]);
 
   useEffect(() => {
-    if (!priceKey || priceKey === initialKey || priceKey === liveKey) return;
+    if (!priceKey || pagePriced || priceKey === liveKey) return;
     const [ci, co, a, c] = priceKey.split("|");
     const request = new AbortController();
     const timer = window.setTimeout(async () => {
@@ -190,7 +193,7 @@ export function StayReservation({
       window.clearTimeout(timer);
       request.abort();
     };
-  }, [priceKey, initialKey, liveKey, stay.slug]);
+  }, [priceKey, pagePriced, liveKey, stay.slug]);
 
   // Nights when every room here is booked. Also from `today`, so it fills in once in the browser.
   // Not for LiteAPI hotels: LiteAPI can offer a party rooms the hotel hasn't saved yet.
