@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750"><title>Hotel lobby with a reception desk</title>
+<rect width="1200" height="750" fill="#EDE5D8"/>
+<rect y="540" width="1200" height="210" fill="#B9A586"/>
+<g stroke="#A8936F" stroke-width="3"><path d="M0 600 H1200M0 670 H1200"/></g>
+<rect x="80" y="80" width="300" height="400" fill="#A9C6E6" stroke="#fff" stroke-width="14"/><path d="M230 80 V480" stroke="#fff" stroke-width="10"/>
+<rect x="470" y="160" width="420" height="200" fill="#F7F1E6"/><text x="680" y="275" text-anchor="middle" font-family="Georgia, serif" font-size="56" fill="#2F4A7A">Welcome</text>
+<rect x="430" y="400" width="500" height="160" rx="10" fill="#8A6F5A"/><rect x="430" y="400" width="500" height="26" rx="8" fill="#6F5847"/>
+<g stroke="#7C6656" stroke-width="4"><path d="M560 0 V120M680 0 V100M800 0 V120"/></g>
+<g fill="#FFF3D6"><circle cx="560" cy="135" r="22"/><circle cx="680" cy="115" r="22"/><circle cx="800" cy="135" r="22"/></g>
+<rect x="1000" y="470" width="110" height="90" fill="#D7CFC2"/><g fill="#6F8F6A"><circle cx="1055" cy="400" r="70"/><circle cx="1010" cy="440" r="45"/><circle cx="1100" cy="440" r="45"/></g>
+<rect x="120" y="560" width="220" height="90" rx="26" fill="#4C79BD"/><rect x="120" y="510" width="60" height="140" rx="24" fill="#3E6AAE"/>
+</svg>

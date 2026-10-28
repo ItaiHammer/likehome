@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750"><title>Hotel restaurant dining room</title>
+<rect width="1200" height="750" fill="#EFE7DA"/>
+<rect x="100" y="70" width="1000" height="300" fill="#A9C6E6"/><rect x="100" y="250" width="1000" height="120" fill="#4C79BD"/>
+<g stroke="#fff" stroke-width="14" fill="none"><rect x="100" y="70" width="1000" height="300"/><path d="M350 70 V370M600 70 V370M850 70 V370"/></g>
+<rect y="520" width="1200" height="230" fill="#B9A586"/>
+<g stroke="#7C6656" stroke-width="4"><path d="M300 0 V170M600 0 V150M900 0 V170"/></g>
+<g fill="#FFF3D6"><path d="M265 170 H335 L320 205 H280Z"/><path d="M565 150 H635 L620 185 H580Z"/><path d="M865 170 H935 L920 205 H880Z"/></g>
+<g><rect x="170" y="450" width="260" height="20" rx="6" fill="#FBF8F3"/><rect x="290" y="470" width="20" height="120" fill="#8A6F5A"/>
+<rect x="770" y="450" width="260" height="20" rx="6" fill="#FBF8F3"/><rect x="890" y="470" width="20" height="120" fill="#8A6F5A"/></g>
+<g fill="#2F4A7A"><rect x="110" y="420" width="50" height="170" rx="14"/><rect x="440" y="420" width="50" height="170" rx="14"/><rect x="710" y="420" width="50" height="170" rx="14"/><rect x="1040" y="420" width="50" height="170" rx="14"/></g>
+<g fill="#fff"><circle cx="240" cy="445" r="16"/><circle cx="360" cy="445" r="16"/><circle cx="840" cy="445" r="16"/><circle cx="960" cy="445" r="16"/></g>
+<g fill="#8DAA7E"><circle cx="300" cy="425" r="14"/><circle cx="900" cy="425" r="14"/></g>
+</svg>

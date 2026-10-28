@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -6 108 120">
+  <!-- LikeHome mark (same drawing as app/_components/LogoMark.tsx), used as the browser tab icon -->
+  <style>
+    .mark { fill: #536383; stroke: #536383; }
+    @media (prefers-color-scheme: dark) { .mark { fill: #9aa6bf; stroke: #9aa6bf; } }
+  </style>
+  <defs>
+    <mask id="cut">
+      <rect x="-10" y="-10" width="130" height="140" fill="#fff" />
+      <circle cx="81" cy="17" r="3.8" fill="#000" />
+      <path d="M81 17 C 84 31, 82 45, 72 56" fill="none" stroke="#000" stroke-width="3.4" stroke-linecap="round" />
+    </mask>
+    <clipPath id="door"><path d="M28 104 V49 A22 22 0 0 1 72 49 V104 Z" /></clipPath>
+  </defs>
+  <g class="mark" transform="rotate(-9 50 55)">
+    <path mask="url(#cut)" stroke="none" d="M18 6 H82 A10 10 0 0 1 92 16 V99 A5 5 0 0 1 87 104 H77 A5 5 0 0 1 72 99 V49 A22 22 0 0 0 28 49 V99 A5 5 0 0 1 23 104 H13 A5 5 0 0 1 8 99 V16 A10 10 0 0 1 18 6 Z" />
+    <path clip-path="url(#door)" d="M81 17 C 84 31, 82 45, 72 56 C 66 63, 58 66, 51 68" fill="none" stroke-width="3.4" stroke-linecap="round" />
+    <circle stroke="none" cx="49" cy="68" r="4.4" />
+  </g>
+</svg>

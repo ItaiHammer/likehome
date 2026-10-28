@@ -1,0 +1,144 @@
+import type { SceneVariant } from "../_components/WindowScene";
+
+// Placeholder listings until the backend exists. The names borrow real hotel
+// brands so the template reads like a real booking site; prices, ratings and
+// rooms are made up, so swap in invented names before anything goes public.
+export type Room = {
+  id: string;
+  name: string;
+  description: string;
+  sleeps: number;
+  nightly: number;
+  soldOut?: boolean;
+  /** Set on the stay page when every room of this type is booked for the chosen dates */
+  bookedForDates?: boolean;
+  /** Database rooms only: the identical rooms behind this card and the nights each is booked */
+  units?: { id: string; bookedNights: string[] }[];
+  /** Database rooms only: what the search filters check per room */
+  maxAdults?: number | null;
+  maxChildren?: number | null;
+  beds?: number;
+  bedSize?: string | null;
+  tags?: string[];
+  liteapiRoomId?: string | null;
+  // A LiteAPI room's live quote; null when it has none (the stored price shows). Owner rooms leave these out
+  // and follow the site's own cancellation rule.
+  refundable?: boolean | null;
+  /** Free cancellation ends as this day starts; null for a refundable rate that lists no fee */
+  cancelBy?: string | null;
+  /** Hotel fees for the whole stay, paid at the property on top of the price */
+  dueAtProperty?: number | null;
+};
+
+/** Something a stay has, named like the search filter it matches */
+export type Offer = { label: string; /** Only some of its rooms have it */ someRooms?: boolean };
+
+export type Stay = {
+  slug: string;
+  name: string;
+  location: string;
+  /** Kind of place, shown on stay cards */
+  type: string;
+  /** A few standout amenities, shown as tags on stay cards */
+  tags: string[];
+  /** null until the hotel has a rating */
+  rating: number | null;
+  reviews?: number;
+  variant?: SceneVariant;
+  /** Photo URLs; the gallery shows numbered placeholders without them */
+  photos?: string[];
+  /** What it offers, from its database tags; the sample stays show their tags instead */
+  offers?: Offer[];
+  /** The "Good for" filters it matches (Families, Pets…) */
+  goodFor?: string[];
+  /** A real hotel whose rooms can be booked through /api/reservations (the sample stays can't) */
+  bookable?: boolean;
+  liteapiId?: string | null;
+  /** "stored" when live prices were asked for but LiteAPI couldn't give any */
+  priceSource?: "live" | "stored";
+  /** The server has a LiteAPI key. Without one, the stored prices hold for any dates, so pages never refetch them. */
+  liteapiConfigured?: boolean;
+  /** Tax added to the room and cleaning fee; TAX_RATE when not set */
+  taxRate?: number;
+  cleaningFee: number;
+  /** Nights already booked, as days from today. Placeholder until availability comes from the backend. */
+  blockedNights: number[];
+  /** Database hotels: the nights the rooms' booked nights were looked up for (see units) */
+  bookedWindow?: { from: string; to: string };
+  rooms: Room[];
+};
+
+/** The made-up stays on the home page always have a rating, reviews and an illustration */
+export type SampleStay = Stay & { rating: number; reviews: number; variant: SceneVariant };
+
+export const TAX_RATE = 0.12;
+
+export const STAYS: SampleStay[] = [
+  {
+    slug: "four-seasons-positano",
+    name: "Four Seasons Positano",
+    location: "Positano, Italy",
+    type: "Resort",
+    tags: ["Sea view", "Pool", "Free breakfast"],
+    rating: 4.96,
+    reviews: 128,
+    variant: "sea",
+    cleaningFee: 45,
+    blockedNights: [5, 6, 13],
+    rooms: [
+      { id: "garden", name: "Garden room", description: "Queen bed · Garden view", sleeps: 2, nightly: 214 },
+      { id: "terrace", name: "Sea-view suite", description: "King bed · Private terrace", sleeps: 3, nightly: 289 },
+      { id: "villa", name: "Private villa", description: "3 bedrooms · Full kitchen", sleeps: 6, nightly: 405, soldOut: true },
+    ],
+  },
+  {
+    slug: "fairmont-banff",
+    name: "Fairmont Banff",
+    location: "Banff, Canada",
+    type: "Lodge",
+    tags: ["Mountain view", "Spa", "Free parking"],
+    rating: 4.92,
+    reviews: 86,
+    variant: "mountain",
+    cleaningFee: 60,
+    blockedNights: [3, 9, 10, 17],
+    rooms: [
+      { id: "loft", name: "Loft room", description: "Queen bed · Mountain view", sleeps: 2, nightly: 178 },
+      { id: "chalet", name: "Mountain chalet", description: "2 bedrooms · Wood stove", sleeps: 5, nightly: 320 },
+    ],
+  },
+  {
+    slug: "hilton-joshua-tree",
+    name: "Hilton Joshua Tree",
+    location: "Joshua Tree, California",
+    type: "Hotel",
+    tags: ["Stargazing deck", "Hot tub", "Pet friendly"],
+    rating: 4.89,
+    reviews: 203,
+    variant: "desert",
+    cleaningFee: 50,
+    blockedNights: [8, 15, 16],
+    rooms: [
+      { id: "king", name: "Desert king room", description: "King bed · Stargazing deck", sleeps: 2, nightly: 146 },
+      { id: "casita", name: "Casita suite", description: "2 bedrooms · Hot tub", sleeps: 4, nightly: 265 },
+    ],
+  },
+  {
+    slug: "marriott-lisbon",
+    name: "Marriott Lisbon",
+    location: "Lisbon, Portugal",
+    type: "Hotel",
+    tags: ["River view", "City center", "Gym"],
+    rating: 4.94,
+    reviews: 157,
+    variant: "city",
+    cleaningFee: 35,
+    blockedNights: [4, 11, 12, 20],
+    rooms: [
+      { id: "river", name: "River-view room", description: "Queen bed · River view", sleeps: 2, nightly: 132 },
+      { id: "suite", name: "Two-bedroom suite", description: "2 bedrooms · Balcony", sleeps: 4, nightly: 219 },
+    ],
+  },
+];
+
+export const getStay = (slug: string) => STAYS.find((s) => s.slug === slug);
