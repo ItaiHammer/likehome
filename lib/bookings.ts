@@ -61,6 +61,15 @@ export const money = (n: number) => {
   return `$${cents.toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(cents) ? 0 : 2, maximumFractionDigits: 2 })}`
 }
 
+// "$120 × 2 nights". A live nightly price isn't rounded to cents (so the stay costs exactly LiteAPI's total); when the
+// rounded price doesn't multiply out to the subtotal, the line gives it as an average instead.
+export function nightsPriceLabel(nightly: number, nights: number, subtotal: number): string {
+  const label = `${nights} ${nights === 1 ? 'night' : 'nights'}`
+  return Math.round(nightly * 100) * nights === Math.round(subtotal * 100)
+    ? `${money(nightly)} × ${label}`
+    : `${label} (avg. ${money(nightly)} / night)`
+}
+
 /** One of the guest's confirmed bookings at another hotel. The database refuses a stay that overlaps one. */
 export type OtherStay = { checkIn: string; checkOut: string; hotelName: string }
 

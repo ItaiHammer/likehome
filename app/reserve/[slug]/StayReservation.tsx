@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
+import { findOverlap, money, nightsPriceLabel, overlapMessage, type OtherStay } from "@/lib/bookings";
 import { freeUnitId, markBookedRooms, mergeBookedNights, soldOutNights, withAddedRooms } from "@/lib/room-availability";
 import { matchingRoom, roomFits } from "@/lib/stay-filters";
 import { cardErrors } from "@/lib/card";
@@ -642,7 +642,7 @@ export function StayReservation({
 
             {nights > 0 ? (
               <dl className="mt-5 space-y-3 border-t border-edge pt-5 text-sm">
-                <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
+                <Line label={nightsPriceLabel(room.nightly, nights, subtotal)} value={money(subtotal)} />
                 {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
                 {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
                 <div className="flex justify-between border-t border-edge pt-3 text-lg font-bold text-ink">
@@ -808,7 +808,7 @@ export function StayReservation({
               {nights > 0 ? (
                 <div>
                   <dl className="space-y-2 text-base">
-                    <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
+                    <Line label={nightsPriceLabel(room.nightly, nights, subtotal)} value={money(subtotal)} />
                     {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
                     {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
                     <div className="flex justify-between border-t border-edge pt-3 text-base font-bold text-ink">

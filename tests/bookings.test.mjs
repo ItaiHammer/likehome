@@ -10,6 +10,7 @@ import {
   groupBookings,
   initials,
   money,
+  nightsPriceLabel,
   overlapMessage,
 } from '../lib/bookings.ts'
 
@@ -132,4 +133,21 @@ test('money shows cents only when there are some', () => {
   assert.equal(money(1234.5), '$1,234.50')
   assert.equal(money(569.97), '$569.97')
   assert.equal(money(64.4 * 15), '$966')
+})
+
+test('the price line multiplies out to the subtotal, or gives the nightly price as an average', () => {
+  assert.equal(nightsPriceLabel(120, 2, 240), '$120 × 2 nights')
+  assert.equal(nightsPriceLabel(99.5, 1, 99.5), '$99.50 × 1 night')
+  // A live nightly price is LiteAPI's total over the nights: $573.77 for 2 nights isn't $286.89 × 2
+  assert.equal(nightsPriceLabel(573.77 / 2, 2, 573.77), '2 nights (avg. $286.89 / night)')
+  assert.equal(nightsPriceLabel(100 / 3, 3, (100 / 3) * 3), '3 nights (avg. $33.33 / night)')
+  for (let cents = 1; cents <= 300000; cents += 997) {
+    for (let nights = 1; nights <= 30; nights++) {
+      const subtotal = (cents / 100 / nights) * nights
+      const label = nightsPriceLabel(cents / 100 / nights, nights, subtotal)
+      const each = label.match(/^\$([\d,.]+) × /)
+      if (each) assert.equal(Math.round(Number(each[1].replace(/,/g, '')) * 100) * nights, Math.round(subtotal * 100), label)
+      else assert.ok(nights > 1 && label.startsWith(`${nights} nights (avg. `), label)
+    }
+  }
 })

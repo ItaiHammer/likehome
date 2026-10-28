@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { bookingCode, changeBlocker, findOverlap, formatStayDates, money, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
+import { bookingCode, changeBlocker, findOverlap, formatStayDates, money, nightsPriceLabel, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
 import { calculateTotalPrice, MAX_NIGHTS, todayInTimeZone } from "@/utils/reservation-logic";
 import { browserTimeZone, formatDate, nightsBetween } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
@@ -394,9 +394,7 @@ export function ChangeBooking({
               ) : nights > 0 ? (
                 <dl className="space-y-2 text-base">
                   <div className="flex justify-between text-slate">
-                    <dt>
-                      {money(room.nightly)} × {nightsLabel(nights)}
-                    </dt>
+                    <dt>{nightsPriceLabel(room.nightly, nights, total)}</dt>
                     <dd className="text-ink">{money(total)}</dd>
                   </div>
                   {difference !== 0 && (
