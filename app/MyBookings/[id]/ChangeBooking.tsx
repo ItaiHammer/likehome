@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { bookingCode, changeBlocker, datesProblem, findOverlap, formatStayDates, money, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
-import { calculateTotalPrice, todayInTimeZone } from "@/utils/reservation-logic";
+import { calculateTotalPrice, MAX_NIGHTS, todayInTimeZone } from "@/utils/reservation-logic";
 import { browserTimeZone, formatDate, nightsBetween } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, FormError, Stepper } from "../../_components/ui";
