@@ -83,3 +83,27 @@ export function mergeBookedNights<R extends WithUnits>(rooms: R[], rows: { room_
       : r,
   );
 }
+
+/**
+ * The rooms without the guest's own stay counted as booked, for changing a booking: the room they
+ * already hold is free for its own nights (audit retest: My Bookings room switch).
+ */
+export function withoutStay<R extends WithUnits>(rooms: R[], unitId: string, checkIn: string, checkOut: string): R[] {
+  const inStay = coversNight(checkIn, checkOut);
+  return rooms.map((r) =>
+    r.units?.some((u) => u.id === unitId)
+      ? { ...r, units: r.units.map((u) => (u.id === unitId ? { ...u, bookedNights: u.bookedNights.filter((n) => !inStay(n)) } : u)) }
+      : r,
+  );
+}
+
+/**
+ * The room cards for a booking being changed: the card holding the booked room is named by that
+ * room's id and offers it first, so keeping the same room keeps the same room.
+ */
+export function cardsForBooking<R extends WithUnits>(rooms: R[], unitId: string): R[] {
+  return rooms.map((r) => {
+    const own = r.units?.find((u) => u.id === unitId);
+    return own && r.units ? { ...r, id: unitId, units: [own, ...r.units.filter((u) => u !== own)] } : r;
+  });
+}

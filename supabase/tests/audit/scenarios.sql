@@ -126,3 +126,13 @@ insert into storage.objects (bucket_id, name) values ('listing-photos', 'aaaaaaa
 \echo '--- 25. upload at the bucket root: REFUSED'
 insert into storage.objects (bucket_id, name) values ('listing-photos', 'a.jpg');
 reset role;
+\echo '--- 26. owner can see their own photo (needed to delete it) but not another owner''s'
+reset role;
+insert into storage.objects (bucket_id, name) values ('listing-photos', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/other.jpg');
+set role authenticated;
+set test.uid = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+select name from storage.objects order by name;
+\echo '--- 27. owner deletes their own photo: 1 row; another owner''s: 0 rows'
+delete from storage.objects where name = 'cccccccc-cccc-cccc-cccc-cccccccccccc/a.jpg';
+delete from storage.objects where name = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/other.jpg';
+reset role;

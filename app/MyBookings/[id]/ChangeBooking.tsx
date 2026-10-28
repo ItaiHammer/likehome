@@ -13,6 +13,8 @@ import type { Room } from "../../_data/stays";
 import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
 import { guestLabel } from "../../reserve/[slug]/GuestsField";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
+import { useBookedNightsLookup } from "../../reserve/[slug]/useBookedNightsLookup";
+import { freeUnitId, markBookedRooms, mergeBookedNights, withoutStay, type BookedWindow } from "@/lib/room-availability";
 import { HotelPhoto } from "../_components/HotelPhoto";
 
 export type BookingToChange = {
@@ -47,6 +49,8 @@ export function ChangeBooking({
   rooms: listedRooms,
   otherStays,
   sample = false,
+  hotelId,
+  bookedWindow,
 }: {
   booking: BookingToChange;
   /** The hotel's rooms; the booking can move to any of them */
@@ -55,6 +59,9 @@ export function ChangeBooking({
   otherStays: OtherStay[];
   /** Dev-only sample booking: changes are shown, never saved */
   sample?: boolean;
+  /** For looking up booked nights after the page's ~400-day window */
+  hotelId?: string;
+  bookedWindow?: BookedWindow;
 }) {
   const router = useRouter();
   // From the first load only: the refresh after a save mustn't swap the confirmation for the read-only view
@@ -97,7 +104,7 @@ export function ChangeBooking({
   const sameGuests = guests === current.guests && children === current.children;
   const sameStay = checkIn === current.checkIn && checkOut === current.checkOut && sameGuests;
   const listed = [...listedRooms, ...addedRooms.filter((r) => !listedRooms.some((l) => l.id === r.id))];
-  const rooms =
+  const priced =
     livePrices && livePrices.key === priceKey
       ? listed.map((r) => {
           const live = livePrices.byId[r.id];
@@ -106,6 +113,12 @@ export function ChangeBooking({
           return { ...r, ...live, soldOut: live.soldOut && !(sameStay && r.id === current.roomId) };
         })
       : listed;
+  // Rooms other guests hold on the new dates show as unavailable (audit retest). Dates after the
+  // page's ~400-day lookup are looked up for their exact nights, minus this booking's own.
+  const { rows: extraNights, lookingUp } = useBookedNightsLookup(hotelId ?? "", bookedWindow, checkIn, checkOut, !!hotelId && !sample);
+  const known = mergeBookedNights(priced, extraNights);
+  const mine = extraNights.length ? withoutStay(known, booking.roomId, booking.checkIn, booking.checkOut) : known;
+  const rooms = markBookedRooms(mine, checkIn, checkOut);
   const room = rooms.find((r) => r.id === roomId) ?? rooms[0];
   const currentRoom = rooms.find((r) => r.id === current.roomId);
   const changed = checkIn !== current.checkIn || checkOut !== current.checkOut || !sameGuests || roomId !== current.roomId;
@@ -180,6 +193,8 @@ export function ChangeBooking({
     if (checkIn < todayInTimeZone(browserTimeZone())) return { field: "dates", message: "That check-in date is too soon. Pick a later date." };
     const clash = findOverlap(otherStays, checkIn, checkOut);
     if (clash) return { field: "dates", message: overlapMessage(clash) };
+    if (lookingUp) return { field: "dates", message: "Still checking which rooms are free on those dates. Try again in a moment." };
+    if (room.bookedForDates) return { field: "guests", message: `${room.name} is booked for those dates. Pick another room or change your dates.` };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     return null;
   }
@@ -222,7 +237,8 @@ export function ChangeBooking({
       const res = await fetch(`/api/reservations/${booking.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ room_id: roomId, check_in: checkIn, check_out: checkOut, guests, children, time_zone: browserTimeZone() }),
+        // Whichever of the card's identical rooms is free (this booking's own room first)
+        body: JSON.stringify({ room_id: freeUnitId(room, checkIn, checkOut) ?? room.id, check_in: checkIn, check_out: checkOut, guests, children, time_zone: browserTimeZone() }),
         signal: controller.signal,
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; reservation?: { total_price?: number | string | null } | null };
