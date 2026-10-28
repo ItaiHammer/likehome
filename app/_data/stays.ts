@@ -20,6 +20,14 @@ export type Room = {
   beds?: number;
   bedSize?: string | null;
   tags?: string[];
+  liteapiRoomId?: string | null;
+  // A LiteAPI room's live quote; null when it has none (the stored price shows). Owner rooms leave these out
+  // and follow the site's own cancellation rule.
+  refundable?: boolean | null;
+  /** Free cancellation ends as this day starts; null for a refundable rate that lists no fee */
+  cancelBy?: string | null;
+  /** Hotel fees for the whole stay, paid at the property on top of the price */
+  dueAtProperty?: number | null;
 };
 
 /** Something a stay has, named like the search filter it matches */
@@ -45,6 +53,11 @@ export type Stay = {
   goodFor?: string[];
   /** A real hotel whose rooms can be booked through /api/reservations (the sample stays can't) */
   bookable?: boolean;
+  liteapiId?: string | null;
+  /** "stored" when live prices were asked for but LiteAPI couldn't give any */
+  priceSource?: "live" | "stored";
+  /** The server has a LiteAPI key. Without one, the stored prices hold for any dates, so pages never refetch them. */
+  liteapiConfigured?: boolean;
   /** Tax added to the room and cleaning fee; TAX_RATE when not set */
   taxRate?: number;
   cleaningFee: number;

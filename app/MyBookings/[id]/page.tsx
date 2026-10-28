@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PAGE_ROUTES } from "@/constants/routes";
+import { partyOf } from "@/lib/liteapi/party";
 import { getOtherStays } from "@/lib/other-stays";
 import { cardsForBooking, withoutStay } from "@/lib/room-availability";
 import { guestToday } from "@/utils/guest-today";
-import { getHotelStay } from "../../reserve/[slug]/hotelStay";
+import { getHotelStay, withLiveRoomPrices } from "../../reserve/[slug]/hotelStay";
 import { SampleNotice } from "../_components/SampleNotice";
 import { getSampleBooking } from "../sampleBookings";
 import { loadReservation, toBooking } from "./booking";
@@ -19,9 +20,15 @@ async function loadBooking(id: string, today: string) {
   const { userId, reservation: r } = await loadReservation(id, `${PAGE_ROUTES.MY_BOOKINGS}/${id}`);
   const [stay, otherStays] = await Promise.all([getHotelStay(r.hotel_id), getOtherStays(userId, r.hotel_id, r.id)]);
   const booking = toBooking(r, stay, today);
+  let listed = stay?.rooms ?? [];
+  if (!booking.blocker && stay?.liteapiId) {
+    // The guest's own room stays selectable even when LiteAPI has no more of it for these dates
+    const party = partyOf(booking.guests - booking.children, booking.children);
+    listed = (await withLiveRoomPrices(stay, { checkIn: r.check_in, checkOut: r.check_out, ...party }, r.room_id)).rooms;
+  }
   // The card holding the booked room is named by it, and the booking's own nights don't count as
   // booked, so only rooms other guests hold show as unavailable (audit retest)
-  const rooms = withoutStay(cardsForBooking(stay?.rooms ?? [], r.room_id), r.room_id, booking.checkIn, booking.checkOut);
+  const rooms = withoutStay(cardsForBooking(listed, r.room_id), r.room_id, booking.checkIn, booking.checkOut);
   return { booking, rooms, otherStays, hotelId: r.hotel_id, bookedWindow: stay?.bookedWindow };
 }
 

@@ -7,14 +7,14 @@ import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
 import { freeUnitId, markBookedRooms, mergeBookedNights, soldOutNights } from "@/lib/room-availability";
-import { matchingRoom } from "@/lib/stay-filters";
+import { matchingRoom, roomFits } from "@/lib/stay-filters";
 import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Card, Field, Stars } from "../../_components/ui";
 import { HotelPhoto } from "../../MyBookings/_components/HotelPhoto";
-import { TAX_RATE, type Stay } from "../../_data/stays";
+import { TAX_RATE, type Room, type Stay } from "../../_data/stays";
 import { checkoutRequest } from "./checkoutRequest";
 import { DateRangePicker } from "./DateRangePicker";
 import { GuestsField, guestLabel } from "./GuestsField";
@@ -96,6 +96,13 @@ export function StayReservation({
   const [booking, setBooking] = useState<Booking | null>(null);
   // Contact details survive going back to the stay (card details aren't kept)
   const [contact, setContact] = useState<Contact>({ firstName: "", lastName: "", email: "", phone: "" });
+  const [livePrices, setLivePrices] = useState<{ key: string; byId: Record<string, Partial<Room>> } | null>(null);
+  // Every room the prices route listed, including ones saved after the page loaded because LiteAPI offered them for
+  // other guests; kept so a picked one stays listed
+  const [addedRooms, setAddedRooms] = useState<Room[]>([]);
+  // Without a LiteAPI key the stored prices on the page hold for every date. A LiteAPI outage doesn't turn
+  // this off: checkout also falls back to the stored price while LiteAPI is down.
+  const [pricingOff, setPricingOff] = useState(!stay.liteapiConfigured);
   const cardRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -110,14 +117,20 @@ export function StayReservation({
   const roomsLocked = step !== "stay";
 
   const nights = nightsBetween(checkIn, checkOut);
+  const guests = adults + children;
+  // The server already priced the dates and guests in the link, so those need no fetch. Adults and children
+  // apart: LiteAPI prices children by age.
+  const initialKey = `${initial.checkIn ?? ""}|${initial.checkOut ?? ""}|${initial.adults ?? 2}|${initial.children ?? 0}`;
+  const priceKey = stay.liteapiId && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${adults}|${children}` : null;
+  const liveKey = livePrices?.key;
+  const listed = [...stay.rooms, ...addedRooms.filter((r) => !stay.rooms.some((s) => s.id === r.id))];
+  const priced = livePrices && livePrices.key === priceKey ? listed.map((r) => ({ ...r, ...livePrices.byId[r.id] })) : listed;
+  const pricesPending = !!priceKey && priceKey !== initialKey && liveKey !== priceKey;
+
   // Dates after the page's ~400-day lookup are looked up for their exact nights
   const { rows: extraNights, lookingUp } = useBookedNightsLookup(stay.slug, stay.bookedWindow, checkIn, checkOut, !!stay.bookable);
   // A room card is booked for these dates when every one of its identical rooms is (audit F9)
-  const rooms = useMemo(
-    () => markBookedRooms(mergeBookedNights(stay.rooms, extraNights), checkIn, checkOut),
-    [stay.rooms, extraNights, checkIn, checkOut],
-  );
-  const guests = adults + children;
+  const rooms = markBookedRooms(mergeBookedNights(priced, extraNights), checkIn, checkOut);
   // While choosing, a room that's booked for the dates isn't kept selected: the cheapest open room
   // that fits the party takes its place (audit R5). The guest's own pick comes back if the dates
   // change back. Once past "Reserve", the room stays put and the checks below catch any problem.
@@ -130,7 +143,9 @@ export function StayReservation({
   const cleaning = nights ? stay.cleaningFee : 0;
   const taxes = Math.round((subtotal + cleaning) * (stay.taxRate ?? TAX_RATE));
   const total = subtotal + cleaning + taxes;
-  // Today is "" while rendering on the server, so the server and the browser agree on first render.
+  // Not part of the total: the guest pays these to the hotel
+  const dueAtProperty = nights ? (room.dueAtProperty ?? 0) : 0;
+  // Today is "" while rendering on the server, so the server and the browser agree on first render
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
   // Nights the guest already has booked at other hotels, as days from today, so the calendar crosses
   // them out. Derived from `today` (empty on the server), so it fills in once the page is in the browser.
@@ -145,10 +160,43 @@ export function StayReservation({
     });
   }, [otherStays, today]);
 
+  useEffect(() => {
+    if (!priceKey || priceKey === initialKey || priceKey === liveKey) return;
+    const [ci, co, a, c] = priceKey.split("|");
+    const request = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const query = new URLSearchParams({ checkIn: ci, checkOut: co, adults: a, children: c });
+        const res = await fetch(`/api/stays/${stay.slug}/prices?${query}`, { signal: request.signal });
+        if (!res.ok) throw new Error(`Prices request failed (${res.status})`);
+        const body = (await res.json()) as { configured?: boolean; rooms?: (Partial<Room> & { id: string })[] };
+        if (request.signal.aborted) return;
+        // The route sets every key (null without a live quote), so an earlier quote's terms and fees don't linger
+        const byId: Record<string, Partial<Room>> = {};
+        for (const { id, ...r } of body.rooms ?? []) if (Number.isFinite(r.nightly)) byId[id] = { ...r, soldOut: !!r.soldOut };
+        const full = (body.rooms ?? []).filter((r): r is Room => Number.isFinite(r.nightly) && typeof r.sleeps === "number");
+        setAddedRooms((had) => {
+          const fresh = full.filter((r) => !had.some((h) => h.id === r.id));
+          return fresh.length ? [...had, ...fresh] : had;
+        });
+        setLivePrices({ key: priceKey, byId });
+        if (body.configured === false) setPricingOff(true);
+      } catch {
+        // Keeps the prices already shown; checkout prices the stay on the server either way
+        if (!request.signal.aborted) setLivePrices({ key: priceKey, byId: {} });
+      }
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      request.abort();
+    };
+  }, [priceKey, initialKey, liveKey, stay.slug]);
+
   // Nights when every room here is booked. Also from `today`, so it fills in once in the browser.
+  // Not for LiteAPI hotels: LiteAPI can offer a party rooms the hotel hasn't saved yet.
   const soldOutOffsets = useMemo(
-    () => (today ? soldOutNights(stay.rooms).filter((night) => night >= today).map((night) => nightsBetween(today, night)) : []),
-    [stay.rooms, today],
+    () => (today ? soldOutNights(stay.liteapiId ? [] : stay.rooms).filter((night) => night >= today).map((night) => nightsBetween(today, night)) : []),
+    [stay.rooms, stay.liteapiId, today],
   );
 
   const blockedOffsets = [
@@ -217,9 +265,10 @@ export function StayReservation({
     if (stay.bookable && checkIn < todayISO()) return { field: "dates", message: "That check-in date is too soon to book. Pick a later date." };
     const clash = stay.bookable ? findOverlap(otherStays, checkIn, checkOut) : null;
     if (clash) return { field: "dates", message: overlapMessage(clash) };
+    if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
+    if (!roomFits(room, guests, adults, children)) return { field: "guests", message: `${room.name} is too small for ${guestLabel(adults, children)}. Pick another room.` };
     if (room.bookedForDates) return { field: "guests", message: `${room.name} is booked for those dates. Pick another room or change your dates.` };
     if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
-    if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     return null;
   }
 
@@ -284,6 +333,7 @@ export function StayReservation({
   }
 
   function reserve() {
+    if (pricesPending) return;
     const problem = stayProblem();
     if (problem) return showStayProblem(problem);
     if (!account) return router.push(signInHref());
@@ -314,6 +364,7 @@ export function StayReservation({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (pricesPending) return;
     const data = new FormData(e.currentTarget);
     const text = (name: string) => String(data.get(name) ?? "").trim();
     const next: Errors = {};
@@ -361,7 +412,6 @@ export function StayReservation({
       roomId: freeUnitId(room, checkIn, checkOut) ?? room.id,
       checkIn,
       checkOut,
-      guests: adults + children,
       adults,
       children,
       cardNumber: text("cardNumber"),
@@ -603,6 +653,7 @@ export function StayReservation({
             ) : (
               <p className="mt-5 border-t border-edge pt-5 text-sm text-slate">Add your dates to see the total for your stay.</p>
             )}
+            {dueAtProperty > 0 && <p className="mt-2 text-sm text-slate">{dueAtPropertyText(dueAtProperty)}</p>}
 
             {checkIn && (
               <Card tone="tint" padding="none" className="mt-5 p-4 text-sm">
@@ -625,8 +676,10 @@ export function StayReservation({
                 )}
               </p>
             )}
-            <button type="submit" disabled={submitting} className={`${buttonPrimary} mt-5 w-full`}>
-              {submitting ? (
+            <button type="submit" disabled={submitting || pricesPending} className={`${buttonPrimary} mt-5 w-full`}>
+              {pricesPending && !submitting ? (
+                "Updating prices…"
+              ) : submitting ? (
                 <>
                   <svg viewBox="0 0 24 24" className="h-5 w-5 animate-spin" fill="none" aria-hidden>
                     <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3" />
@@ -690,6 +743,7 @@ export function StayReservation({
             }}
             locked={roomsLocked}
             note={() => "Non-refundable"}
+            party={{ adults, children }}
           />
         </fieldset>
 
@@ -752,15 +806,18 @@ export function StayReservation({
               </div>
 
               {nights > 0 ? (
-                <dl className="space-y-2 text-base">
-                  <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
-                  {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
-                  {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
-                  <div className="flex justify-between border-t border-edge pt-3 text-base font-bold text-ink">
-                    <dt>Total</dt>
-                    <dd>{money(total)}</dd>
-                  </div>
-                </dl>
+                <div>
+                  <dl className="space-y-2 text-base">
+                    <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
+                    {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
+                    {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
+                    <div className="flex justify-between border-t border-edge pt-3 text-base font-bold text-ink">
+                      <dt>Total</dt>
+                      <dd>{money(total)}</dd>
+                    </div>
+                  </dl>
+                  {dueAtProperty > 0 && <p className="mt-2 text-sm text-slate">{dueAtPropertyText(dueAtProperty)}</p>}
+                </div>
               ) : (
                 <p className="text-sm text-slate">Add your dates to see the total for your stay.</p>
               )}
@@ -772,8 +829,8 @@ export function StayReservation({
                 </div>
               )}
 
-              <button type="button" onClick={reserve} className={`${buttonPrimary} w-full`}>
-                {nights === 0 ? "Check availability" : account ? "Reserve" : "Sign in to reserve"}
+              <button type="button" onClick={reserve} disabled={pricesPending} className={`${buttonPrimary} w-full`}>
+                {pricesPending ? "Updating prices…" : nights === 0 ? "Check availability" : account ? "Reserve" : "Sign in to reserve"}
               </button>
               <p className="text-center text-sm text-slate">You won’t be charged yet.</p>
             </div>
@@ -823,6 +880,8 @@ export function StayReservation({
     </>
   );
 }
+
+const dueAtPropertyText = (amount: number) => `Plus ${money(amount)} in hotel fees, paid at the property.`;
 
 function Line({ label, value }: { label: string; value: string }) {
   return (

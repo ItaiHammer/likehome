@@ -173,6 +173,15 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
   transition: none;
 }
 
+/* Taps pass through a clip-path that is still unrolling, so a quick tap on a phone landed on whatever sat under the
+   panel (the guests field, or Search). Touch screens get the fade and slide only. */
+@media (pointer: coarse) {
+  .dropdown,
+  .dropdown[data-open="true"] {
+    clip-path: none;
+  }
+}
+
 /* WindowScene (stay cards): night layers fade in with the theme, the desert
    sun fades out. Same timing as the rest of the switch. */
 .ws-night {

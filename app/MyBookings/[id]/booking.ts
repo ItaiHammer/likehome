@@ -16,6 +16,8 @@ export type ReservationRow = {
   check_in: string;
   check_out: string;
   guests: number | null;
+  // Missing before supabase/migrations/reservation_children.sql
+  children?: number | null;
   total_price: number | string;
   status: string | null;
 };
@@ -38,14 +40,17 @@ export function toBooking(r: ReservationRow, stay: Stay | null, today: string): 
   const status = r.status ?? "confirmed";
   return {
     id: r.id,
+    hotelId: r.hotel_id,
     hotelName: stay?.name ?? "Hotel no longer listed",
     location: stay?.location ?? "",
     photoUrl: stay?.photos?.[0] ?? null,
     checkIn: r.check_in,
     checkOut: r.check_out,
     guests: r.guests ?? 1,
+    children: r.children ?? 0,
     roomId: r.room_id,
     total: Number(r.total_price),
     blocker: changeBlocker({ status, checkIn: r.check_in, checkOut: r.check_out }, today),
+    livePrices: !!stay?.liteapiId && !!stay.liteapiConfigured,
   };
 }

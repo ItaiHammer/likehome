@@ -3,10 +3,11 @@
 //                         the reservation, its payment (last 4 digits only) and the charge.
 // Never log the request body: it contains card details.
 import { getUserId } from '@/utils/user'
-import { createReservation, updateReservation } from '@/utils/reservations'
+import { createLiveReservation, createReservation, updateReservation } from '@/utils/reservations'
 import { createPayment } from '@/utils/payments'
-import { recordCheckoutCharge } from '@/utils/transactions'
+import { recordCheckoutCharge, recordLiveCharge } from '@/utils/transactions'
 import {
+  bookingParty,
   calculateTotalPrice,
   checkCapacity,
   checkPartyLimits,
@@ -15,6 +16,8 @@ import {
   type RoomForBooking,
 } from '@/utils/reservation-logic'
 import { authorizeMockPayment, validatePaymentInput } from '@/utils/payment-logic'
+import { partyOf } from '@/lib/liteapi/party'
+import { liveRoomPrice } from '@/lib/liteapi/rates'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
 const EXCLUSION_VIOLATION = '23P01'
@@ -46,10 +49,11 @@ export async function POST(request: Request) {
   const input = stay.value
   const payment = card.value
 
-  // 2. Look up the room and check capacity
+  // 2. Look up the room and check capacity. `*` rather than the LiteAPI columns by name, so booking
+  //    keeps working (at stored prices) on a database without supabase/migrations/liteapi_hotels.sql.
   const { data: room, error: roomError } = await supabase
     .from('rooms')
-    .select('id, hotel_id, price_per_night, capacity, max_adults, max_children')
+    .select('*, hotels(*)')
     .eq('id', input.room_id)
     .single<RoomForBooking>()
 
@@ -66,8 +70,27 @@ export async function POST(request: Request) {
     return Response.json({ error: partyError }, { status: 400 })
   }
 
-  // 3. Price is always calculated here, never taken from the browser
-  const total_price = calculateTotalPrice(input.check_in, input.check_out, room.price_per_night)
+  // 3. Price is always calculated here, never taken from the browser. LiteAPI hotels are charged the
+  //    live quote for the same adults and children (the stay page's cached one when the same server
+  //    instance handles both); if LiteAPI is down or live prices are off, the stored estimate is charged instead.
+  let nightly: number | string = room.price_per_night
+  let pricedLive = false
+  const liteapiHotelId = room.hotels?.liteapi_id
+  if (liteapiHotelId) {
+    const { adults, children } = bookingParty(input)
+    const live = await liveRoomPrice(
+      { liteapiHotelId, liteapiRoomId: room.liteapi_room_id ?? null, roomType: room.room_type ?? '' },
+      { checkIn: input.check_in, checkOut: input.check_out, ...partyOf(adults, children) }
+    )
+    if (live.status === 'sold_out') {
+      return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
+    }
+    if (live.status === 'live') {
+      nightly = live.value.perNight
+      pricedLive = true
+    }
+  }
+  const total_price = calculateTotalPrice(input.check_in, input.check_out, nightly)
 
   // 4. Mock charge. A decline writes nothing.
   const auth = authorizeMockPayment(payment.cardNumber, total_price)
@@ -75,8 +98,9 @@ export async function POST(request: Request) {
     return Response.json({ error: auth.reason }, { status: 402 })
   }
 
-  // 5. Save the reservation
-  const { data: reservations, error: reservationError } = await createReservation({
+  // 5. Save the reservation. A live price is saved with the server key: the reservations trigger puts a
+  //    signed-in user's own booking back at the stored price.
+  const booking = {
     account_id: userId,
     hotel_id: room.hotel_id,
     room_id: room.id,
@@ -86,7 +110,10 @@ export async function POST(request: Request) {
     guests: input.guests,
     // Saved so the booking keeps its child count (audit R4)
     children: input.children,
-  })
+  }
+  const { data: reservations, error: reservationError } = pricedLive
+    ? await createLiveReservation(booking)
+    : await createReservation(booking)
   const reservation = reservations?.[0]
 
   if (reservationError || !reservation) {
@@ -107,9 +134,12 @@ export async function POST(request: Request) {
   })
   const savedPayment = payments?.[0]
 
-  const { data: transactions, error: transactionError } = savedPayment
-    ? await recordCheckoutCharge(savedPayment.id)
-    : { data: null, error: null }
+  // record_checkout_charge charges the stored price, so a live one is recorded with the server key
+  const { data: transactions, error: transactionError } = !savedPayment
+    ? { data: null, error: null }
+    : pricedLive
+      ? await recordLiveCharge(savedPayment.id, total_price)
+      : await recordCheckoutCharge(savedPayment.id)
   const transaction = transactions?.[0]
 
   // 7. Supabase can't wrap these inserts in one DB transaction, so undo by hand:

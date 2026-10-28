@@ -32,6 +32,8 @@ let mockRoomResult = {
   error: null,
 }
 let mockUpdateError = null
+let updateCalls = 0
+let liveUpdates = []
 mock.module('../utils/user.ts', {
   namedExports: {
     getUserId: async () => ({
@@ -57,7 +59,13 @@ mock.module('../utils/user.ts', {
 mock.module('../utils/reservations.ts', {
   namedExports: {
     getReservation: async (id) => mockReservationResult,
+    updateLiveReservation: async (id, accountId, payload) => {
+      liveUpdates.push({ id, accountId, payload })
+      if (mockUpdateError) return { data: null, error: mockUpdateError }
+      return { data: [{ id, ...payload }], error: null }
+    },
     updateReservation: async (id, payload) => {
+      updateCalls++
       if (mockUpdateError) {
         return { data: null, error: mockUpdateError }
       }
@@ -69,6 +77,9 @@ mock.module('../utils/reservations.ts', {
     },
   },
 })
+
+const liveRoomPrice = mock.fn(async () => ({ status: 'unavailable' }))
+mock.module('../lib/liteapi/rates.ts', { namedExports: { liveRoomPrice } })
 
 const { PATCH } = await import('../app/api/reservations/[id]/route.ts')
 
@@ -96,6 +107,10 @@ beforeEach(() => {
     error: null,
   }
   mockUpdateError = null
+  updateCalls = 0
+  liveUpdates = []
+  liveRoomPrice.mock.resetCalls()
+  liveRoomPrice.mock.mockImplementation(async () => ({ status: 'unavailable' }))
 })
 
 function createMockRequest(body) {
@@ -223,6 +238,144 @@ test('successfully updates reservation and returns 200', async () => {
     guests: 2,
     children: 0,
   })
+  assert.equal(liveRoomPrice.mock.callCount(), 0)
+})
+
+// Rooms at hotels imported from LiteAPI are repriced at the live rate when the stay changes
+const LITE_ROOM = {
+  id: 'room-1',
+  hotel_id: 'hotel-1',
+  price_per_night: 120,
+  capacity: 2,
+  room_type: 'Standard King Room',
+  liteapi_room_id: '2617267',
+  hotels: { liteapi_id: 'lp1897' },
+}
+const liveQuote = (total, nights) => ({
+  status: 'live',
+  value: { total, perNight: total / nights, offerId: 'offer-1', rateName: 'Standard King Room', boardType: 'RO', refundable: true, dueAtProperty: 0 },
+})
+
+test('LiteAPI room with new dates is repriced at the live rate', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM }, error: null }
+  liveRoomPrice.mock.mockImplementation(async () => liveQuote(487.31, 4))
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(9) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  const json = await res.json()
+  assert.equal(json.reservation.total_price, 487.31)
+  // Saved with the server key, for this account only
+  assert.deepEqual(liveUpdates.map((u) => [u.id, u.accountId, u.payload.total_price]), [['res-1', 'user-1', 487.31]])
+  assert.equal(updateCalls, 0)
+  assert.deepEqual(liveRoomPrice.mock.calls[0].arguments, [
+    { liteapiHotelId: 'lp1897', liteapiRoomId: '2617267', roomType: 'Standard King Room' },
+    { checkIn: getDateFromToday(5), checkOut: getDateFromToday(9), adults: 2, children: [] },
+  ])
+})
+
+test('LiteAPI room: a guest-count change alone is repriced too', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM }, error: null }
+  liveRoomPrice.mock.mockImplementation(async () => liveQuote(250.5, 3))
+  const req = createMockRequest({ guests: 1 })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  assert.equal((await res.json()).reservation.total_price, 250.5)
+  assert.equal(liveRoomPrice.mock.calls[0].arguments[1].adults, 1)
+})
+
+test('LiteAPI room: an adult becoming a child is repriced for the new party, and saved', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM }, error: null }
+  liveRoomPrice.mock.mockImplementation(async () => liveQuote(210, 3))
+  const req = createMockRequest({ guests: 2, children: 1 })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  const { reservation } = await res.json()
+  assert.equal(reservation.total_price, 210)
+  assert.equal(reservation.children, 1)
+  assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].adults, 1)
+  assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].children, [8])
+})
+
+test('a saved children count carries into a change that leaves it out', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM, capacity: 3 }, error: null }
+  mockReservationResult.data = { ...mockReservationResult.data, guests: 3, children: 1 }
+  liveRoomPrice.mock.mockImplementation(async () => liveQuote(480, 4))
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(9) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].adults, 2)
+  assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].children, [8])
+})
+
+test('400 when the children leave no adult', async () => {
+  const req = createMockRequest({ guests: 2, children: 2 })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 400)
+  assert.equal(updateCalls, 0)
+})
+
+test('LiteAPI room sold out for the new dates: 409 and nothing updated', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM }, error: null }
+  liveRoomPrice.mock.mockImplementation(async () => ({ status: 'sold_out' }))
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(9) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 409)
+  assert.equal((await res.json()).error, 'Room is not available for those dates.')
+  assert.equal(updateCalls, 0)
+})
+
+test('LiteAPI unavailable: the change is priced at the stored nightly rate', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM }, error: null }
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(9) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  assert.equal((await res.json()).reservation.total_price, 480)
+  assert.equal(liveRoomPrice.mock.callCount(), 1)
+  assert.equal(liveUpdates.length, 0)
+  assert.equal(updateCalls, 1)
+})
+
+test('a live-priced change that clashes with another booking: 409', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM }, error: null }
+  liveRoomPrice.mock.mockImplementation(async () => liveQuote(487.31, 4))
+  mockUpdateError = { code: EXCLUSION_VIOLATION }
+  const req = createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(9) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 409)
+  assert.equal(liveUpdates.length, 1)
+})
+
+test('unchanged room, dates and guests keep the booked total without calling LiteAPI', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM }, error: null }
+  liveRoomPrice.mock.mockImplementation(async () => liveQuote(999, 3))
+  const { room_id, check_in, check_out, guests } = mockReservationResult.data
+  // A booking saved before the children column existed counts as 0 children
+  const req = createMockRequest({ room_id, check_in, check_out, guests, children: 0 })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  assert.equal((await res.json()).reservation.total_price, 300)
+  assert.equal(liveRoomPrice.mock.callCount(), 0)
+  assert.equal(liveUpdates.length, 0)
+})
+
+test('a children change alone is not "unchanged"', async () => {
+  mockRoomResult = { data: { ...LITE_ROOM }, error: null }
+  liveRoomPrice.mock.mockImplementation(async () => liveQuote(270, 3))
+  const { room_id, check_in, check_out, guests } = mockReservationResult.data
+  const req = createMockRequest({ room_id, check_in, check_out, guests, children: 1 })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  assert.equal((await res.json()).reservation.total_price, 270)
+  assert.equal(liveRoomPrice.mock.callCount(), 1)
 })
 
 // Audit R2: saved bookings have guests + children but no adults column
@@ -272,6 +425,7 @@ test('an invalid split is still rejected', async () => {
   const res = await PATCH(createMockRequest({ guests: 2, adults: 2, children: 1 }), { params: Promise.resolve({ id: 'res-1' }) })
   assert.equal(res.status, 400)
 })
+
 // "Today" is the guest's today (from time_zone), not UTC's.
 // 6pm Pacific on Oct 10 is already Oct 11 in UTC.
 test('uses the guest time zone for "today": 6pm Pacific can still book from today', async (t) => {

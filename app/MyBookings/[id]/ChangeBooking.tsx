@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { bookingCode, changeBlocker, findOverlap, formatStayDates, money, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
 import { calculateTotalPrice, MAX_NIGHTS, todayInTimeZone } from "@/utils/reservation-logic";
@@ -11,6 +11,7 @@ import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Stepper } from "../../_components/ui";
 import type { Room } from "../../_data/stays";
 import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
+import { guestLabel } from "../../reserve/[slug]/GuestsField";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
 import { useBookedNightsLookup } from "../../reserve/[slug]/useBookedNightsLookup";
 import { freeUnitId, markBookedRooms, mergeBookedNights, withoutStay, type BookedWindow } from "@/lib/room-availability";
@@ -18,29 +19,34 @@ import { HotelPhoto } from "../_components/HotelPhoto";
 
 export type BookingToChange = {
   id: string;
+  hotelId: string;
   hotelName: string;
   location: string;
   photoUrl: string | null;
   checkIn: string;
   checkOut: string;
   guests: number;
+  /** How many of the guests are children */
+  children: number;
   roomId: string;
   total: number;
   /** Why the booking can't be changed, or null when it can */
   blocker: string | null;
+  livePrices: boolean;
 };
 
-type Stay = { checkIn: string; checkOut: string; guests: number; roomId: string; total: number };
+type Stay = { checkIn: string; checkOut: string; guests: number; children: number; roomId: string; total: number };
+type LivePrices = { key: string; byId: Record<string, Partial<Room>> };
 type Errors = { dates?: string; guests?: string; form?: string; signIn?: boolean };
 
 const nightsLabel = (n: number) => `${n} ${n === 1 ? "night" : "nights"}`;
-const guestsLabel = (n: number) => `${n} ${n === 1 ? "guest" : "guests"}`;
+const guestsLabel = (s: Pick<Stay, "guests" | "children">) => guestLabel(s.guests - s.children, s.children);
 
 // Change the dates, room or guests of a booking through PATCH /api/reservations/[id].
 // The API reprices the stay (nights × nightly price); no difference is charged or refunded yet.
 export function ChangeBooking({
   booking,
-  rooms,
+  rooms: listedRooms,
   otherStays,
   sample = false,
   hotelId,
@@ -65,17 +71,25 @@ export function ChangeBooking({
     checkIn: booking.checkIn,
     checkOut: booking.checkOut,
     guests: booking.guests,
+    children: booking.children,
     roomId: booking.roomId,
     total: booking.total,
   }));
   const [checkIn, setCheckIn] = useState(booking.checkIn);
   const [checkOut, setCheckOut] = useState(booking.checkOut);
-  const [guests, setGuests] = useState(booking.guests);
+  // Adults and children apart, since LiteAPI prices them apart
+  const [adults, setAdults] = useState(booking.guests - booking.children);
+  const [children, setChildren] = useState(booking.children);
+  const guests = adults + children;
   const [roomId, setRoomId] = useState(booking.roomId);
   const [datesOpen, setDatesOpen] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [livePrices, setLivePrices] = useState<LivePrices | null>(null);
+  // Every room the prices route listed, including ones LiteAPI offered for other guests after the page loaded
+  const [addedRooms, setAddedRooms] = useState<Room[]>([]);
+  const [pricingOff, setPricingOff] = useState(false);
   const request = useRef<AbortController | null>(null);
   const sampleTimer = useRef<number | undefined>(undefined);
   const cardRef = useRef<HTMLElement>(null);
@@ -83,17 +97,32 @@ export function ChangeBooking({
   const lastDone = useRef(done);
 
   const nights = nightsBetween(checkIn, checkOut);
+  // The page priced the rooms for the booked dates and guests; anything else needs a fresh quote
+  const initialKey = `${booking.checkIn}|${booking.checkOut}|${booking.guests - booking.children}|${booking.children}`;
+  const priceKey = booking.livePrices && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${adults}|${children}` : null;
+  const pricesPending = !!priceKey && priceKey !== initialKey && livePrices?.key !== priceKey;
+  const sameGuests = guests === current.guests && children === current.children;
+  const sameStay = checkIn === current.checkIn && checkOut === current.checkOut && sameGuests;
+  const listed = [...listedRooms, ...addedRooms.filter((r) => !listedRooms.some((l) => l.id === r.id))];
+  const priced =
+    livePrices && livePrices.key === priceKey
+      ? listed.map((r) => {
+          const live = livePrices.byId[r.id];
+          if (!live) return r;
+          // The guest already holds this room for these dates, even if LiteAPI has sold out of it since
+          return { ...r, ...live, soldOut: live.soldOut && !(sameStay && r.id === current.roomId) };
+        })
+      : listed;
   // Rooms other guests hold on the new dates show as unavailable (audit retest). Dates after the
-  // page's ~400-day lookup are looked up for their exact nights, minus this booking's own.
+  // page's ~400-day lookup are looked up for their exact nights. Those and a live quote's rooms both
+  // count this booking's own nights again, so they come off every time.
   const { rows: extraNights, lookingUp } = useBookedNightsLookup(hotelId ?? "", bookedWindow, checkIn, checkOut, !!hotelId && !sample);
-  const datedRooms = useMemo(() => {
-    const known = mergeBookedNights(rooms, extraNights);
-    const mine = extraNights.length ? withoutStay(known, booking.roomId, booking.checkIn, booking.checkOut) : known;
-    return markBookedRooms(mine, checkIn, checkOut);
-  }, [rooms, extraNights, booking.roomId, booking.checkIn, booking.checkOut, checkIn, checkOut]);
-  const room = datedRooms.find((r) => r.id === roomId) ?? datedRooms[0];
-  const currentRoom = datedRooms.find((r) => r.id === current.roomId);
-  const changed = checkIn !== current.checkIn || checkOut !== current.checkOut || guests !== current.guests || roomId !== current.roomId;
+  const known = mergeBookedNights(priced, extraNights);
+  const mine = withoutStay(known, booking.roomId, booking.checkIn, booking.checkOut);
+  const rooms = markBookedRooms(mine, checkIn, checkOut);
+  const room = rooms.find((r) => r.id === roomId) ?? rooms[0];
+  const currentRoom = rooms.find((r) => r.id === current.roomId);
+  const changed = checkIn !== current.checkIn || checkOut !== current.checkOut || !sameGuests || roomId !== current.roomId;
   // Any change is repriced at today's nightly price (the API does the same), so until something
   // changes the booked room shows what was actually booked
   const priceFor = (r: Room) => (!changed && r.id === current.roomId ? current.total : calculateTotalPrice(checkIn, checkOut, r.nightly));
@@ -117,6 +146,34 @@ export function ChangeBooking({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!priceKey || priceKey === initialKey || livePrices?.key === priceKey) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      const query = new URLSearchParams({ checkIn, checkOut, adults: String(adults), children: String(children) });
+      try {
+        const res = await fetch(`/api/stays/${booking.hotelId}/prices?${query}`, { signal: controller.signal });
+        if (!res.ok) throw new Error(`Room prices failed: ${res.status}`);
+        const body = (await res.json()) as { configured?: boolean; rooms?: (Partial<Room> & { id: string })[] };
+        if (controller.signal.aborted) return;
+        setLivePrices({ key: priceKey, byId: Object.fromEntries((body.rooms ?? []).map(({ id, ...live }) => [id, live])) });
+        const full = (body.rooms ?? []).filter((r): r is Room => Number.isFinite(r.nightly) && typeof r.sleeps === "number");
+        setAddedRooms((had) => {
+          const fresh = full.filter((r) => !had.some((h) => h.id === r.id));
+          return fresh.length ? [...had, ...fresh] : had;
+        });
+        if (body.configured === false) setPricingOff(true);
+      } catch {
+        // Keep the prices shown and let Save through: the API reprices the change itself
+        if (!controller.signal.aborted) setLivePrices({ key: priceKey, byId: {} });
+      }
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [priceKey, initialKey, livePrices?.key, booking.hotelId, checkIn, checkOut, adults, children]);
 
   if (blocker || !room || !currentRoom) {
     return (
@@ -155,7 +212,7 @@ export function ChangeBooking({
   }
 
   async function save() {
-    if (saving) return;
+    if (saving || pricesPending) return;
     const found = problem();
     if (found) {
       setErrors({ [found.field]: found.message });
@@ -166,7 +223,7 @@ export function ChangeBooking({
     setErrors({});
     setDatesOpen(false);
     setSaving(true);
-    const next = { checkIn, checkOut, guests, roomId, total };
+    const next = { checkIn, checkOut, guests, children, roomId, total };
 
     if (sample) {
       window.clearTimeout(sampleTimer.current);
@@ -182,7 +239,7 @@ export function ChangeBooking({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         // Whichever of the card's identical rooms is free (this booking's own room first)
-        body: JSON.stringify({ room_id: freeUnitId(room, checkIn, checkOut) ?? room.id, check_in: checkIn, check_out: checkOut, guests, time_zone: browserTimeZone() }),
+        body: JSON.stringify({ room_id: freeUnitId(room, checkIn, checkOut) ?? room.id, check_in: checkIn, check_out: checkOut, guests, children, time_zone: browserTimeZone() }),
         signal: controller.signal,
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; reservation?: { total_price?: number | string | null } | null };
@@ -230,13 +287,14 @@ export function ChangeBooking({
             </p>
           )}
           <RoomOptions
-            rooms={datedRooms}
+            rooms={rooms}
             selectedId={roomId}
             onSelect={(id) => {
               setRoomId(id);
               setErrors(({ dates }) => ({ dates }));
             }}
             locked={locked}
+            party={{ adults, children }}
             note={(r) =>
               [r.id === current.roomId && "Your room now", nights > 0 && `${money(priceFor(r))} for ${nightsLabel(nights)}`]
                 .filter(Boolean)
@@ -260,7 +318,7 @@ export function ChangeBooking({
                     {formatStayDates(current.checkIn, current.checkOut)} · {nightsLabel(nightsBetween(current.checkIn, current.checkOut))}
                   </p>
                   <p>
-                    {currentRoom.name} · {guestsLabel(current.guests)} · {money(current.total)}
+                    {currentRoom.name} · {guestsLabel(current)} · {money(current.total)}
                   </p>
                 </div>
               </div>
@@ -280,22 +338,38 @@ export function ChangeBooking({
               />
 
               <div>
-                <div className={`rounded-control border px-4 ${errors.guests ? "border-danger" : "border-edge"}`}>
+                {/* The stay page's guest limits, within what the biggest room sleeps */}
+                <div className={`divide-y divide-edge rounded-control border px-4 ${errors.guests ? "border-danger" : "border-edge"}`}>
                   <Stepper
-                    label="Guests"
-                    hint={`${room.name} sleeps up to ${room.sleeps}`}
-                    value={guests}
+                    label="Adults"
+                    hint="Ages 13 or above"
+                    value={adults}
                     min={1}
-                    max={maxGuests}
+                    max={Math.min(16, Math.max(1, maxGuests - children))}
                     onChange={(n) => {
-                      setGuests(n);
+                      setAdults(n);
+                      setErrors(({ dates }) => ({ dates }));
+                    }}
+                  />
+                  <Stepper
+                    label="Children"
+                    hint="Ages 0 to 12"
+                    value={children}
+                    min={0}
+                    max={Math.min(10, Math.max(0, maxGuests - adults))}
+                    onChange={(n) => {
+                      setChildren(n);
                       setErrors(({ dates }) => ({ dates }));
                     }}
                   />
                 </div>
-                {errors.guests && (
+                {errors.guests ? (
                   <p role="alert" className="mt-1.5 text-sm text-danger">
                     {errors.guests}
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-sm text-slate">
+                    {room.name} sleeps up to {room.sleeps}.
                   </p>
                 )}
               </div>
@@ -355,8 +429,10 @@ export function ChangeBooking({
               )}
 
               {/* aria-disabled while saving (not disabled), so a focused button keeps focus */}
-              <button type="button" onClick={save} disabled={!changed} aria-disabled={saving || undefined} className={`${buttonPrimary} w-full`}>
-                {saving ? (
+              <button type="button" onClick={save} disabled={!changed || pricesPending} aria-disabled={saving || undefined} className={`${buttonPrimary} w-full`}>
+                {pricesPending ? (
+                  "Updating prices…"
+                ) : saving ? (
                   <>
                     <svg viewBox="0 0 24 24" className="h-5 w-5 animate-spin" fill="none" aria-hidden>
                       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3" />
@@ -450,7 +526,7 @@ function StayDetails({ roomName, stay }: { roomName: string | null; stay: Stay }
     roomName && ["Room", roomName],
     ["Check-in", formatDate(stay.checkIn)],
     ["Check-out", formatDate(stay.checkOut)],
-    ["Guests", guestsLabel(stay.guests)],
+    ["Guests", guestsLabel(stay)],
     ["Total", money(stay.total)],
   ].filter(Boolean) as [string, string][];
   return (

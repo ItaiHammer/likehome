@@ -12,7 +12,8 @@ const form = (overrides = {}) => ({
   roomId: '7b0c6a2e-3f4d-4e5a-9b8c-1d2e3f4a5b6c',
   checkIn: '2026-11-02',
   checkOut: '2026-11-05',
-  guests: 3,
+  adults: 2,
+  children: 1,
   cardNumber: '4242 4242 4242 4242',
   expiry: '12/28',
   cvc: '123',
@@ -25,7 +26,7 @@ test('the checkout body passes the /api/checkout stay and card checks', () => {
   const body = checkoutRequest(form())
   const stay = validateReservationInput(body, TODAY)
   assert.equal(stay.ok, true, stay.error)
-  assert.deepEqual(stay.value, { room_id: form().roomId, check_in: '2026-11-02', check_out: '2026-11-05', guests: 3, adults: 3, children: 0 })
+  assert.deepEqual(stay.value, { room_id: form().roomId, check_in: '2026-11-02', check_out: '2026-11-05', guests: 3, adults: 2, children: 1 })
   const card = validatePaymentInput(body.payment, NOW)
   assert.equal(card.ok, true, card.error)
 })
@@ -59,6 +60,9 @@ test("the guest's time zone is sent, so the API judges \"today\" in it (#79)", (
   assert.equal(checkoutRequest(form({ timeZone: undefined })).time_zone, undefined)
 })
 
-test('adults and children are sent together as guests', () => {
-  assert.equal(checkoutRequest(form({ guests: 2 + 1 })).guests, 3)
+test('adults and children are sent together as guests, and the children apart for pricing', () => {
+  const body = checkoutRequest(form({ adults: 2, children: 1 }))
+  assert.equal(body.guests, 3)
+  assert.equal(body.children, 1)
+  assert.equal(checkoutRequest(form({ adults: 1, children: 0 })).children, 0)
 })

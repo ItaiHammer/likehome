@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { matchingRoom, originalSearch, readRoomFilters, roomAmenityList, searchQuery, stayOffers } from '../lib/stay-filters.ts'
+import { matchingRoom, roomFits, originalSearch, readRoomFilters, roomAmenityList, searchQuery, stayOffers } from '../lib/stay-filters.ts'
 import { propertyAmenities, roomAmenities, tags as filterTags, travelerTypes } from '../app/search/types.ts'
 
 // What the stay page lists for a tag, in either the amenities row or "Good for"
@@ -105,6 +105,16 @@ test('Back to stays keeps the original search through sign-in', () => {
   assert.equal(originalSearch({ where: 'Honolulu', adults: '2' }), 'where=Honolulu&adults=2')
   // Only search keys survive, so `from` can't put anything else into the link
   assert.equal(originalSearch({ from: 'next=https://evil.example&where=Paris' }), 'where=Paris')
+})
+
+test('roomFits goes by what the room sleeps and, where it lists them, its own adult and child limits', () => {
+  // Villa Fontaine's Superior Queen: 2 adults, no children
+  const queen = { nightly: 150, sleeps: 2, maxAdults: 2, maxChildren: 0 }
+  assert.equal(roomFits(queen, 2, 2, 0), true)
+  assert.equal(roomFits(queen, 3, 2, 1), false)
+  assert.equal(roomFits({ ...queen, sleeps: 3 }, 3, 2, 1), false, 'no room for a child')
+  assert.equal(roomFits({ nightly: 150, sleeps: 3, maxAdults: null, maxChildren: null }, 3, 2, 1), true, 'no limits listed')
+  assert.equal(roomFits({ ...queen, sleeps: 3 }, 3), true, 'only the head count when the split is unknown')
 })
 
 // Audit F10: the guest's time zone survives search -> stay -> Back to stays

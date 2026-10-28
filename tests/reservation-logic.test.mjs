@@ -107,6 +107,13 @@ test('adults/children: invalid values and mismatches are rejected', () => {
   assert.equal(validateReservationInput({ ...base, guests: 4, adults: 2, children: 1 }, '2026-10-01').ok, false)
 })
 
+test('adults/children: without adults, guests minus children are the adults, so room limits still apply', () => {
+  const r = validateReservationInput({ room_id: 'r', check_in: '2099-01-01', check_out: '2099-01-02', guests: 3, children: 1 }, '2026-10-01')
+  assert.equal(r.value.adults, 2)
+  const room = { id: 'r', hotel_id: 'h', price_per_night: 100, capacity: 3, max_adults: 1, max_children: null }
+  assert.equal(checkPartyLimits(r.value, room), 'This room allows up to 1 adult.')
+})
+
 // Audit R4: every guest count ends up as a full party, so limits always apply and children are saved
 test('no split: everyone counts as an adult', () => {
   const r = validateReservationInput({ room_id: 'r', check_in: '2099-01-01', check_out: '2099-01-02', guests: 3 }, '2026-10-01')
