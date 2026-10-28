@@ -97,6 +97,7 @@ const ownBooking = (patch = {}) => ({
   check_out: validBody().check_out,
   status: 'confirmed',
   guests: 2,
+  children: 0,
   total_price: 389.97,
   payments: [
     {
@@ -398,6 +399,22 @@ describe('LiteAPI hotels', () => {
     assert.equal(createLiveReservation.mock.callCount(), 1)
   })
 
+  test('a retry after LiteAPI sold out of the room still gets the guest’s own paid booking, nothing written', async () => {
+    liveRoomPrice.mock.mockImplementation(async () => ({ status: 'sold_out' }))
+    const paid = { id: 'txn-1', amount: 163.66, status: 'completed', transaction_type: 'charge' }
+    savedReservations = [ownBooking({ total_price: 163.66, payments: [{ id: 'pay-1', card_number: '4242', transactions: [paid] }] })]
+    const r = await post(validBody())
+    assert.equal(r.status, 200)
+    assert.equal(r.json.reservation.id, 'res-1')
+    assert.equal(writes(), 0)
+  })
+
+  test('LiteAPI sold out with no booking of the guest’s own: 409', async () => {
+    liveRoomPrice.mock.mockImplementation(async () => ({ status: 'sold_out' }))
+    savedReservations = [ownBooking({ account_id: 'user-2' })]
+    assert.deepEqual(await post(validBody()), { status: 409, json: { error: 'Room is not available for those dates.' } })
+  })
+
   test('an owner hotel (no liteapi_id) never calls LiteAPI', async () => {
     for (const hotels of [null, { liteapi_id: null }]) {
       roomResult = { data: { ...LITE_ROOM, liteapi_room_id: null, hotels }, error: null }
@@ -502,6 +519,14 @@ describe('retry after a lost response', () => {
       { payments: [{ id: 'pay-1', card_number: '4242', transactions: [{ ...charge, status: 'failed' }] }] },
       { payments: [{ id: 'pay-1', card_number: '4242', transactions: [{ ...charge, transaction_type: 'credit' }] }] },
     ]) {
+      savedReservations = [ownBooking(patch)]
+      assert.deepEqual(await post(validBody()), taken, JSON.stringify(patch))
+    }
+  })
+
+  test('the same room and dates for a different party is still a 409', async () => {
+    createReservation.mock.mockImplementation(clash)
+    for (const patch of [{ guests: 3 }, { children: 1 }]) {
       savedReservations = [ownBooking(patch)]
       assert.deepEqual(await post(validBody()), taken, JSON.stringify(patch))
     }

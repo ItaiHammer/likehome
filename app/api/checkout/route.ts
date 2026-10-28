@@ -43,7 +43,7 @@ async function ownPaidBooking(
   input: ReservationInput,
   card: PaymentInput
 ) {
-  const { data: own } = await supabase
+  let query = supabase
     .from('reservations')
     .select('id, guests, total_price, status, payments(id, card_number, transactions(id, amount, status, transaction_type))')
     .eq('account_id', accountId)
@@ -51,7 +51,10 @@ async function ownPaidBooking(
     .eq('check_in', input.check_in)
     .eq('check_out', input.check_out)
     .eq('status', 'confirmed')
-    .maybeSingle<PaidBooking>()
+  // A different party is a new request, not a retry
+  if (input.guests !== undefined) query = query.eq('guests', input.guests)
+  if (input.children !== undefined) query = query.eq('children', input.children)
+  const { data: own } = await query.maybeSingle<PaidBooking>()
   if (!own) return null
   for (const saved of own.payments) {
     const charge = saved.transactions.find((t) => t.transaction_type === 'charge' && t.status === 'completed')
@@ -135,6 +138,9 @@ export async function POST(request: Request) {
       { checkIn: input.check_in, checkOut: input.check_out, ...partyOf(adults, children) }
     )
     if (live.status === 'sold_out') {
+      // LiteAPI may have no more of the room by the time a lost response is retried
+      const paid = await ownPaidBooking(supabase, userId, input, payment)
+      if (paid) return Response.json(paid)
       return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
     }
     if (live.status === 'live') {
