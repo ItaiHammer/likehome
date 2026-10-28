@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { inputClass, labelClass } from "./styles";
 
 type FieldBase = {
@@ -32,6 +33,29 @@ function FieldFrame({ id, label, error, hint, className = "", children }: FieldB
 }
 
 const describedBy = (id: string, error?: string, hint?: string) => (error ? `${id}-error` : hint ? `${id}-hint` : undefined);
+
+/**
+ * An error for the whole form, under its fields. Pass `signInHref` when the
+ * fix is to sign in again.
+ *
+ *   <FormError message={errors.form} signInHref={errors.signIn ? href : undefined} />
+ */
+export function FormError({ message, signInHref, className = "" }: { message?: string; signInHref?: string; className?: string }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className={`text-sm text-danger ${className}`}>
+      {message}
+      {signInHref && (
+        <>
+          {" "}
+          <Link href={signInHref} className="font-semibold underline">
+            Sign in
+          </Link>
+        </>
+      )}
+    </p>
+  );
+}
 
 /**
  * Text input with its label and an optional hint or error.

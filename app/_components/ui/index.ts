@@ -2,7 +2,7 @@
 // See them all, with every state, at /components.
 
 export { Button, IconButton } from "./Button";
-export { Field, TextArea, Select } from "./Field";
+export { Field, TextArea, Select, FormError } from "./Field";
 export { Card, Tag, SectionHeading, Stars } from "./Display";
 export { Tabs, Stepper, Popover } from "./Interactive";
 export {

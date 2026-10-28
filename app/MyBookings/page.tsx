@@ -50,6 +50,7 @@ async function loadMyBookings() {
       city: hotel?.city ?? null,
       photoUrl: hotel?.photo_urls?.find(Boolean) ?? null,
       roomType: roomById.get(r.room_id)?.room_type ?? null,
+      unlisted: !hotel || !!hotel.liteapi_deleted_at,
     };
   });
 
@@ -125,7 +126,7 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: P
               </h2>
               <ul className="mt-4 space-y-3">
                 {past.map((booking) => (
-                  <PastBooking key={booking.id} booking={booking} />
+                  <PastBooking key={booking.id} booking={booking} sample={showSample} />
                 ))}
               </ul>
             </section>

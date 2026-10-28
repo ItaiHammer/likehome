@@ -1,8 +1,8 @@
 import { Tag } from "@/app/_components/ui";
 import { formatStayDates, type Booking } from "@/lib/bookings";
-import { SoonButton } from "./SoonButton";
+import { RebookButton } from "./RebookButton";
 
-export function PastBooking({ booking }: { booking: Booking }) {
+export function PastBooking({ booking, sample = false }: { booking: Booking; sample?: boolean }) {
   const cancelled = booking.status === "cancelled";
 
   return (
@@ -14,7 +14,7 @@ export function PastBooking({ booking }: { booking: Booking }) {
         </div>
         <p className="mt-0.5 text-sm text-slate">{[booking.city, formatStayDates(booking.checkIn, booking.checkOut)].filter(Boolean).join(" · ")}</p>
       </div>
-      {!cancelled && <SoonButton>Book again</SoonButton>}
+      {!cancelled && !booking.unlisted && <RebookButton bookingId={booking.id} hotelName={booking.hotelName} sample={sample} />}
     </li>
   );
 }
