@@ -196,6 +196,7 @@ export function ChangeBooking({
     if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (lookingUp) return { field: "dates", message: "Still checking which rooms are free on those dates. Try again in a moment." };
     if (room.bookedForDates) return { field: "guests", message: `${room.name} is booked for those dates. Pick another room or change your dates.` };
+    if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     return null;
   }
