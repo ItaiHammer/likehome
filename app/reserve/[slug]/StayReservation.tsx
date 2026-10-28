@@ -108,6 +108,8 @@ export function StayReservation({
   const formRef = useRef<HTMLFormElement>(null);
   const confirmTimer = useRef<number | undefined>(undefined);
   const saveRequest = useRef<AbortController | null>(null);
+  // The checkout attempt still without an answer; only resending it may be matched to a booking that went through
+  const unconfirmed = useRef<string | null>(null);
   const lastStep = useRef(step);
   const bodyRef = useRef<HTMLDivElement>(null);
   const changeDatesRef = useRef<HTMLButtonElement>(null);
@@ -423,14 +425,21 @@ export function StayReservation({
       cardName: text("cardName"),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
+    const attempt = `${payload.room_id}|${payload.check_in}|${payload.check_out}|${payload.adults}|${payload.children}`;
+    const retry = unconfirmed.current === attempt;
+    unconfirmed.current = attempt;
     saveRequest.current?.abort();
     const request = new AbortController();
     saveRequest.current = request;
-    void saveBooking(snapshot, payload, request.signal);
+    void saveBooking(snapshot, retry ? { ...payload, retry } : payload, request.signal);
   }
 
   // A mock charge (nothing is billed), then the booking and its payment are saved
-  async function saveBooking(snapshot: Omit<Booking, "confirmation" | "saved">, payload: ReturnType<typeof checkoutRequest>, signal: AbortSignal) {
+  async function saveBooking(
+    snapshot: Omit<Booking, "confirmation" | "saved">,
+    payload: ReturnType<typeof checkoutRequest> & { retry?: boolean },
+    signal: AbortSignal,
+  ) {
     const fail = (message: string, signIn = false) => {
       setSubmitting(false);
       setErrors(signIn ? { form: message, signIn: "yes" } : { form: message });
@@ -443,6 +452,8 @@ export function StayReservation({
         signal,
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; reservation?: { id?: string; total_price?: number | string } };
+      // A gateway error without the API's own answer leaves the attempt unconfirmed
+      if (res.ok || body.error) unconfirmed.current = null;
       if (res.status === 401) return fail("Your sign-in has ended. Sign in again to finish booking.", true);
       if (res.status === 402) {
         // A declined card saves nothing, so the guest can just try another one

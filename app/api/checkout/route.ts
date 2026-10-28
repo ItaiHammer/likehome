@@ -103,6 +103,8 @@ export async function POST(request: Request) {
   }
   const input = stay.value
   const payment = card.value
+  // Sent by the stay page only when it resends an attempt that got no answer
+  const retry = (body as Record<string, unknown>).retry === true
 
   // 2. Look up the room and check capacity. `*` rather than the LiteAPI columns by name, so booking
   //    keeps working (at stored prices) on a database without supabase/migrations/liteapi_hotels.sql.
@@ -139,7 +141,7 @@ export async function POST(request: Request) {
     )
     if (live.status === 'sold_out') {
       // LiteAPI may have no more of the room by the time a lost response is retried
-      const paid = await ownPaidBooking(supabase, userId, input, payment)
+      const paid = retry ? await ownPaidBooking(supabase, userId, input, payment) : null
       if (paid) return Response.json(paid)
       return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
     }
@@ -176,7 +178,7 @@ export async function POST(request: Request) {
 
   if (reservationError || !reservation) {
     if (reservationError?.code === EXCLUSION_VIOLATION) {
-      const paid = await ownPaidBooking(supabase, userId, input, payment)
+      const paid = retry ? await ownPaidBooking(supabase, userId, input, payment) : null
       if (paid) return Response.json(paid)
       return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
     }
