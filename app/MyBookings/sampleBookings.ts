@@ -1,10 +1,14 @@
-import { changeBlocker, type Booking, type OtherStay } from "@/lib/bookings";
+import { changeBlocker, type Booking, type CancellationQuote, type OtherStay } from "@/lib/bookings";
 import { calculateTotalPrice } from "@/utils/reservation-logic";
 import type { Room } from "../_data/stays";
 import type { BookingToChange } from "./[id]/ChangeBooking";
 
 // Dev-only, so the page can be checked without signing in or writing test rows to the shared database.
 // Dates count from today so each section always has something in it.
+
+// What the sample bookings were "paid" per night; the change-booking page prices the booked room the same
+const BOOKED_NIGHTLY = 189;
+const INSURED_SAMPLE_ID = "48291c0e-7a3d-4f55-9b1e-2c6d8e0f4a17";
 
 function daysFrom(today: string, days: number) {
   const date = new Date(`${today}T00:00:00Z`);
@@ -76,6 +80,20 @@ export function getSampleBookings(today: string, empty = false): { name: string;
   };
 }
 
+/** Cancellation terms for a sample booking: Sunset Beach is insured (refund as points), the rest aren't */
+export function getSampleQuote(b: Booking, today: string): CancellationQuote {
+  const paid = calculateTotalPrice(b.checkIn, b.checkOut, BOOKED_NIGHTLY);
+  const insured = b.id === INSURED_SAMPLE_ID;
+  return {
+    hasInsurance: insured,
+    canCancel: b.status === "confirmed" && b.checkIn > today,
+    bookingPaid: paid,
+    insurancePaid: insured ? 38 : 0,
+    refund: insured ? paid : 0,
+    refundPoints: insured ? Math.round(paid * 100) : 0,
+  };
+}
+
 /** One sample booking for the change-booking page, with made-up rooms at its hotel */
 export function getSampleBooking(id: string, today: string): { booking: BookingToChange; rooms: Room[]; otherStays: OtherStay[] } | null {
   const { bookings } = getSampleBookings(today);
@@ -84,7 +102,7 @@ export function getSampleBooking(id: string, today: string): { booking: BookingT
 
   const rooms: Room[] = [
     { id: "standard", name: "Standard room", description: "Queen bed", sleeps: 2, nightly: 149 },
-    { id: "booked", name: b.roomType ?? "Room", description: "King bed · View", sleeps: 2, nightly: 189 },
+    { id: "booked", name: b.roomType ?? "Room", description: "King bed · View", sleeps: 2, nightly: BOOKED_NIGHTLY },
     { id: "suite", name: "Family suite", description: "2 bedrooms · Kitchenette", sleeps: 4, nightly: 289 },
   ];
   const otherStays = bookings
@@ -103,7 +121,7 @@ export function getSampleBooking(id: string, today: string): { booking: BookingT
       guests: b.guests ?? 1,
       children: 0,
       roomId: "booked",
-      total: calculateTotalPrice(b.checkIn, b.checkOut, 189),
+      total: calculateTotalPrice(b.checkIn, b.checkOut, BOOKED_NIGHTLY),
       blocker: changeBlocker(b, today),
       livePrices: false,
     },
