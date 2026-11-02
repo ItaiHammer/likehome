@@ -168,9 +168,7 @@ export function StayReservation({
   const fromBox = useRef<{ height: number; top: number } | null>(null);
 
   const roomsLocked = step !== "stay";
-  const room = stay.rooms.find((r) => r.id === roomId)!;
   const nights = nightsBetween(checkIn, checkOut);
-  const guests = adults + children;
   // The server already priced the dates and guests in the link, so those need no fetch. Adults and children
   // apart: LiteAPI prices children by age.
   const initialKey = `${initial.checkIn ?? ""}|${initial.checkOut ?? ""}|${initial.adults ?? 2}|${initial.children ?? 0}`;
@@ -188,6 +186,7 @@ export function StayReservation({
   // that fits the party takes its place (audit R5). The guest's own pick comes back if the dates
   // change back. Once past "Reserve", the room stays put and the checks below catch any problem.
   const chosen = rooms.find((r) => r.id === roomId)!;
+  const guests = adults + children;
   const room =
     chosen.soldOut && step === "stay"
       ? (matchingRoom(rooms, stay.tags, { guests, adults, children, tags: [] }) ?? chosen)
@@ -199,7 +198,6 @@ export function StayReservation({
   // Not part of the total: the guest pays these to the hotel
   const dueAtProperty = nights ? (room.dueAtProperty ?? 0) : 0;
   // Today is "" while rendering on the server, so the server and the browser agree on first render
-  const guests = adults + children;
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
   // Nights the guest already has booked at other hotels, as days from today, so the calendar crosses
   // them out. Derived from `today` (empty on the server), so it fills in once the page is in the browser.
@@ -515,38 +513,38 @@ export function StayReservation({
 
     const payload = selectedCard
       ? checkoutRequest({
-        roomId: room.id,
-        checkIn,
-        checkOut,
-        guests: adults + children,
-        savedPaymentMethodId: selectedCard.id,
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      })
+          roomId: room.id,
+          checkIn,
+          checkOut,
+          adults, 
+          children,
+          savedPaymentMethodId: selectedCard.id,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        })
       : checkoutRequest({
-        // Whichever of the identical rooms is free for these dates
-      roomId: freeUnitId(room, checkIn, checkOut) ?? room.id,
-        checkIn,
-        checkOut,
-        adults,
-      children,
-        cardNumber: text("cardNumber"),
-        expiry: text("expiry"),
-        cvc: text("cvc"),
-        cardName: text("cardName"),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
+          // Use whichever identical room is free for these dates.
+          roomId: freeUnitId(room, checkIn, checkOut) ?? room.id,
+          checkIn,
+          checkOut,
+          adults, 
+          children,
+          cardNumber: text("cardNumber"),
+          expiry: text("expiry"),
+          cvc: text("cvc"),
+          cardName: text("cardName"),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        });
 
     saveRequest.current?.abort();
     const request = new AbortController();
     saveRequest.current = request;
-    void saveBooking(snapshot, payload, request.signal, text("expiry"));
+    void saveBooking(snapshot, payload, request.signal);
   }
 
   async function saveBooking(
       snapshot: Omit<Booking, "confirmation" | "saved">,
       payload: ReturnType<typeof checkoutRequest>,
       signal: AbortSignal,
-      typedExpiry?: string
   ) {
     const fail = (message: string, signIn = false) => {
       setSubmitting(false);
@@ -1101,15 +1099,6 @@ export function StayReservation({
 }
 
 const dueAtPropertyText = (amount: number) => `Plus ${money(amount)} in hotel fees, paid at the property.`;
-
-function Line({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between text-slate">
-      <dt>{label}</dt>
-      <dd className="text-ink">{value}</dd>
-    </div>
-  );
-}
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
