@@ -44,7 +44,7 @@ function Arrow({ className }: { className?: string }) {
   );
 }
 
-const perks = ["Member prices on every stay", "Rewards on every night you book", "Free cancellation on most stays"];
+const perks = ["Member prices on every stay", "Rewards on every night you book", "Change your dates or room online"];
 
 export default function Home() {
   return (

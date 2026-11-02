@@ -36,6 +36,8 @@ export function PropertyEditor({ listing, initialTab, initialPreview = false }: 
   const [isSaving, startSaving] = useTransition();
   const [previewing, setPreviewing] = useState(initialPreview);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  // Why the last save failed, when the server says (e.g. booked rooms can't be removed)
+  const [failMessage, setFailMessage] = useState<string | null>(null);
   const uploads = usePhotoUploads((photo) => dispatch({ type: "addPhoto", photo }));
 
   const dirty = !sameDraft(state.draft, state.saved);
@@ -87,7 +89,10 @@ export function PropertyEditor({ listing, initialTab, initialPreview = false }: 
       }
       if (result.status !== "saved") guard.restore();
       if (result.status === "invalid") showErrors(result.errors);
-      else if (result.status === "failed") dispatch({ type: "saveFailed", reason: "failed" });
+      else if (result.status === "failed") {
+        setFailMessage(result.message ?? null);
+        dispatch({ type: "saveFailed", reason: "failed" });
+      }
       else if (isNew) guard.replace(`/listings/${result.id}/edit`);
       else dispatch({ type: "saveSucceeded", sent, saved: result.saved });
     });
@@ -152,7 +157,9 @@ export function PropertyEditor({ listing, initialTab, initialPreview = false }: 
       : state.problem === "unreachable"
         ? "We couldn't reach LikeHome. Your edits are still here; check your connection and retry."
         : state.problem === "failed"
-          ? "Your edits are kept. Retry saving when you're ready."
+          ? failMessage
+            ? `${failMessage} Your edits are kept.`
+            : "Your edits are kept. Retry saving when you're ready."
           : null;
 
   return (

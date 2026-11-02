@@ -6,19 +6,22 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
+import { freeUnitId, markBookedRooms, mergeBookedNights, soldOutNights } from "@/lib/room-availability";
+import { matchingRoom, roomFits } from "@/lib/stay-filters";
 import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Card, Field, Stars } from "../../_components/ui";
 import { HotelPhoto } from "../../MyBookings/_components/HotelPhoto";
-import { TAX_RATE, type Stay } from "../../_data/stays";
+import { TAX_RATE, type Room, type Stay } from "../../_data/stays";
 import { checkoutRequest } from "./checkoutRequest";
 import { DateRangePicker } from "./DateRangePicker";
 import { GuestsField, guestLabel } from "./GuestsField";
 import { PhotoGallery } from "./PhotoGallery";
 import { RoomOptions } from "./RoomOptions";
 import { StayOffers } from "./StayOffers";
+import { useBookedNightsLookup } from "./useBookedNightsLookup";
 
 type Step = "stay" | "details" | "done";
 type Errors = Partial<Record<string, string>>;
@@ -147,6 +150,13 @@ export function StayReservation({
   const [cardNumber, setCardNumber] = useState("");
   const [saveCardForFuture, setSaveCardForFuture] = useState(true);
 
+  const [livePrices, setLivePrices] = useState<{ key: string; byId: Record<string, Partial<Room>> } | null>(null);
+  // Every room the prices route listed, including ones saved after the page loaded because LiteAPI offered them for
+  // other guests; kept so a picked one stays listed
+  const [addedRooms, setAddedRooms] = useState<Room[]>([]);
+  // Without a LiteAPI key the stored prices on the page hold for every date. A LiteAPI outage doesn't turn
+  // this off: checkout also falls back to the stored price while LiteAPI is down.
+  const [pricingOff, setPricingOff] = useState(!stay.liteapiConfigured);
   const cardRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -160,10 +170,35 @@ export function StayReservation({
   const roomsLocked = step !== "stay";
   const room = stay.rooms.find((r) => r.id === roomId)!;
   const nights = nightsBetween(checkIn, checkOut);
+  const guests = adults + children;
+  // The server already priced the dates and guests in the link, so those need no fetch. Adults and children
+  // apart: LiteAPI prices children by age.
+  const initialKey = `${initial.checkIn ?? ""}|${initial.checkOut ?? ""}|${initial.adults ?? 2}|${initial.children ?? 0}`;
+  const priceKey = stay.liteapiId && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${adults}|${children}` : null;
+  const liveKey = livePrices?.key;
+  const listed = [...stay.rooms, ...addedRooms.filter((r) => !stay.rooms.some((s) => s.id === r.id))];
+  const priced = livePrices && livePrices.key === priceKey ? listed.map((r) => ({ ...r, ...livePrices.byId[r.id] })) : listed;
+  const pricesPending = !!priceKey && priceKey !== initialKey && liveKey !== priceKey;
+
+  // Dates after the page's ~400-day lookup are looked up for their exact nights
+  const { rows: extraNights, lookingUp } = useBookedNightsLookup(stay.slug, stay.bookedWindow, checkIn, checkOut, !!stay.bookable);
+  // A room card is booked for these dates when every one of its identical rooms is (audit F9)
+  const rooms = markBookedRooms(mergeBookedNights(priced, extraNights), checkIn, checkOut);
+  // While choosing, a room that's booked for the dates isn't kept selected: the cheapest open room
+  // that fits the party takes its place (audit R5). The guest's own pick comes back if the dates
+  // change back. Once past "Reserve", the room stays put and the checks below catch any problem.
+  const chosen = rooms.find((r) => r.id === roomId)!;
+  const room =
+    chosen.soldOut && step === "stay"
+      ? (matchingRoom(rooms, stay.tags, { guests, adults, children, tags: [] }) ?? chosen)
+      : chosen;
   const subtotal = room.nightly * nights;
   const cleaning = nights ? stay.cleaningFee : 0;
   const taxes = Math.round((subtotal + cleaning) * (stay.taxRate ?? TAX_RATE));
   const total = subtotal + cleaning + taxes;
+  // Not part of the total: the guest pays these to the hotel
+  const dueAtProperty = nights ? (room.dueAtProperty ?? 0) : 0;
+  // Today is "" while rendering on the server, so the server and the browser agree on first render
   const guests = adults + children;
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
   // Nights the guest already has booked at other hotels, as days from today, so the calendar crosses
@@ -179,8 +214,47 @@ export function StayReservation({
     });
   }, [otherStays, today]);
 
+  useEffect(() => {
+    if (!priceKey || priceKey === initialKey || priceKey === liveKey) return;
+    const [ci, co, a, c] = priceKey.split("|");
+    const request = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const query = new URLSearchParams({ checkIn: ci, checkOut: co, adults: a, children: c });
+        const res = await fetch(`/api/stays/${stay.slug}/prices?${query}`, { signal: request.signal });
+        if (!res.ok) throw new Error(`Prices request failed (${res.status})`);
+        const body = (await res.json()) as { configured?: boolean; rooms?: (Partial<Room> & { id: string })[] };
+        if (request.signal.aborted) return;
+        // The route sets every key (null without a live quote), so an earlier quote's terms and fees don't linger
+        const byId: Record<string, Partial<Room>> = {};
+        for (const { id, ...r } of body.rooms ?? []) if (Number.isFinite(r.nightly)) byId[id] = { ...r, soldOut: !!r.soldOut };
+        const full = (body.rooms ?? []).filter((r): r is Room => Number.isFinite(r.nightly) && typeof r.sleeps === "number");
+        setAddedRooms((had) => {
+          const fresh = full.filter((r) => !had.some((h) => h.id === r.id));
+          return fresh.length ? [...had, ...fresh] : had;
+        });
+        setLivePrices({ key: priceKey, byId });
+        if (body.configured === false) setPricingOff(true);
+      } catch {
+        // Keeps the prices already shown; checkout prices the stay on the server either way
+        if (!request.signal.aborted) setLivePrices({ key: priceKey, byId: {} });
+      }
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      request.abort();
+    };
+  }, [priceKey, initialKey, liveKey, stay.slug]);
+
+  // Nights when every room here is booked. Also from `today`, so it fills in once in the browser.
+  // Not for LiteAPI hotels: LiteAPI can offer a party rooms the hotel hasn't saved yet.
+  const soldOutOffsets = useMemo(
+    () => (today ? soldOutNights(stay.liteapiId ? [] : stay.rooms).filter((night) => night >= today).map((night) => nightsBetween(today, night)) : []),
+    [stay.rooms, stay.liteapiId, today],
+  );
+
   const blockedOffsets = [
-    ...new Set([...stay.blockedNights, ...userBookingBlockedOffsets]),
+    ...new Set([...stay.blockedNights, ...soldOutOffsets, ...userBookingBlockedOffsets]),
   ];
 
   const cancelBy = checkIn ? addDays(checkIn, -2) : "";
@@ -285,11 +359,15 @@ export function StayReservation({
     if (nights > MAX_NIGHTS) return { field: "dates", message: `Stays can be up to ${MAX_NIGHTS} nights.` };
     const booked = blockedOffsets.map((offset) => addDays(todayISO(), offset));
     if (booked.some((night) => night >= checkIn && night < checkOut)) return { field: "dates", message: "Some of those nights are already booked." };
+    if (lookingUp) return { field: "dates", message: "Still checking which rooms are free on those dates. Try again in a moment." };
+    // The booking API judges "today" in the guest's time zone (sent with the booking), so this uses the local date
     if (stay.bookable && checkIn < todayISO()) return { field: "dates", message: "That check-in date is too soon to book. Pick a later date." };
     const clash = stay.bookable ? findOverlap(otherStays, checkIn, checkOut) : null;
     if (clash) return { field: "dates", message: overlapMessage(clash) };
-    if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
+    if (!roomFits(room, guests, adults, children)) return { field: "guests", message: `${room.name} is too small for ${guestLabel(adults, children)}. Pick another room.` };
+    if (room.bookedForDates) return { field: "guests", message: `${room.name} is booked for those dates. Pick another room or change your dates.` };
+    if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     return null;
   }
 
@@ -346,11 +424,14 @@ export function StayReservation({
   }
 
   function reserve() {
+    if (pricesPending) return;
     const problem = stayProblem();
     if (problem) return showStayProblem(problem);
     if (!account) return router.push(signInHref());
     setErrors({});
     setPopover(null);
+    // Keep the room shown as selected (it may have stood in for a booked pick) for the next steps
+    setRoomId(room.id);
     goTo("details");
   }
 
@@ -372,6 +453,7 @@ export function StayReservation({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (pricesPending) return;
     const data = new FormData(e.currentTarget);
     const text = (name: string) => String(data.get(name) ?? "").trim();
     const next: Errors = {};
@@ -441,10 +523,12 @@ export function StayReservation({
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       })
       : checkoutRequest({
-        roomId: room.id,
+        // Whichever of the identical rooms is free for these dates
+      roomId: freeUnitId(room, checkIn, checkOut) ?? room.id,
         checkIn,
         checkOut,
-        guests: adults + children,
+        adults,
+      children,
         cardNumber: text("cardNumber"),
         expiry: text("expiry"),
         cvc: text("cvc"),
@@ -778,15 +862,28 @@ export function StayReservation({
               ) : (
                   <p className="mt-5 border-t border-edge pt-5 text-sm text-slate">Add your dates to see the total for your stay.</p>
               )}
+            {nights > 0 ? (
+              <dl className="mt-5 space-y-3 border-t border-edge pt-5 text-sm">
+                <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
+                {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
+                {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
+                <div className="flex justify-between border-t border-edge pt-3 text-lg font-bold text-ink">
+                  <dt>Total</dt>
+                  <dd>{money(total)}</dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="mt-5 border-t border-edge pt-5 text-sm text-slate">Add your dates to see the total for your stay.</p>
+            )}
+            {dueAtProperty > 0 && <p className="mt-2 text-sm text-slate">{dueAtPropertyText(dueAtProperty)}</p>}
 
-              {checkIn && (
-                  <Card tone="tint" padding="none" className="mt-5 p-4 text-sm">
-                    <p className="font-semibold text-ink">{freeCancel ? `Free cancellation until ${formatDate(cancelBy)}` : "No free cancellation"}</p>
-                    <p className="mt-1 text-slate">
-                      {freeCancel ? "After that, the first night is non-refundable." : "This booking can’t be cancelled for free. The first night is non-refundable."}
-                    </p>
-                  </Card>
-              )}
+            {checkIn && (
+              <Card tone="tint" padding="none" className="mt-5 p-4 text-sm">
+                {/* The rule cancel_reservation applies (audit F4): only insured bookings are refunded */}
+                <p className="font-semibold text-ink">Non-refundable</p>
+                <p className="mt-1 text-slate">You can cancel any time before check-in, but without cancellation insurance there’s no refund.</p>
+              </Card>
+            )}
 
               {errors.form && (
                   <p role="alert" className="mt-5 text-sm text-danger">
@@ -847,27 +944,28 @@ export function StayReservation({
 
         <StayOffers offers={stay.offers ?? stay.tags.map((label) => ({ label }))} goodFor={stay.goodFor ?? []} />
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_514px] lg:items-start">
-          <fieldset id="rooms" disabled={roomsLocked} aria-describedby={roomsLocked ? "rooms-locked" : undefined} className="min-w-0 scroll-mt-6">
-            <legend className="text-[32px] font-bold leading-10 text-ink">
-              <h2>Choose a room</h2>
-            </legend>
-            {roomsLocked && (
-                <p id="rooms-locked" className="mt-2 text-sm text-slate">
-                  {booking?.saved ? "Your room is booked." : "Sample stay, so nothing was booked."}
-                </p>
-            )}
-            <RoomOptions
-                rooms={stay.rooms}
-                selectedId={roomId}
-                onSelect={(id) => {
-                  setRoomId(id);
-                  clear("guests");
-                }}
-                locked={roomsLocked}
-                note={() => (freeCancel ? "Free cancellation" : "No free cancellation")}
-            />
-          </fieldset>
+      <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_514px] lg:items-start">
+        <fieldset id="rooms" disabled={roomsLocked} aria-describedby={roomsLocked ? "rooms-locked" : undefined} className="min-w-0 scroll-mt-6">
+          <legend className="text-[32px] font-bold leading-10 text-ink">
+            <h2>Choose a room</h2>
+          </legend>
+          {roomsLocked && (
+            <p id="rooms-locked" className="mt-2 text-sm text-slate">
+              {booking?.saved ? "Your room is booked." : "Sample stay, so nothing was booked."}
+            </p>
+          )}
+          <RoomOptions
+            rooms={rooms}
+            selectedId={room.id}
+            onSelect={(id) => {
+              setRoomId(id);
+              clear("guests");
+            }}
+            locked={roomsLocked}
+            note={() => "Non-refundable"}
+            party={{ adults, children }}
+          />
+        </fieldset>
 
           <aside
               ref={cardRef}
@@ -926,28 +1024,98 @@ export function StayReservation({
                   </span>
                     </div>
 
-                    {nights > 0 ? (
-                        <dl className="space-y-2 text-base">
-                          <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
-                          {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
-                          {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
-                          <div className="flex justify-between border-t border-edge pt-3 text-lg font-bold text-ink">
-                            <dt>Total</dt>
-                            <dd>{money(total)}</dd>
-                          </div>
-                        </dl>
-                    ) : (
-                        <p className="text-sm text-slate">Add check-in and check-out dates to see pricing.</p>
-                    )}
-
-                    <button type="button" onClick={reserve} className={`${buttonPrimary} w-full`}>
-                      Reserve
-                    </button>
-                  </div>
+              {nights > 0 ? (
+                <div>
+                  <dl className="space-y-2 text-base">
+                    <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
+                    {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
+                    {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
+                    <div className="flex justify-between border-t border-edge pt-3 text-base font-bold text-ink">
+                      <dt>Total</dt>
+                      <dd>{money(total)}</dd>
+                    </div>
+                  </dl>
+                  {dueAtProperty > 0 && <p className="mt-2 text-sm text-slate">{dueAtPropertyText(dueAtProperty)}</p>}
+                </div>
+              ) : (
+                <p className="text-sm text-slate">Add your dates to see the total for your stay.</p>
               )}
+
+              {!account && (
+                <div className="rounded-control border border-blue/30 bg-blue/5 p-4 text-sm text-slate">
+                  <p className="text-base font-semibold leading-5 text-ink">Sign in to reserve</p>
+                  <p className="mt-1">You need a LikeHome account to book. Pick your room and dates first, and we’ll bring you back here after you sign in.</p>
+                </div>
+              )}
+
+              <button type="button" onClick={reserve} disabled={pricesPending} className={`${buttonPrimary} w-full`}>
+                {pricesPending ? "Updating prices…" : nights === 0 ? "Check availability" : account ? "Reserve" : "Sign in to reserve"}
+              </button>
+              <p className="text-center text-sm text-slate">You won’t be charged yet.</p>
             </div>
-          </aside>
-        </div>
-      </>
+          )}
+
+          {step === "done" && booking && (
+            <div className={`space-y-5 ${moved ? "step-in" : ""}`}>
+              <div>
+                <h2 ref={headingRef} tabIndex={-1} className="text-[32px] font-bold leading-10 text-ink outline-none">
+                  {booking.saved ? "You’re booked." : "That was a sample stay."}
+                </h2>
+                <p className="mt-2 text-base text-slate">
+                  {booking.saved ? (
+                    <>
+                      Confirmation <span className="font-semibold text-ink">{booking.confirmation}</span>. Your booking is saved to your account.
+                    </>
+                  ) : (
+                    "Nothing was booked. Hotels you find in Stays are saved to your account when you book."
+                  )}
+                </p>
+              </div>
+              {/* From the snapshot taken on confirm, so later edits can't change it */}
+              <dl className="space-y-3 border-y border-edge py-4 text-base">
+                <Row label="Room" value={booking.roomName} />
+                <Row label="Check-in" value={formatDate(booking.checkIn)} />
+                <Row label="Check-out" value={formatDate(booking.checkOut)} />
+                <Row label="Guests" value={guestLabel(booking.adults, booking.children)} />
+                <Row label="Total" value={money(booking.total)} />
+              </dl>
+              {booking.saved ? (
+                <Link href={PAGE_ROUTES.MY_BOOKINGS} className={`${buttonPrimary} w-full`}>
+                  View My Bookings
+                </Link>
+              ) : (
+                <Link href="/" className={`${buttonPrimary} w-full`}>
+                  Back to home
+                </Link>
+              )}
+              <button type="button" onClick={startOver} className={`${buttonSecondary} w-full`}>
+                Book different dates
+              </button>
+            </div>
+          )}
+          </div>
+        </aside>
+      </div>
+    </>
+  );
+}
+
+const dueAtPropertyText = (amount: number) => `Plus ${money(amount)} in hotel fees, paid at the property.`;
+
+function Line({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between text-slate">
+      <dt>{label}</dt>
+      <dd className="text-ink">{value}</dd>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-slate">{label}</dt>
+      <dd className="text-right font-semibold text-ink">{value}</dd>
+    </div>
   );
 }
