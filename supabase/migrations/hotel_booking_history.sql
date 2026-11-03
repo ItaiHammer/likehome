@@ -61,7 +61,7 @@ begin
   -- only completed transactions count (same rule as get_booking_history)
   left join lateral (
     select sum(t.amount) filter (where t.transaction_type in ('charge', 'insurance')) as paid,
-           sum(t.amount) filter (where t.transaction_type = 'credit')                as r
+           sum(t.amount) filter (where t.transaction_type = 'credit')                as refunded
     from public.payments pay
     join public.transactions t on t.payment_id = pay.id
     where pay.reservation_id = r.id and t.status = 'completed'
@@ -73,7 +73,7 @@ end;
 $$;
 
 -- One row per guest. Reuses the function above, so the owner check lives in one place.
-create or replace function public.get_hotel_customer_history(p_hotel_id uuid default null
+create or replace function public.get_hotel_customer_history(p_hotel_id uuid default null)
 returns table (
   guest_id uuid,
   guest_name text,
