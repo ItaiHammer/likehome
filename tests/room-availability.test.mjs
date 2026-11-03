@@ -73,6 +73,23 @@ test('the cheapest room booked for the dates is skipped; a free one is picked', 
   assert.deepEqual(markBookedRooms([{ id: 'v', soldOut: true }], '2027-04-10', '2027-04-12'), [{ id: 'v', soldOut: true }])
 })
 
+test('back on the dates and guests the page was priced for, rooms added for other guests are sold out', async () => {
+  const { markBookedRooms, withAddedRooms } = await import('../lib/room-availability.ts')
+  const { matchingRoom } = await import('../lib/stay-filters.ts')
+  // The link is for 2 adults, who are offered only the Double (booked on Nov 10). 4 adults are offered a Family room,
+  // which the prices route saves and lists at their price.
+  const double = { id: 'double', nightly: 150, sleeps: 2, units: [{ id: 'double', bookedNights: ['2026-11-10'] }] }
+  const family = { id: 'family', nightly: 450, sleeps: 4, soldOut: false, units: [{ id: 'family', bookedNights: [] }] }
+  const added = [{ ...double, nightly: 300, soldOut: true }, family]
+  assert.deepEqual(withAddedRooms([double], added, false), [double, family]) // the page's own copy of a room is kept
+  const back = withAddedRooms([double], added, true)
+  assert.deepEqual(back, [double, { ...family, soldOut: true }])
+  // Left open, it would stand in for the booked Double; sold out, nothing does
+  const party = { guests: 2, adults: 2, children: 0, tags: [] }
+  assert.equal(matchingRoom(markBookedRooms(withAddedRooms([double], added, false), '2026-11-10', '2026-11-12'), [], party).id, 'family')
+  assert.equal(matchingRoom(markBookedRooms(back, '2026-11-10', '2026-11-12'), [], party), null)
+})
+
 // Retest: stays after the first ~400-day lookup are checked for their own dates
 test('dates outside the looked-up window need their own lookup', async () => {
   const { outsideWindow } = await import('../lib/room-availability.ts')

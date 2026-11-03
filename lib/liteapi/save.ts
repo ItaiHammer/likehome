@@ -129,7 +129,7 @@ export type SavedRoom = RoomRow & { id: string }
 
 const ROOM_FIELDS = 'id, liteapi_room_id, room_type, capacity, max_adults, max_children, num_beds, bed_size, price_per_night, tags'
 const RETRY_MS = 30 * 60_000
-// Rooms asked about lately, saved or not, so page views don't keep asking LiteAPI for the same ones
+// Rooms asked about lately and not saved, so page views don't keep asking LiteAPI for the same ones
 const tried = new Map<string, number>()
 
 /**
@@ -169,6 +169,8 @@ export async function saveOfferedRooms(hotelId: string, liteapiId: string, perNi
     console.warn('[liteapi] saving offered rooms failed', liteapiId, error.code)
     return []
   }
+  // Only asked for again once its row is gone, and then it is saved again
+  for (const room of rows) tried.delete(`${liteapiId}|${room.liteapi_room_id}`)
   const { data } = await db.from('rooms').select(ROOM_FIELDS).eq('hotel_id', hotelId).in('liteapi_room_id', rows.map((room) => room.liteapi_room_id))
   return (data ?? []) as SavedRoom[]
 }
