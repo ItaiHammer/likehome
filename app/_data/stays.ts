@@ -10,12 +10,24 @@ export type Room = {
   sleeps: number;
   nightly: number;
   soldOut?: boolean;
+  /** Set on the stay page when every room of this type is booked for the chosen dates */
+  bookedForDates?: boolean;
+  /** Database rooms only: the identical rooms behind this card and the nights each is booked */
+  units?: { id: string; bookedNights: string[] }[];
   /** Database rooms only: what the search filters check per room */
   maxAdults?: number | null;
   maxChildren?: number | null;
   beds?: number;
   bedSize?: string | null;
   tags?: string[];
+  liteapiRoomId?: string | null;
+  // A LiteAPI room's live quote; null when it has none (the stored price shows). Owner rooms leave these out
+  // and follow the site's own cancellation rule.
+  refundable?: boolean | null;
+  /** Free cancellation ends as this day starts; null for a refundable rate that lists no fee */
+  cancelBy?: string | null;
+  /** Hotel fees for the whole stay, paid at the property on top of the price */
+  dueAtProperty?: number | null;
 };
 
 /** Something a stay has, named like the search filter it matches */
@@ -41,11 +53,18 @@ export type Stay = {
   goodFor?: string[];
   /** A real hotel whose rooms can be booked through /api/reservations (the sample stays can't) */
   bookable?: boolean;
+  liteapiId?: string | null;
+  /** "stored" when live prices were asked for but LiteAPI couldn't give any */
+  priceSource?: "live" | "stored";
+  /** The server has a LiteAPI key. Without one, the stored prices hold for any dates, so pages never refetch them. */
+  liteapiConfigured?: boolean;
   /** Tax added to the room and cleaning fee; TAX_RATE when not set */
   taxRate?: number;
   cleaningFee: number;
   /** Nights already booked, as days from today. Placeholder until availability comes from the backend. */
   blockedNights: number[];
+  /** Database hotels: the nights the rooms' booked nights were looked up for (see units) */
+  bookedWindow?: { from: string; to: string };
   rooms: Room[];
 };
 

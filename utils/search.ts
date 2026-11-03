@@ -20,6 +20,7 @@ export async function searchAvailableHotels(filters: {
   sort?: "recommended" | "price-low" | "price-high";
   page?: number;
   page_size?: number;
+  liteapi_ids?: string[];
 }) {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
@@ -46,6 +47,8 @@ export async function searchAvailableHotels(filters: {
     p_sort: filters.sort ?? "recommended",
     p_limit: pageSize,
     p_offset: (page - 1) * pageSize,
+    // Only when given, so searches without it still work before search_hotels.sql adds it
+    ...(filters.liteapi_ids?.length ? { p_liteapi_ids: filters.liteapi_ids } : {}),
   });
 
   const total = data?.[0]?.total_count ?? 0;
