@@ -17,6 +17,7 @@ type SearchMode = "standard" | "ai";
 
 export type SearchInitialValues = SearchFilterValues & {
   where?: string;
+  place?: string;
   checkIn?: string;
   checkOut?: string;
   adults?: number;
@@ -157,6 +158,7 @@ export function SearchExperience({
             <DestinationInput
               className={`${field} sm:col-span-1 sm:border-b sm:border-r sm:border-edge/60 md:flex-[1.45] md:border-0 lg:flex-[1.6]`}
               initialValue={initialValues.where ?? ""}
+              initialPlace={initialValues.place ?? ""}
               autoFocusFrom={switchedBy === "keyboard" ? "keyboard" : undefined}
             />
             <DatesField

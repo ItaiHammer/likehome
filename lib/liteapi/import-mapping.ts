@@ -2,8 +2,10 @@
 import { bedSizes, tags as filterTags } from '../../app/search/types.ts'
 import type { BedSize, Tag } from '../../app/search/types.ts'
 import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRoom } from './types.ts'
+import { stateFromZip } from '../us-states.ts'
 
-// city/region/country come from here, never from LiteAPI: search matches them exactly ("USA" + full state name)
+// city/region/country as search matches them ("USA" + full state name): TARGETS sets them on import, targetFor on
+// hotels saved from live search
 export type Target = { countryCode: string; cityName: string; city: string; region: string | null; country: string }
 
 export type HotelRow = {
@@ -20,7 +22,7 @@ export type HotelRow = {
   longitude: number | null
   tags: Tag[]
   liteapi_deleted_at: null
-  liteapi_synced_at: string
+  liteapi_synced_at: string | null
 }
 
 export type RoomRow = {
@@ -236,7 +238,7 @@ export function samplePricesFor(offers: LiteOffer[] | undefined, nights = 1): Sa
   for (const offer of pricedOffers(offers)) {
     const perNight = offerTotal(offer)! / nights
     const first = offer.rates![0]
-    const mappedRoomId = first.mappedRoomId ?? offer.mappedRoomId
+    const mappedRoomId = first.mappedRoomId
     if (mappedRoomId !== undefined && mappedRoomId !== null && String(mappedRoomId) !== '') {
       sample.mapped = true
       keepCheapest(sample.byRoom, String(mappedRoomId), perNight)
@@ -314,6 +316,20 @@ export function hotelTagsFor(d: LiteHotelDetail, offers: LiteOffer[] | undefined
   return inTagOrder(found)
 }
 
+export const listsAdultsOnly = (facilityIds: number[] | undefined) => (facilityIds ?? []).includes(ADULT_ONLY)
+
+// The hotel list has facility ids and no rooms, so 149 alone marks a hotel adults-only there
+export function listingTagsFor(facilityIds: number[] | undefined, names: Map<number, string>): Tag[] {
+  const ids = facilityIds ?? []
+  const found = new Set(hotelTagsFor({ id: '', name: '', facilities: ids.map((id) => ({ facilityId: id, name: names.get(id) ?? '' })) }, undefined, []))
+  if (listsAdultsOnly(ids)) {
+    found.delete('Kids')
+    found.delete('Families')
+    found.add('Couples')
+  }
+  return inTagOrder(found)
+}
+
 const finiteOrNull = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null)
 
 // Star class, never the 0-10 review score: hotels.rating is a 0..5 star rating
@@ -332,8 +348,44 @@ function photosFor(s: LiteHotelSummary, d: LiteHotelDetail): string[] {
   return [d.main_photo, s.main_photo].map((url) => (url ?? '').trim()).filter(Boolean).slice(0, 1)
 }
 
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' })
+
+/** English name for a 2-letter country code ("FR" → "France"), or the code itself when there's none */
+export function countryName(code: string): string {
+  try {
+    return regionNames.of(code.toUpperCase()) ?? code
+  } catch {
+    return code
+  }
+}
+
+// A hotel saved from a live search is stored the way the import stores its cities and search_hotels matches them:
+// the US as "USA" with the full state name (LiteAPI gives the state only at the front of the zip), others by name
+export function targetFor(d: LiteHotelDetail): Target {
+  const code = (d.country ?? '').trim().toUpperCase()
+  const city = (d.city ?? '').trim()
+  if (code === 'US') return { countryCode: code, cityName: city, city, region: stateFromZip(d.zip), country: 'USA' }
+  return { countryCode: code, cityName: city, city, region: null, country: code ? countryName(code) : '' }
+}
+
+export function summaryOf(d: LiteHotelDetail): LiteHotelSummary {
+  return {
+    id: d.id,
+    name: d.name,
+    country: d.country ?? '',
+    city: d.city ?? '',
+    latitude: Number(d.location?.latitude),
+    longitude: Number(d.location?.longitude),
+    hotelDescription: d.hotelDescription,
+    address: d.address,
+    main_photo: d.main_photo,
+    stars: d.starRating,
+  }
+}
+
 export function hotelRowFor(
-  target: Target, s: LiteHotelSummary, d: LiteHotelDetail, offers?: LiteOffer[], rooms?: LiteRoom[], syncedAt = new Date().toISOString(),
+  target: Target, s: LiteHotelSummary, d: LiteHotelDetail, offers?: LiteOffer[], rooms?: LiteRoom[],
+  syncedAt: string | null = new Date().toISOString(),
 ): HotelRow {
   return {
     liteapi_id: s.id,
@@ -387,10 +439,123 @@ export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices,
       },
     })
   }
+  // A mapped hotel's live prices go by room id, so a room no offer named would open sold out: unpriced rooms only
+  // fill in when the rooms can't be told apart that way
+  const anyPriced = candidates.some((candidate) => candidate.priced)
   return candidates
+    .filter((candidate) => candidate.priced || !sample.mapped || !anyPriced)
     .sort((a, b) => Number(b.priced) - Number(a.priced) || a.price - b.price)
     .slice(0, Math.max(0, maxRooms))
     .map((candidate) => candidate.row)
+}
+
+const HOUR_MS = 60 * 60 * 1000
+export const AUTO_OVERLAP_DAYS = 2
+// So a city whose imported hotels rarely change doesn't list an ever-longer history of the rest
+export const AUTO_MAX_DAYS = 14
+
+// An ISO timestamp needs a zone when it has a time, so it means the same on any machine
+const ISO_SINCE = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/
+
+// --since: an ISO timestamp, Nh or Nd before now, or 'auto' (worked out per city from the database). null if invalid.
+export function parseSince(raw: string | undefined, now = new Date()): Date | 'auto' | null {
+  const value = (raw ?? '').trim()
+  if (value === 'auto') return 'auto'
+  const ago = /^([1-9]\d*)([hd])$/.exec(value)
+  const at = new Date(ago ? now.getTime() - Number(ago[1]) * (ago[2] === 'd' ? 24 : 1) * HOUR_MS : ISO_SINCE.test(value) ? Date.parse(value) : NaN)
+  return Number.isFinite(at.getTime()) && at <= now ? at : null
+}
+
+// Two days before the last sync, so a hotel a failed or skipped request missed, or one over --max-new, is listed again
+// on the next runs instead of falling out of the window. Never more than two weeks back, which is also where a city
+// never synced starts.
+export function autoSince(lastSyncedAt: string | null | undefined, now = new Date()): Date {
+  const earliest = now.getTime() - AUTO_MAX_DAYS * 24 * HOUR_MS
+  const last = Date.parse(lastSyncedAt ?? '')
+  if (!Number.isFinite(last)) return new Date(earliest)
+  return new Date(Math.max(Math.min(last, now.getTime()) - AUTO_OVERLAP_DAYS * 24 * HOUR_MS, earliest))
+}
+
+const folded = (text: string) => text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+
+// PostgREST filter (for .or()) keeping the hotels no city sync refreshes, so they're refreshed by id. City, country and
+// the US state all count: a hotel saved in London, Ontario or Las Vegas, New Mexico isn't in that import (one with no
+// state is, and gets the target's). A target LiteAPI lists under another name (Bali under Ubud) keeps nothing out,
+// since its change list misses hotels saved under its own name. Values are double-quoted, with \ and " escaped.
+export function outsideTargets(targets: Target[]): string {
+  const quoted = (value: string) => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+  const inside = targets.filter((t) => folded(t.city) === folded(t.cityName)).map((t) => {
+    const terms = [`city.eq.${quoted(t.city)}`, `country.eq.${quoted(t.country)}`]
+    if (t.region) terms.push(`or(region.eq.${quoted(t.region)},region.is.null)`)
+    return `and(${terms.join(',')})`
+  })
+  return inside.length ? `not.or(${inside.join(',')})` : 'liteapi_id.not.is.null'
+}
+
+const placeOf = (s: LiteHotelSummary) => [s.country, s.city].map((part) => String(part ?? '').trim().toLowerCase()).join('|')
+
+export const sameCity = (a: LiteHotelSummary, b: LiteHotelSummary) => Boolean(a.city) && placeOf(a) === placeOf(b)
+
+// RFC3339 with whole seconds, like the docs' example 2026-07-05T15:00:00Z. Dropping the milliseconds only widens the window.
+export const rfc3339 = (date: Date) => date.toISOString().replace(/\.\d{3}Z$/, 'Z')
+
+export function hotelListQuery(target: Target, limit: number, since?: Date, offset = 0): URLSearchParams {
+  const query = new URLSearchParams({ countryCode: target.countryCode, cityName: target.cityName, limit: String(limit) })
+  if (since) {
+    query.set('offset', String(offset))
+    query.set('lastUpdatedAt', rfc3339(since))
+  }
+  return query
+}
+
+// liteapi_id -> liteapi_deleted_at of the LiteAPI hotels already in the database
+export type Existing = Map<string, string | null>
+
+export type SavedRow = { liteapi_id: string; city: string | null; region: string | null; country: string | null }
+
+// A saved hotel outside the import cities is refreshed by id, so it keeps the location it was saved with
+export const savedTarget = (row: SavedRow): Target =>
+  ({ countryCode: '', cityName: row.city ?? '', city: row.city ?? '', region: row.region, country: row.country ?? '' })
+
+export type SyncPlan = {
+  update: LiteHotelSummary[]
+  add: LiteHotelSummary[]
+  remove: { s: LiteHotelSummary; at: string }[]
+  skip: { s: LiteHotelSummary; reason: string }[]
+  // Hotels of ours merged into one the listing left out, to look that one up by id
+  unlisted: LiteHotelSummary[]
+}
+
+export function removedAt(deletedAt: string, fallback: string): string {
+  const at = Date.parse(deletedAt)
+  return Number.isFinite(at) ? new Date(at).toISOString() : fallback
+}
+
+// Without a database (existing null) every hotel counts as new. Deleted hotels are only hidden, never deleted:
+// reservations point at their rooms. Most deletions are merges, so the hotel one of ours was merged into is added
+// even over --max-new, or the hotel would drop out of search.
+export function planSync(listed: LiteHotelSummary[], existing: Existing | null, maxNew: number, now: string): SyncPlan {
+  const plan: SyncPlan = { update: [], add: [], remove: [], skip: [], unlisted: [] }
+  const known = (id: string) => existing?.has(id) ?? false
+  const merged = listed.filter(({ id, deletedAt, primaryHotelId: primary }) =>
+    deletedAt && known(id) && typeof primary === 'string' && primary !== '' && !known(primary))
+  const primaries = new Set(merged.map((s) => s.primaryHotelId))
+  let added = 0
+  for (const s of listed) {
+    if (s.deletedAt) {
+      if (!known(s.id)) plan.skip.push({ s, reason: 'deleted at LiteAPI' })
+      else if (existing!.get(s.id)) plan.skip.push({ s, reason: 'already marked removed' })
+      else plan.remove.push({ s, at: removedAt(s.deletedAt, now) })
+    } else if (known(s.id)) plan.update.push(s)
+    else if (primaries.has(s.id)) plan.add.push(s)
+    else if (added < maxNew) {
+      added++
+      plan.add.push(s)
+    } else plan.skip.push({ s, reason: `new, over --max-new ${maxNew}` })
+  }
+  const ids = new Set(listed.map((s) => s.id))
+  plan.unlisted = merged.filter((s) => !ids.has(s.primaryHotelId!))
+  return plan
 }
 
 const HOTEL_COLUMNS = ['liteapi_id', 'name', 'description', 'address', 'city', 'region', 'country', 'photo_urls', 'rating', 'latitude', 'longitude', 'tags',

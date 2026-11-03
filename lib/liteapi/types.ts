@@ -14,6 +14,22 @@ export interface LiteHotelSummary {
   main_photo?: string
   stars?: number
   deletedAt?: string | null
+  // Not in the docs: on a deleted hotel, the hotel LiteAPI merged it into (null on live ones)
+  primaryHotelId?: string | null
+}
+
+// GET /data/hotels?placeId=…: `country` is a 2-letter code here
+export interface LiteHotelListing extends LiteHotelSummary {
+  rating?: number
+  reviewCount?: number
+  facilityIds?: number[]
+}
+
+export interface LitePlace {
+  placeId: string
+  displayName: string
+  formattedAddress?: string
+  types?: string[]
 }
 
 export interface LiteRoom {
@@ -70,19 +86,27 @@ export interface LiteRate {
   name?: string
   boardType?: string
   mappedRoomId?: number | string
+  // The party this rate was quoted for, repeated from the request. Not the room's limits.
+  maxOccupancy?: number
+  adultCount?: number
+  childCount?: number
+  childrenAges?: number[]
   retailRate?: {
     total?: LiteMoney[] | LiteMoney | null
     /** The lowest price the offer may be shown at publicly */
     suggestedSellingPrice?: LiteMoney[] | LiteMoney | null
     taxesAndFees?: { included: boolean; amount: number; currency: string; description?: string }[] | null
   }
-  cancellationPolicies?: { refundableTag?: 'RFN' | 'NRFN' } | null
+  cancellationPolicies?: {
+    refundableTag?: 'RFN' | 'NRFN'
+    /** From cancelTime (GMT, "YYYY-MM-DD HH:mm:ss") on, cancelling costs `amount` */
+    cancelPolicyInfos?: { cancelTime?: string; amount?: number; currency?: string; type?: string; timezone?: string }[] | null
+  } | null
 }
 
 export interface LiteOffer {
   offerId?: string
   rates?: LiteRate[]
-  mappedRoomId?: number | string
   offerRetailRate?: LiteMoney | LiteMoney[]
 }
 

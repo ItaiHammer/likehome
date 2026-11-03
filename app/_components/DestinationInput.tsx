@@ -5,6 +5,8 @@ import { DESTINATIONS } from "../_data/destinations";
 import { RotatingPlaceholder } from "./placeholders";
 
 const MAX_RESULTS = 7;
+// Typing pause before asking LiteAPI for places the bundled list doesn't have
+const PLACES_DELAY_MS = 250;
 
 // Case- and accent-insensitive: "sao paulo" matches "São Paulo". Letters that
 // don't decompose into letter + accent (ø, æ, ß…) are folded by hand, so
@@ -25,6 +27,11 @@ const INDEX = DESTINATIONS.map(([name, region], rank) => ({
 }));
 
 type Result = (typeof INDEX)[number];
+
+/** A suggestion; `placeId` marks one of LiteAPI's places */
+type Option = { key: string; name: string; region: string; placeId?: string };
+
+type RemotePlace = { placeId: string; name: string; region: string };
 
 function search(query: string): Result[] {
   const q = norm(query.trim());
@@ -69,14 +76,17 @@ function PinIcon({ className }: { className: string }) {
   );
 }
 
-// Destination field with instant suggestions from a bundled list (no network round-trip).
+// Destination field: instant suggestions from a bundled list, then LiteAPI's places (any town, airport or landmark)
+// after a typing pause. Picking one of LiteAPI's sends its place id with the search.
 export function DestinationInput({
   className = "",
   initialValue = "",
+  initialPlace = "",
   autoFocusFrom,
 }: {
   className?: string;
   initialValue?: string;
+  initialPlace?: string;
   /** Focus the field when it mounts, e.g. back from AI search; "pointer" keeps the keyboard ring off */
   autoFocusFrom?: "keyboard" | "pointer";
 }) {
@@ -86,11 +96,40 @@ export function DestinationInput({
   const [active, setActive] = useState(-1);
   // The last place filled in by picking (a suggestion or a popular-destination tile)
   const [picked, setPicked] = useState(initialValue);
+  // LiteAPI's id for the picked place; typing anything else clears it
+  const [placeId, setPlaceId] = useState(initialPlace);
+  const [remote, setRemote] = useState<{ query: string; places: RemotePlace[] }>({ query: "", places: [] });
   // Text fields match :focus-visible even when clicked, so the search bar's
   // keyboard focus ring is turned off while the field was focused by mouse or touch
   const [pointerFocus, setPointerFocus] = useState(autoFocusFrom === "pointer");
   const inputRef = useRef<HTMLInputElement>(null);
-  const results = useMemo(() => search(query), [query]);
+  const trimmed = query.trim();
+  const options = useMemo<Option[]>(() => {
+    const local = search(query);
+    const known = new Set(local.map((d) => d.full));
+    const places = remote.query === trimmed ? remote.places : [];
+    return [
+      ...local.map((d) => ({ key: `d${d.rank}`, name: d.name, region: d.region })),
+      ...places
+        .filter((p) => !known.has(norm(`${p.name}, ${p.region}`)))
+        .map((p) => ({ key: p.placeId, name: p.name, region: p.region, placeId: p.placeId })),
+    ];
+  }, [query, trimmed, remote]);
+
+  useEffect(() => {
+    if (trimmed.length < 2 || trimmed === picked.trim()) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/places?${new URLSearchParams({ q: trimmed })}`, { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : { places: [] }))
+        .then((body: { places?: RemotePlace[] }) => setRemote({ query: trimmed, places: Array.isArray(body.places) ? body.places : [] }))
+        .catch(() => {});
+    }, PLACES_DELAY_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [trimmed, picked]);
 
   // Popular destination tiles fill this field.
   useEffect(() => {
@@ -98,20 +137,22 @@ export function DestinationInput({
       const place = (e as CustomEvent<string>).detail;
       setQuery(place);
       setPicked(place);
+      setPlaceId("");
       setActive(-1);
     };
     window.addEventListener("likehome:destination", onPick);
     return () => window.removeEventListener("likehome:destination", onPick);
   }, []);
-  // "No matches" is for typing; a picked place that isn't in the suggestion
-  // list (some popular-destination tiles) just closes the list instead
-  const showNoMatches = query.trim() !== "" && results.length === 0 && query !== picked;
-  const open = focused && (results.length > 0 || showNoMatches);
+  // "No matches" is for typing, once LiteAPI has answered too; a picked place that isn't in the
+  // suggestion list (some popular-destination tiles) just closes the list instead
+  const showNoMatches = trimmed !== "" && options.length === 0 && query !== picked && remote.query === trimmed;
+  const open = focused && (options.length > 0 || showNoMatches);
 
-  function choose(d: Result) {
-    const place = `${d.name}, ${d.region}`;
+  function choose(option: Option) {
+    const place = option.region ? `${option.name}, ${option.region}` : option.name;
     setQuery(place);
     setPicked(place);
+    setPlaceId(option.placeId ?? "");
     setFocused(false);
     setActive(-1);
   }
@@ -120,14 +161,14 @@ export function DestinationInput({
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (!focused) return setFocused(true);
-      const n = results.length;
+      const n = options.length;
       if (!n) return;
       const down = e.key === "ArrowDown";
       // From nothing selected: Down goes to the first result, Up to the last
       setActive((i) => (i < 0 ? (down ? 0 : n - 1) : (i + (down ? 1 : -1) + n) % n));
     } else if (e.key === "Enter" && open && active >= 0) {
       e.preventDefault();
-      choose(results[active]);
+      choose(options[active]);
     } else if (e.key === "Escape") {
       setFocused(false);
     }
@@ -156,6 +197,7 @@ export function DestinationInput({
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
+            setPlaceId("");
             setActive(-1);
             setFocused(true);
           }}
@@ -185,6 +227,7 @@ export function DestinationInput({
             <RotatingPlaceholder kind="where" paused={focused} className="w-full text-base text-slate" />
           </span>
         )}
+        {placeId && <input type="hidden" name="place" value={placeId} />}
       </span>
 
       <div
@@ -195,9 +238,9 @@ export function DestinationInput({
           <p className="cascade px-3 pb-1 pt-2 text-sm font-semibold text-slate">Popular destinations</p>
         )}
         <ul role="listbox" id={listId} aria-label="Destinations">
-          {results.map((d, i) => (
+          {options.map((d, i) => (
             <li
-              key={d.rank}
+              key={d.key}
               id={`${listId}-${i}`}
               role="option"
               aria-selected={i === active}

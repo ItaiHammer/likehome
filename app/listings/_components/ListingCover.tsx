@@ -27,14 +27,15 @@ export function ListingCover({
   return (
     <div className={`relative shrink-0 overflow-hidden rounded-lg bg-disabled ${className}`}>
       {photo && !failed ? (
-        // blob: URLs (mock uploads) only exist in this browser, so Next's image optimizer can't fetch them
+        // Only the bundled sample photos go through Next's image optimizer: next.config lists no remote
+        // image hosts (uploads are on Supabase Storage), and blob: URLs only exist in this browser
         <Image
           src={photo.url}
           alt={photo.caption}
           fill
           sizes={sizes}
           loading={eager ? "eager" : undefined}
-          unoptimized={photo.url.startsWith("blob:")}
+          unoptimized={!photo.url.startsWith("/")}
           onError={() => setFailedUrl(photo.url)}
           className={`object-cover ${zoom ? "transition-transform duration-500 ease-out group-hover:scale-[1.03]" : ""}`}
         />

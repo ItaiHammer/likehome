@@ -21,7 +21,11 @@ Create `.env.local` in the project folder (ask the team for the values, never co
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
 GOOGLE_GENERATIVE_AI_API_KEY=...
+LITEAPI_KEY=...
+SUPABASE_SECRET_KEY=...
 ```
+
+`LITEAPI_KEY` turns on live prices, search anywhere and destination suggestions. `SUPABASE_SECRET_KEY` is server-only: it saves a LiteAPI hotel when someone opens it from search, saves bookings at their live LiteAPI price (without it, every stay shows and books at its stored price), and `npm run import:liteapi` needs it to write.
 
 Then start the dev server and open http://localhost:3000:
 
@@ -29,7 +33,7 @@ Then start the dev server and open http://localhost:3000:
 npm run dev
 ```
 
-In development, empty search results and My Bookings fall back to sample data (`/MyBookings?sample`), so pages can be tested without seeded data.
+In development, `/MyBookings?sample` shows sample bookings, so My Bookings can be tested without seeded data.
 
 ## Scripts
 
@@ -39,6 +43,7 @@ In development, empty search results and My Bookings fall back to sample data (`
 | `npm test` | Unit tests (`tests/*.test.mjs`, Node's built-in test runner) |
 | `npm run lint` | ESLint |
 | `npm run build` | Production build |
+| `npm run import:liteapi` | Imports hotels for popular destinations from LiteAPI (try `-- --dry-run` first) |
 
 ## Where things are
 
@@ -49,7 +54,7 @@ In development, empty search results and My Bookings fall back to sample data (`
 | `components/` | Auth buttons used in the header |
 | `utils/` | Supabase data access and server helpers (reservations, payments, points, search) |
 | `lib/` | Pure logic shared by pages (bookings, listings, LiteAPI mapping, validation) |
-| `supabase/migrations/` | SQL for search, overlap checks, points, saved checkout, insurance |
+| `supabase/migrations/` | SQL for search, LiteAPI hotels, overlap checks, points, saved checkout, insurance |
 | `tests/` | Unit tests |
 
 ## Conventions
