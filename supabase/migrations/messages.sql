@@ -28,13 +28,28 @@ using (exists (
   where h.id = messages.hotel_id and h.owner_id = (select auth.uid())
 ));
 
--- Owners send from hotels they own
+-- Is p_account_id a previous customer (any reservation) of a hotel the caller owns?
+-- A function because owners can't read other users' reservations under RLS. The owner check
+-- is inside, so it can't be used to look up who has stayed at someone else's hotel.
+create or replace function public.is_hotel_guest(p_hotel_id uuid, p_account_id uuid)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1
+    from public.hotels h
+    join public.reservations r on r.hotel_id = h.id
+    where h.id = p_hotel_id
+      and h.owner_id = (select auth.uid())
+      and r.account_id = p_account_id
+  );
+$$;
+
+revoke execute on function public.is_hotel_guest(uuid, uuid) from public, anon;
+grant execute on function public.is_hotel_guest(uuid, uuid) to authenticated;
+
+-- Owners send only to guests who have a reservation at their hotel
 create policy "Owners send hotel messages" on public.messages
 for insert to authenticated
-with check (exists (
-  select 1 from public.hotels h
-  where h.id = messages.hotel_id and h.owner_id = (select auth.uid())
-));
+with check (public.is_hotel_guest(hotel_id, recipient_id));
 
 -- Guests mark their own messages read, and nothing else
 create policy "Recipients mark own messages read" on public.messages
