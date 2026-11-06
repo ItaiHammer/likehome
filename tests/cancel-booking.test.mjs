@@ -58,9 +58,9 @@ describe('cancelBooking', () => {
     assert.deepEqual(await cancelBooking(ID), { status: 'cancelled', refund: 0, refundPoints: 0 })
   })
 
-  test('too late or already cancelled (P0001): says so, without logging an error', async () => {
+  test('too late or already cancelled (P0001): its own status, without logging an error', async () => {
     cancelResult = { data: null, error: { code: 'P0001', message: 'This booking can no longer be cancelled' } }
-    assert.deepEqual(await cancelBooking(ID), { status: 'failed', message: 'This reservation can no longer be cancelled.' })
+    assert.deepEqual(await cancelBooking(ID), { status: 'notCancellable' })
     assert.equal(consoleError.mock.callCount(), 0)
   })
 
