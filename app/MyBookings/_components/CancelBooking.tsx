@@ -10,6 +10,7 @@ import { formatStayDates, money, type Booking, type CancellationQuote } from "@/
 import { cancelBooking, type CancelResult } from "../actions";
 
 type Target = { booking: Booking; quote: CancellationQuote };
+type Done = Extract<CancelResult, { status: "cancelled" | "notCancellable" }>;
 
 const points = (n: number) => `${n.toLocaleString("en-US")} ${n === 1 ? "point" : "points"}`;
 const focusOnMount = (el: HTMLElement | null) => el?.focus();
@@ -35,7 +36,7 @@ export function CancelBookingDialog({
   const [target, setTarget] = useState<Target | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<{ message: string; signIn: boolean } | null>(null);
-  const [done, setDone] = useState<{ refund: number; refundPoints: number } | null>(null);
+  const [done, setDone] = useState<Done | null>(null);
 
   const open = useCallback((next: Target) => {
     // Puts this booking in the dialog before showModal() picks what to focus
@@ -67,10 +68,10 @@ export function CancelBookingDialog({
       : await cancelBooking(booking.id).catch((): CancelResult => ({ status: "failed", message: "We couldn’t reach LikeHome. Check your connection and try again." }));
     setPending(false);
 
-    if (result.status === "cancelled") {
+    if (result.status === "cancelled" || result.status === "notCancellable") {
       // Now, not when the dialog closes: leaving with Back skips onClose, and Next's cache would show the booking as active
       if (!sample) router.refresh();
-      setDone({ refund: result.refund, refundPoints: result.refundPoints });
+      setDone(result);
     } else if (result.status === "signedOut") {
       setError({ message: "Your sign-in has ended. Sign in again to cancel.", signIn: true });
     } else {
@@ -79,6 +80,8 @@ export function CancelBookingDialog({
     // Browsers let a second Escape close the dialog mid-request, so reopen it to show the result
     if (!dialogRef.current?.open) dialogRef.current?.showModal();
   }
+
+  const outcome = done && outcomeText(done, sample);
 
   return (
     <OpenCancelDialog value={open}>
@@ -93,18 +96,12 @@ export function CancelBookingDialog({
         // Same look as the listings ConfirmDialog
         className="m-auto w-[min(30rem,calc(100%-2rem))] rounded-lg border border-edge bg-surface p-6 text-ink shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop:bg-disabled/90 dark:backdrop:bg-black/60"
       >
-        {done ? (
+        {outcome ? (
           <>
             <h2 id={titleId} ref={focusOnMount} tabIndex={-1} className="text-xl font-semibold outline-none">
-              {sample ? "That was a sample booking." : "Your reservation is cancelled."}
+              {outcome.title}
             </h2>
-            <p className="mt-2 text-slate">
-              {sample
-                ? `Nothing was cancelled. A real cancellation would ${done.refundPoints > 0 ? `add ${points(done.refundPoints)} to your account` : "not refund anything"}.`
-                : done.refundPoints > 0
-                  ? `${points(done.refundPoints)} (worth ${money(done.refund)}) were added to your account.`
-                  : "No refund was issued."}
-            </p>
+            <p className="mt-2 text-slate">{outcome.text}</p>
             <Button onClick={close} className="mt-6">
               Done
             </Button>
@@ -148,6 +145,25 @@ export function CancelBookingDialog({
       </dialog>
     </OpenCancelDialog>
   );
+}
+
+function outcomeText(done: Done, sample: boolean): { title: string; text: string } {
+  if (done.status === "notCancellable") {
+    return {
+      title: "This reservation can’t be cancelled anymore.",
+      text: "It may already be cancelled, or it’s now too late to cancel online. Your bookings are up to date.",
+    };
+  }
+  if (sample) {
+    return {
+      title: "That was a sample booking.",
+      text: `Nothing was cancelled. A real cancellation would ${done.refundPoints > 0 ? `add ${points(done.refundPoints)} to your account` : "not refund anything"}.`,
+    };
+  }
+  return {
+    title: "Your reservation is cancelled.",
+    text: done.refundPoints > 0 ? `${points(done.refundPoints)} (worth ${money(done.refund)}) were added to your account.` : "No refund was issued.",
+  };
 }
 
 // The card's button; it opens the CancelBookingDialog around the Upcoming list

@@ -5,6 +5,7 @@ import { getUserId } from "@/utils/user";
 
 export type CancelResult =
   | { status: "cancelled"; refund: number; refundPoints: number }
+  | { status: "notCancellable" }
   | { status: "signedOut" }
   | { status: "failed"; message: string };
 
@@ -18,7 +19,8 @@ export async function cancelBooking(reservationId: unknown): Promise<CancelResul
   if (typeof reservationId !== "string") return { status: "failed", message: TRY_AGAIN };
 
   const { data, error } = await cancelReservation(reservationId);
-  if (error?.code === "P0001") return { status: "failed", message: "This reservation can no longer be cancelled." };
+  // Already cancelled, or check-in has passed since the page loaded
+  if (error?.code === "P0001") return { status: "notCancellable" };
   if (error || !data) {
     console.error("cancelReservation failed:", error);
     return { status: "failed", message: TRY_AGAIN };
