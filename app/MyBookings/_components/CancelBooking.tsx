@@ -49,6 +49,7 @@ export function CancelBookingDialog({
 
   // Runs however the dialog closes (Done, Keep reservation, Escape)
   function onClose() {
+    if (dialogRef.current?.open) return; // already reopened with the result (see confirm)
     // Here, not in open(): showModal() would focus the old Sign in link just before it disappears
     setError(null);
     setDone(null);
@@ -69,13 +70,14 @@ export function CancelBookingDialog({
     if (result.status === "cancelled") {
       // Now, not when the dialog closes: leaving with Back skips onClose, and Next's cache would show the booking as active
       if (!sample) router.refresh();
-      // Some browsers let a second Escape close the dialog mid-request, and then nobody presses Done
-      if (dialogRef.current?.open) setDone({ refund: result.refund, refundPoints: result.refundPoints });
+      setDone({ refund: result.refund, refundPoints: result.refundPoints });
     } else if (result.status === "signedOut") {
       setError({ message: "Your sign-in has ended. Sign in again to cancel.", signIn: true });
     } else {
       setError({ message: result.message, signIn: false });
     }
+    // Browsers let a second Escape close the dialog mid-request, so reopen it to show the result
+    if (!dialogRef.current?.open) dialogRef.current?.showModal();
   }
 
   return (
