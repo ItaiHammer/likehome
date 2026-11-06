@@ -1,19 +1,17 @@
 import { Button, Tag } from "@/app/_components/ui";
 import { bookingCode, bookingSummary, type Booking, type CancellationQuote } from "@/lib/bookings";
-import { CancelBooking } from "./CancelBooking";
+import { CancelBookingButton } from "./CancelBooking";
 import { HotelPhoto } from "./HotelPhoto";
 
 export function UpcomingBooking({
   booking,
   href,
   cancellation,
-  sample = false,
   priority = false,
 }: {
   booking: Booking;
   href: string;
   cancellation: CancellationQuote | null;
-  sample?: boolean;
   priority?: boolean;
 }) {
   return (
@@ -29,7 +27,7 @@ export function UpcomingBooking({
         <Button href={href} className="grow basis-44 xl:flex-none">
           View booking
         </Button>
-        <CancelBooking booking={booking} quote={cancellation} sample={sample} className="grow basis-44 xl:flex-none" />
+        <CancelBookingButton booking={booking} quote={cancellation} className="grow basis-44 xl:flex-none" />
         {/* "View stay" look from the search cards; px-1.5 insets it by the buttons' corner radius so it lines up with their edge */}
         <div className="flex w-full justify-end">
           <button

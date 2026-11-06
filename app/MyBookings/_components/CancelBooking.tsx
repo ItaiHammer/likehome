@@ -2,44 +2,46 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Button, Card } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { formatStayDates, money, type Booking, type CancellationQuote } from "@/lib/bookings";
 import { cancelBooking, type CancelResult } from "../actions";
 
+type Target = { booking: Booking; quote: CancellationQuote };
+
 const points = (n: number) => `${n.toLocaleString("en-US")} ${n === 1 ? "point" : "points"}`;
 const focusOnMount = (el: HTMLElement | null) => el?.focus();
 const signInHref = `${PAGE_ROUTES.LOGIN}?next=${encodeURIComponent(PAGE_ROUTES.MY_BOOKINGS)}`;
 
+const OpenCancelDialog = createContext<((target: Target) => void) | null>(null);
+
+// One dialog for the whole Upcoming list, so it keeps showing the result after the refresh removes the cancelled card.
 // A native <dialog> opened with showModal(), like the listings ConfirmDialog: the browser traps focus,
 // closes it on Escape and makes the page behind it inert. The database works out the refund; this only shows it.
-export function CancelBooking({
-  booking,
-  quote,
+export function CancelBookingDialog({
   sample = false,
-  className = "",
+  children,
 }: {
-  booking: Booking;
-  /** What cancelling costs, loaded with the page; null when it couldn't be loaded */
-  quote: CancellationQuote | null;
-  /** Dev-only sample booking: nothing is cancelled */
+  /** Dev-only sample bookings: nothing is cancelled */
   sample?: boolean;
-  className?: string;
+  children: React.ReactNode;
 }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const termsId = useId();
+  const [target, setTarget] = useState<Target | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<{ message: string; signIn: boolean } | null>(null);
   const [done, setDone] = useState<{ refund: number; refundPoints: number } | null>(null);
 
-  const unavailable = !quote ? "Cancellation isn’t available right now." : !quote.canCancel ? "It’s too late to cancel this reservation online." : null;
-
-  function open() {
+  const open = useCallback((next: Target) => {
+    // Puts this booking in the dialog before showModal() picks what to focus
+    flushSync(() => setTarget(next));
     dialogRef.current?.showModal();
-  }
+  }, []);
 
   function close() {
     if (!pending) dialogRef.current?.close();
@@ -49,13 +51,12 @@ export function CancelBooking({
   function onClose() {
     // Here, not in open(): showModal() would focus the old Sign in link just before it disappears
     setError(null);
-    if (!done) return;
-    if (sample) setDone(null);
-    else router.refresh(); // moves the booking to "Cancelled reservations"
+    setDone(null);
   }
 
   async function confirm() {
-    if (pending || !quote) return;
+    if (pending || !target) return;
+    const { booking, quote } = target;
     setError(null);
     setPending(true);
     const result = sample
@@ -66,9 +67,10 @@ export function CancelBooking({
     setPending(false);
 
     if (result.status === "cancelled") {
+      // Now, not when the dialog closes: leaving with Back skips onClose, and Next's cache would show the booking as active
+      if (!sample) router.refresh();
       // Some browsers let a second Escape close the dialog mid-request, and then nobody presses Done
       if (dialogRef.current?.open) setDone({ refund: result.refund, refundPoints: result.refundPoints });
-      else if (!sample) router.refresh();
     } else if (result.status === "signedOut") {
       setError({ message: "Your sign-in has ended. Sign in again to cancel.", signIn: true });
     } else {
@@ -77,10 +79,8 @@ export function CancelBooking({
   }
 
   return (
-    <>
-      <Button variant="secondary" onClick={open} disabled={!!unavailable} title={unavailable ?? undefined} className={className}>
-        Cancel reservation
-      </Button>
+    <OpenCancelDialog value={open}>
+      {children}
 
       <dialog
         ref={dialogRef}
@@ -108,15 +108,15 @@ export function CancelBooking({
             </Button>
           </>
         ) : (
-          quote && (
+          target && (
             <>
               <h2 id={titleId} className="text-xl font-semibold">
                 Cancel this reservation?
               </h2>
               <p className="mt-2 text-slate">
-                {booking.hotelName} · {formatStayDates(booking.checkIn, booking.checkOut)}
+                {target.booking.hotelName} · {formatStayDates(target.booking.checkIn, target.booking.checkOut)}
               </p>
-              <CancelTerms id={termsId} quote={quote} />
+              <CancelTerms id={termsId} quote={target.quote} />
 
               {error && (
                 <p role="alert" className="mt-4 text-sm text-danger">
@@ -144,7 +144,36 @@ export function CancelBooking({
           )
         )}
       </dialog>
-    </>
+    </OpenCancelDialog>
+  );
+}
+
+// The card's button; it opens the CancelBookingDialog around the Upcoming list
+export function CancelBookingButton({
+  booking,
+  quote,
+  className = "",
+}: {
+  booking: Booking;
+  /** What cancelling costs, loaded with the page; null when it couldn't be loaded */
+  quote: CancellationQuote | null;
+  className?: string;
+}) {
+  const open = useContext(OpenCancelDialog);
+  if (!open) throw new Error("CancelBookingButton must be inside a CancelBookingDialog");
+
+  const unavailable = !quote ? "Cancellation isn’t available right now." : !quote.canCancel ? "It’s too late to cancel this reservation online." : null;
+
+  return (
+    <Button
+      variant="secondary"
+      onClick={() => quote && open({ booking, quote })}
+      disabled={!!unavailable}
+      title={unavailable ?? undefined}
+      className={className}
+    >
+      Cancel reservation
+    </Button>
   );
 }
 

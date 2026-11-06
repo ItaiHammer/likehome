@@ -10,6 +10,7 @@ import { getCancellationQuote, getReservationsByAccount } from "@/utils/reservat
 import { getRoomsByIds } from "@/utils/rooms";
 import { getUserId } from "@/utils/user";
 import { AccountSidebar } from "./_components/AccountSidebar";
+import { CancelBookingDialog } from "./_components/CancelBooking";
 import { PastBooking } from "./_components/PastBooking";
 import { SampleNotice } from "./_components/SampleNotice";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
@@ -99,23 +100,25 @@ export default async function MyBookingsPage({ searchParams }: { searchParams: P
             <h2 id="upcoming-heading" className={sectionHeading}>
               {upcoming.length === 1 ? "Upcoming reservation" : "Upcoming reservations"}
             </h2>
-            {upcoming.length > 0 ? (
-              <ul className="mt-4 space-y-4">
-                {upcoming.map((booking, i) => (
-                  <li key={booking.id}>
-                    <UpcomingBooking
-                      booking={booking}
-                      href={`${PAGE_ROUTES.MY_BOOKINGS}/${booking.id}${showSample ? "?sample" : ""}`}
-                      cancellation={quotes.get(booking.id) ?? null}
-                      sample={showSample}
-                      priority={i === 0}
-                    />
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <NoUpcoming firstTrip={past.length + cancelled.length === 0} />
-            )}
+            {/* Above the list, so the dialog stays open with the result once the cancelled card is gone */}
+            <CancelBookingDialog sample={showSample}>
+              {upcoming.length > 0 ? (
+                <ul className="mt-4 space-y-4">
+                  {upcoming.map((booking, i) => (
+                    <li key={booking.id}>
+                      <UpcomingBooking
+                        booking={booking}
+                        href={`${PAGE_ROUTES.MY_BOOKINGS}/${booking.id}${showSample ? "?sample" : ""}`}
+                        cancellation={quotes.get(booking.id) ?? null}
+                        priority={i === 0}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <NoUpcoming firstTrip={past.length + cancelled.length === 0} />
+              )}
+            </CancelBookingDialog>
           </section>
 
           {past.length > 0 && (
