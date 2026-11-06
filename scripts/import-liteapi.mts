@@ -9,8 +9,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { LITEAPI_BASE } from '../lib/liteapi/types.ts'
 import type { LiteHotelDetail, LiteHotelSummary, LiteOffer, LiteRatesRequest, LiteRatesResponse } from '../lib/liteapi/types.ts'
 import {
-  AUTO_MAX_DAYS, AUTO_OVERLAP_DAYS, autoSince, goneRooms, hotelListQuery, hotelRowFor, hotelSql, isAdultsOnly, parseSince, planSync, removedAt, rfc3339,
-  roomIdsOf, roomRowsFor, outsideTargets, sameCity, samplePricesFor, savedTarget, typicalPrices, unmappedFacilities,
+  AUTO_MAX_DAYS, AUTO_OVERLAP_DAYS, autoSince, hotelListQuery, hotelRowFor, hotelSql, isAdultsOnly, parseSince, planSync, removedAt, rfc3339, roomRowsFor,
+  outsideTargets, sameCity, samplePricesFor, savedTarget, typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import type { Existing, HotelRow, RoomRow, SavedRow, Target } from '../lib/liteapi/import-mapping.ts'
 import { stateFromZip } from '../lib/us-states.ts'
@@ -255,8 +255,7 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return results
 }
 
-// roomIds: every room type LiteAPI lists for the hotel, imported or not
-type Imported = { place: string; hotel: HotelRow; rooms: RoomRow[]; roomIds: string[] }
+type Imported = { place: string; hotel: HotelRow; rooms: RoomRow[] }
 
 type Removed = { liteapi_id: string; at: string }
 
@@ -552,7 +551,7 @@ async function importHotels(
     report.droppedRooms += Math.max(0, (d.rooms ?? []).length - rooms.length)
     const hotel = hotelRowFor(target, s, d, offersByHotel.get(s.id)?.flat(), keptRooms, run.at)
     for (const name of unmappedFacilities(d)) report.unmapped.set(name, (report.unmapped.get(name) ?? 0) + 1)
-    report.imported.push({ place, hotel, rooms, roomIds: roomIdsOf(d.rooms) })
+    report.imported.push({ place, hotel, rooms })
     console.log(`  ok   ${label(s)}: ${rooms.length} room types, tags [${hotel.tags.join(', ')}]`)
   })
 }
@@ -560,7 +559,7 @@ async function importHotels(
 async function writeToSupabase(db: SupabaseClient, imported: Imported[], report: Report, syncedAt: string) {
   console.log('\nWriting to Supabase')
   let written = 0
-  for (const { hotel, rooms, roomIds } of imported) {
+  for (const { hotel, rooms } of imported) {
     const { data: h, error } = await db.from('hotels').upsert(hotel, { onConflict: 'liteapi_id' }).select('id').single()
     if (error || !h) {
       report.failures++
@@ -575,7 +574,7 @@ async function writeToSupabase(db: SupabaseClient, imported: Imported[], report:
       continue
     }
     written++
-    await dropStaleRooms(db, h.id, hotel.liteapi_id, rooms, roomIds, report)
+    await dropStaleRooms(db, h.id, hotel.liteapi_id, rooms, report)
   }
   console.log(`  ${written} of ${imported.length} hotels written`)
 
@@ -604,16 +603,17 @@ async function writeToSupabase(db: SupabaseClient, imported: Imported[], report:
   console.log(`  ${hidden} of ${report.removed.length} removed hotels hidden from search`)
 }
 
-// A room type LiteAPI no longer lists goes. One a reservation points at has to stay, and takes the hotel's cheapest
-// current price instead.
-async function dropStaleRooms(db: SupabaseClient, hotelId: string, liteapiId: string, rooms: RoomRow[], roomIds: string[], report: Report) {
+// A room type a run didn't import keeps its old sample price (once $3 a night), so it goes. One a reservation points
+// at has to stay, and takes the hotel's cheapest current price instead.
+async function dropStaleRooms(db: SupabaseClient, hotelId: string, liteapiId: string, rooms: RoomRow[], report: Report) {
+  const kept = new Set(rooms.map((room) => room.liteapi_room_id))
   const { data: existing, error } = await db.from('rooms').select('id, liteapi_room_id').eq('hotel_id', hotelId)
   if (error) {
     report.failures++
     console.error(`  ! ${liteapiId}: reading its rooms failed: ${error.message}`)
     return
   }
-  const stale = goneRooms(existing ?? [], roomIds)
+  const stale = (existing ?? []).filter((room) => room.liteapi_room_id && !kept.has(room.liteapi_room_id)).map((room) => room.id as string)
   if (!stale.length) return
   const { data: booked, error: bookedError } = await db.from('reservations').select('room_id').in('room_id', stale)
   if (bookedError) {
@@ -714,11 +714,11 @@ async function main(options: Options) {
     for (const item of report.imported.slice(0, 2)) console.log(JSON.stringify(item, null, 2))
   } else if (sqlOut !== null) {
     const header = `-- LiteAPI import for ${options.cities.join(', ')}, generated ${new Date().toISOString()}.\n` +
-      '-- Run supabase/migrations/liteapi_hotels.sql first. Safe to re-run: rows are updated in place, and room types LiteAPI\n' +
-      '-- no longer lists are removed unless a reservation points at them.\n' +
+      '-- Run supabase/migrations/liteapi_hotels.sql first. Safe to re-run: rows are updated in place, and room types this run\n' +
+      '-- left out are removed unless a reservation points at them.\n' +
       '-- Do not paste it over newer data (a later import or sync): its hotels would go back to this copy, and any LiteAPI\n' +
       '-- removed since would show in search again.\n'
-    const sql = `${header}begin;\n\n${report.imported.map((item) => hotelSql(item.hotel, item.rooms, item.roomIds)).join('\n')}\ncommit;\n`
+    const sql = `${header}begin;\n\n${report.imported.map((item) => hotelSql(item.hotel, item.rooms)).join('\n')}\ncommit;\n`
     fs.mkdirSync(path.dirname(sqlOut), { recursive: true })
     fs.writeFileSync(sqlOut, sql)
     console.log(`\nWrote ${report.imported.length} hotels to ${sqlOut}`)

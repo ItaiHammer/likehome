@@ -2,7 +2,7 @@ import { countryName, listingTagsFor, listsAdultsOnly, stripHtml } from '../../l
 import type { LiteHotelListing } from '../../lib/liteapi/types.ts';
 import { sortByPrice } from './livePrices.ts';
 import type { HotelSearchResult } from './components/SearchResultCard';
-import type { PriceParams, PropertyFilter } from './types.ts';
+import type { PropertyFilter } from './types.ts';
 
 export function listingRow(hotel: LiteHotelListing, names: Map<number, string>): HotelSearchResult {
     return {
@@ -64,14 +64,9 @@ export function mergeLiveResults(
 }
 
 // LiteAPI can't price a stay without dates, and a stored price is only a sample, so LiteAPI hotels show none
-// A minimum of 0 (e.g. from AI search) narrows nothing, so it isn't a price filter
-export function narrowsPrice(price: PriceParams | undefined): boolean {
-    return Boolean(price && ((price.min ?? 0) > 0 || price.max !== undefined));
-}
-
 export function withoutDates(rows: HotelSearchResult[], p: PropertyFilter): HotelSearchResult[] {
     const shown = rows
-        .filter((row) => !(row.liteapi_id && narrowsPrice(p.price)))
+        .filter((row) => !(row.liteapi_id && p.price))
         .map((row): HotelSearchResult => (row.liteapi_id ? { ...row, min_price: null, price_status: 'needs-dates' } : row));
     return sortByPrice(shown, p.sort);
 }

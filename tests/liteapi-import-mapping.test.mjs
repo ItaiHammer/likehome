@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  autoSince, bedSizeFor, capacityFor, countryName, goneRooms, hotelListQuery, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, parseSince,
-  outsideTargets, planSync, removedAt, rfc3339, roomIdsOf, roomRowsFor, roomTagsFor, sameCity, samplePricesFor, savedTarget, stripHtml, summaryOf,
-  targetFor, typicalPrices, unmappedFacilities,
+  autoSince, bedSizeFor, capacityFor, countryName, hotelListQuery, hotelRowFor, hotelSql, hotelTagsFor, isAdultsOnly, numBedsFor, parseSince,
+  outsideTargets, planSync, removedAt, rfc3339, roomRowsFor, roomTagsFor, sameCity, samplePricesFor, savedTarget, stripHtml, summaryOf, targetFor,
+  typicalPrices, unmappedFacilities,
 } from '../lib/liteapi/import-mapping.ts'
 import { tags as filterTags } from '../app/search/types.ts'
 
@@ -460,7 +460,7 @@ test('hotelSql writes idempotent upserts with escaped strings and text arrays', 
   const hotel = hotelRowFor(SF, summary({ stars: 4 }), detail({ name: "Tom's Inn", facilities: [{ facilityId: 1, name: 'Free WiFi' }] }), [], undefined,
     '2026-10-15T08:00:00.000Z')
   const rooms = roomRowsFor([room(7, { roomName: "King's Room" }), room(8, { bedTypes: [], maxAdults: 2, maxChildren: 1 })], samplePricesFor([offer(120)]))
-  const sql = hotelSql(hotel, rooms, ['7', '8'])
+  const sql = hotelSql(hotel, rooms)
   assert.match(sql, /insert into public\.hotels \(liteapi_id, name, description, address, city, region, country, photo_urls, rating, latitude, longitude, tags, liteapi_deleted_at, liteapi_synced_at\)/)
   assert.match(sql, /values \('lp1', 'Tom''s Inn', '', '', 'San Francisco', 'California', 'USA', array\[\]::text\[\], 4, 37\.78, -122\.41, array\['Free Wi-Fi'\]::text\[\], null, '2026-10-15T08:00:00\.000Z'\)/)
   assert.match(sql, /on conflict \(liteapi_id\) do update set name = excluded\.name, .*tags = excluded\.tags, liteapi_deleted_at = excluded\.liteapi_deleted_at, liteapi_synced_at = excluded\.liteapi_synced_at;/)
@@ -471,42 +471,18 @@ test('hotelSql writes idempotent upserts with escaped strings and text arrays', 
   assert.match(sql, /\('7', 'King''s Room', 2, null, null, 1, 'Queen', 120, array\[\]::text\[\]\)/)
   assert.match(sql, /\('8', 'Room 8', 2, 2, 1, 1, null, 120, array\[\]::text\[\]\)/)
   assert.match(sql, /join public\.hotels h on h\.liteapi_id = 'lp1'\non conflict \(hotel_id, liteapi_room_id\) do update set room_type = excluded\.room_type, capacity = excluded\.capacity, max_adults = excluded\.max_adults, max_children = excluded\.max_children/)
-  assert.ok(!hotelSql(hotel, [], []).includes('public.rooms'))
+  assert.ok(!hotelSql(hotel, []).includes('public.rooms'))
 })
 
-test('hotelSql removes room types LiteAPI no longer lists, unless a reservation needs them, which get the cheapest price', () => {
+test('hotelSql removes room types this run left out, unless a reservation needs them, which get the cheapest price', () => {
   const hotel = hotelRowFor(SF, summary(), detail(), [], undefined, '2026-10-15T08:00:00.000Z')
-  // 9 is listed but no sampled offer named it, so it isn't imported and isn't removed either
-  const listed = [room(7), room(8), room(9)]
-  const rooms = roomRowsFor(listed, samplePricesFor([offer(300, {}, { mappedRoomId: 7 }), offer(120, {}, { mappedRoomId: 8 })]))
-  assert.deepEqual(rooms.map((r) => r.liteapi_room_id), ['8', '7'])
-  const sql = hotelSql(hotel, rooms, roomIdsOf(listed))
-  const stale = "r.hotel_id = h.id and h.liteapi_id = 'lp1' and r.liteapi_room_id is not null\n  and r.liteapi_room_id not in ('7', '8', '9')"
+  const rooms = roomRowsFor([room(7), room(8)], samplePricesFor([offer(300, {}, { mappedRoomId: 7 }), offer(120, {}, { mappedRoomId: 8 })]))
+  const sql = hotelSql(hotel, rooms)
+  const stale = "r.hotel_id = h.id and h.liteapi_id = 'lp1' and r.liteapi_room_id is not null\n  and r.liteapi_room_id not in ('8', '7')"
   assert.ok(sql.includes(`delete from public.rooms r using public.hotels h\nwhere ${stale}\n  and not exists (select 1 from public.reservations res where res.room_id = r.id);`))
   assert.ok(sql.includes(`update public.rooms r set price_per_night = 120 from public.hotels h\nwhere ${stale};`))
   assert.ok(sql.indexOf('delete from') > sql.indexOf('insert into public.rooms'), 'the new rooms are written first')
-  assert.ok(!hotelSql(hotel, [], roomIdsOf(listed)).includes('delete from'), 'no rooms imported: nothing is removed')
-})
-
-test('roomIdsOf lists every room type the hotel has, including ones roomRowsFor leaves out', () => {
-  const listed = [room(1), room('2'), room(1, { roomName: 'Copy' }), room(undefined), room(3, { roomName: '' }), room(4), room(5)]
-  const sample = samplePricesFor([offer(100, {}, { mappedRoomId: 1 }), offer(150, {}, { mappedRoomId: 4 }), offer(200, {}, { mappedRoomId: 5 })])
-  assert.deepEqual(roomRowsFor(listed, sample, 2).map((r) => r.liteapi_room_id), ['1', '4'])
-  assert.deepEqual(roomIdsOf(listed), ['1', '2', '3', '4', '5'])
-  assert.deepEqual(roomIdsOf(undefined), [])
-})
-
-test('goneRooms picks only the stored room types LiteAPI no longer lists', () => {
-  // The sync's 2-adult sample priced room 1; 5 is a family room the stay page saved; 9 is no longer listed
-  const roomIds = roomIdsOf([room(1), room(5), room(6)])
-  const stored = [
-    { id: 'r-imported', liteapi_room_id: '1' },
-    { id: 'r-family', liteapi_room_id: '5' },
-    { id: 'r-gone', liteapi_room_id: '9' },
-    { id: 'r-owner', liteapi_room_id: null },
-  ]
-  assert.deepEqual(goneRooms(stored, roomIds), ['r-gone'])
-  assert.deepEqual(goneRooms(stored, ['1', '5', '9']), [])
+  assert.ok(!hotelSql(hotel, []).includes('delete from'), 'no rooms imported: nothing is removed')
 })
 
 const NOW = new Date('2026-10-15T10:17:00.000Z')

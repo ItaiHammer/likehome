@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { findOverlap, money, nightsPriceLabel, overlapMessage, type OtherStay } from "@/lib/bookings";
-import { freeUnitId, markBookedRooms, mergeBookedNights, soldOutNights, withAddedRooms } from "@/lib/room-availability";
+import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
+import { freeUnitId, markBookedRooms, mergeBookedNights, soldOutNights } from "@/lib/room-availability";
 import { matchingRoom, roomFits } from "@/lib/stay-filters";
 import { cardErrors } from "@/lib/card";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
@@ -108,8 +108,6 @@ export function StayReservation({
   const formRef = useRef<HTMLFormElement>(null);
   const confirmTimer = useRef<number | undefined>(undefined);
   const saveRequest = useRef<AbortController | null>(null);
-  // The checkout attempt still without an answer; only resending it may be matched to a booking that went through
-  const unconfirmed = useRef<string | null>(null);
   const lastStep = useRef(step);
   const bodyRef = useRef<HTMLDivElement>(null);
   const changeDatesRef = useRef<HTMLButtonElement>(null);
@@ -125,12 +123,9 @@ export function StayReservation({
   const initialKey = `${initial.checkIn ?? ""}|${initial.checkOut ?? ""}|${initial.adults ?? 2}|${initial.children ?? 0}`;
   const priceKey = stay.liteapiId && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${adults}|${children}` : null;
   const liveKey = livePrices?.key;
-  // Rooms saved after the page loaded aren't in its own prices, so then the link's dates and guests are fetched too
-  const pagePriced = priceKey === initialKey && !addedRooms.some((r) => !stay.rooms.some((s) => s.id === r.id));
-  const unquoted = priceKey === initialKey && liveKey === priceKey && Object.keys(livePrices?.byId ?? {}).length === 0;
-  const listed = withAddedRooms(stay.rooms, addedRooms, unquoted);
+  const listed = [...stay.rooms, ...addedRooms.filter((r) => !stay.rooms.some((s) => s.id === r.id))];
   const priced = livePrices && livePrices.key === priceKey ? listed.map((r) => ({ ...r, ...livePrices.byId[r.id] })) : listed;
-  const pricesPending = !!priceKey && !pagePriced && liveKey !== priceKey;
+  const pricesPending = !!priceKey && priceKey !== initialKey && liveKey !== priceKey;
 
   // Dates after the page's ~400-day lookup are looked up for their exact nights
   const { rows: extraNights, lookingUp } = useBookedNightsLookup(stay.slug, stay.bookedWindow, checkIn, checkOut, !!stay.bookable);
@@ -166,7 +161,7 @@ export function StayReservation({
   }, [otherStays, today]);
 
   useEffect(() => {
-    if (!priceKey || pagePriced || priceKey === liveKey) return;
+    if (!priceKey || priceKey === initialKey || priceKey === liveKey) return;
     const [ci, co, a, c] = priceKey.split("|");
     const request = new AbortController();
     const timer = window.setTimeout(async () => {
@@ -195,7 +190,7 @@ export function StayReservation({
       window.clearTimeout(timer);
       request.abort();
     };
-  }, [priceKey, pagePriced, liveKey, stay.slug]);
+  }, [priceKey, initialKey, liveKey, stay.slug]);
 
   // Nights when every room here is booked. Also from `today`, so it fills in once in the browser.
   // Not for LiteAPI hotels: LiteAPI can offer a party rooms the hotel hasn't saved yet.
@@ -425,21 +420,14 @@ export function StayReservation({
       cardName: text("cardName"),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
-    const attempt = `${payload.room_id}|${payload.check_in}|${payload.check_out}|${payload.adults}|${payload.children}`;
-    const retry = unconfirmed.current === attempt;
-    unconfirmed.current = attempt;
     saveRequest.current?.abort();
     const request = new AbortController();
     saveRequest.current = request;
-    void saveBooking(snapshot, retry ? { ...payload, retry } : payload, request.signal);
+    void saveBooking(snapshot, payload, request.signal);
   }
 
   // A mock charge (nothing is billed), then the booking and its payment are saved
-  async function saveBooking(
-    snapshot: Omit<Booking, "confirmation" | "saved">,
-    payload: ReturnType<typeof checkoutRequest> & { retry?: boolean },
-    signal: AbortSignal,
-  ) {
+  async function saveBooking(snapshot: Omit<Booking, "confirmation" | "saved">, payload: ReturnType<typeof checkoutRequest>, signal: AbortSignal) {
     const fail = (message: string, signIn = false) => {
       setSubmitting(false);
       setErrors(signIn ? { form: message, signIn: "yes" } : { form: message });
@@ -452,8 +440,6 @@ export function StayReservation({
         signal,
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string; reservation?: { id?: string; total_price?: number | string } };
-      // A gateway error without the API's own answer leaves the attempt unconfirmed
-      if (res.ok || body.error) unconfirmed.current = null;
       if (res.status === 401) return fail("Your sign-in has ended. Sign in again to finish booking.", true);
       if (res.status === 402) {
         // A declined card saves nothing, so the guest can just try another one
@@ -656,7 +642,7 @@ export function StayReservation({
 
             {nights > 0 ? (
               <dl className="mt-5 space-y-3 border-t border-edge pt-5 text-sm">
-                <Line label={nightsPriceLabel(room.nightly, nights, subtotal)} value={money(subtotal)} />
+                <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
                 {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
                 {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
                 <div className="flex justify-between border-t border-edge pt-3 text-lg font-bold text-ink">
@@ -822,7 +808,7 @@ export function StayReservation({
               {nights > 0 ? (
                 <div>
                   <dl className="space-y-2 text-base">
-                    <Line label={nightsPriceLabel(room.nightly, nights, subtotal)} value={money(subtotal)} />
+                    <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
                     {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
                     {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
                     <div className="flex justify-between border-t border-edge pt-3 text-base font-bold text-ink">

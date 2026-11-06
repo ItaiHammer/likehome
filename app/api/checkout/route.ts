@@ -13,69 +13,14 @@ import {
   checkPartyLimits,
   todayInTimeZone,
   validateReservationInput,
-  type ReservationInput,
   type RoomForBooking,
 } from '@/utils/reservation-logic'
-import { authorizeMockPayment, validatePaymentInput, type PaymentInput } from '@/utils/payment-logic'
+import { authorizeMockPayment, validatePaymentInput } from '@/utils/payment-logic'
 import { partyOf } from '@/lib/liteapi/party'
 import { liveRoomPrice } from '@/lib/liteapi/rates'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
 const EXCLUSION_VIOLATION = '23P01'
-
-type PaidBooking = {
-  id: string
-  guests: number
-  total_price: number | string
-  status: string
-  payments: {
-    id: string
-    card_number: string
-    transactions: { id: string; amount: number | string; status: string; transaction_type: string }[]
-  }[]
-}
-
-// A retry whose first response was lost clashes with the guest's own booking. If that booking of the
-// same room and dates is paid, it's the answer; a clash with anyone else's booking stays a 409.
-async function ownPaidBooking(
-  supabase: Awaited<ReturnType<typeof getUserId>>['supabase'],
-  accountId: string,
-  input: ReservationInput,
-  card: PaymentInput
-) {
-  let query = supabase
-    .from('reservations')
-    .select('id, guests, total_price, status, payments(id, card_number, transactions(id, amount, status, transaction_type))')
-    .eq('account_id', accountId)
-    .eq('room_id', input.room_id)
-    .eq('check_in', input.check_in)
-    .eq('check_out', input.check_out)
-    .eq('status', 'confirmed')
-  // A different party is a new request, not a retry
-  if (input.guests !== undefined) query = query.eq('guests', input.guests)
-  if (input.children !== undefined) query = query.eq('children', input.children)
-  const { data: own } = await query.maybeSingle<PaidBooking>()
-  if (!own) return null
-  for (const saved of own.payments) {
-    const charge = saved.transactions.find((t) => t.transaction_type === 'charge' && t.status === 'completed')
-    if (charge) {
-      return {
-        reservation: {
-          id: own.id,
-          check_in: input.check_in,
-          check_out: input.check_out,
-          guests: own.guests,
-          total_price: own.total_price,
-          status: own.status,
-        },
-        // Only the last 4 digits are saved, so the brand is known only when it's the same card
-        payment: { id: saved.id, brand: saved.card_number === card.last4 ? card.brand : null, last4: saved.card_number },
-        transaction: { id: charge.id, amount: charge.amount, status: charge.status },
-      }
-    }
-  }
-  return null
-}
 
 export async function POST(request: Request) {
   const { supabase, userId } = await getUserId()
@@ -103,8 +48,6 @@ export async function POST(request: Request) {
   }
   const input = stay.value
   const payment = card.value
-  // Sent by the stay page only when it resends an attempt that got no answer
-  const retry = (body as Record<string, unknown>).retry === true
 
   // 2. Look up the room and check capacity. `*` rather than the LiteAPI columns by name, so booking
   //    keeps working (at stored prices) on a database without supabase/migrations/liteapi_hotels.sql.
@@ -140,9 +83,6 @@ export async function POST(request: Request) {
       { checkIn: input.check_in, checkOut: input.check_out, ...partyOf(adults, children) }
     )
     if (live.status === 'sold_out') {
-      // LiteAPI may have no more of the room by the time a lost response is retried
-      const paid = retry ? await ownPaidBooking(supabase, userId, input, payment) : null
-      if (paid) return Response.json(paid)
       return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
     }
     if (live.status === 'live') {
@@ -178,8 +118,6 @@ export async function POST(request: Request) {
 
   if (reservationError || !reservation) {
     if (reservationError?.code === EXCLUSION_VIOLATION) {
-      const paid = retry ? await ownPaidBooking(supabase, userId, input, payment) : null
-      if (paid) return Response.json(paid)
       return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
     }
     console.error('createReservation failed:', reservationError)

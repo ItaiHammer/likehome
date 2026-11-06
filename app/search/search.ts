@@ -139,7 +139,7 @@ function toStoredRegion(region: string | undefined, storedCountry: string | unde
     return stateName(region) ?? region;
 }
 
-export function getSearchParams(searchParams: SearchRequest): PropertyFilter {
+function getSearchParams(searchParams: SearchRequest): PropertyFilter {
     if (searchParams === null || searchParams === undefined) {
         return {};
     }

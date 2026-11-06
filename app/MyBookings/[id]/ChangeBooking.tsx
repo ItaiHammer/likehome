@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { bookingCode, changeBlocker, datesProblem, findOverlap, formatStayDates, money, nightsPriceLabel, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
+import { bookingCode, changeBlocker, datesProblem, findOverlap, formatStayDates, money, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
 import { calculateTotalPrice, MAX_NIGHTS, todayInTimeZone } from "@/utils/reservation-logic";
 import { browserTimeZone, formatDate, nightsBetween } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
@@ -14,7 +14,7 @@ import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
 import { guestLabel } from "../../reserve/[slug]/GuestsField";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
 import { useBookedNightsLookup } from "../../reserve/[slug]/useBookedNightsLookup";
-import { freeUnitId, markBookedRooms, mergeBookedNights, withAddedRooms, withoutStay, type BookedWindow } from "@/lib/room-availability";
+import { freeUnitId, markBookedRooms, mergeBookedNights, withoutStay, type BookedWindow } from "@/lib/room-availability";
 import { HotelPhoto } from "../_components/HotelPhoto";
 
 export type BookingToChange = {
@@ -100,13 +100,10 @@ export function ChangeBooking({
   // The page priced the rooms for the booked dates and guests; anything else needs a fresh quote
   const initialKey = `${booking.checkIn}|${booking.checkOut}|${booking.guests - booking.children}|${booking.children}`;
   const priceKey = booking.livePrices && !pricingOff && nights > 0 && nights <= MAX_NIGHTS ? `${checkIn}|${checkOut}|${adults}|${children}` : null;
-  // Rooms saved after the page loaded aren't in its own prices, so then the booking's dates and guests are fetched too
-  const pagePriced = priceKey === initialKey && !addedRooms.some((r) => !listedRooms.some((l) => l.id === r.id));
-  const pricesPending = !!priceKey && !pagePriced && livePrices?.key !== priceKey;
+  const pricesPending = !!priceKey && priceKey !== initialKey && livePrices?.key !== priceKey;
   const sameGuests = guests === current.guests && children === current.children;
   const sameStay = checkIn === current.checkIn && checkOut === current.checkOut && sameGuests;
-  const unquoted = priceKey === initialKey && livePrices?.key === priceKey && Object.keys(livePrices.byId).length === 0;
-  const listed = withAddedRooms(listedRooms, addedRooms, unquoted);
+  const listed = [...listedRooms, ...addedRooms.filter((r) => !listedRooms.some((l) => l.id === r.id))];
   const priced =
     livePrices && livePrices.key === priceKey
       ? listed.map((r) => {
@@ -151,7 +148,7 @@ export function ChangeBooking({
   );
 
   useEffect(() => {
-    if (!priceKey || pagePriced || livePrices?.key === priceKey) return;
+    if (!priceKey || priceKey === initialKey || livePrices?.key === priceKey) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       const query = new URLSearchParams({ checkIn, checkOut, adults: String(adults), children: String(children) });
@@ -176,7 +173,7 @@ export function ChangeBooking({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [priceKey, pagePriced, livePrices?.key, booking.hotelId, checkIn, checkOut, adults, children]);
+  }, [priceKey, initialKey, livePrices?.key, booking.hotelId, checkIn, checkOut, adults, children]);
 
   if (blocker || !room || !currentRoom) {
     return (
@@ -198,7 +195,6 @@ export function ChangeBooking({
     if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (lookingUp) return { field: "dates", message: "Still checking which rooms are free on those dates. Try again in a moment." };
     if (room.bookedForDates) return { field: "guests", message: `${room.name} is booked for those dates. Pick another room or change your dates.` };
-    if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     return null;
   }
@@ -397,7 +393,9 @@ export function ChangeBooking({
               ) : nights > 0 ? (
                 <dl className="space-y-2 text-base">
                   <div className="flex justify-between text-slate">
-                    <dt>{nightsPriceLabel(room.nightly, nights, total)}</dt>
+                    <dt>
+                      {money(room.nightly)} × {nightsLabel(nights)}
+                    </dt>
                     <dd className="text-ink">{money(total)}</dd>
                   </div>
                   {difference !== 0 && (

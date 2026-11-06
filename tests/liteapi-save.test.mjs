@@ -212,25 +212,9 @@ test('rooms LiteAPI offers a party are saved for the hotel at their nightly pric
   assert.deepEqual([table, op, payload.map((r) => r.hotel_id), options], ['rooms', 'upsert', ['h-1'], { onConflict: 'hotel_id,liteapi_room_id', ignoreDuplicates: true }])
   assert.equal(fetchMock.mock.callCount(), 1)
 
-  // Asked about lately and not found, so the next page view doesn't ask LiteAPI again
+  // Asked about lately, so the next page view doesn't ask LiteAPI again, even for the room it couldn't find
   assert.deepEqual(await saveOfferedRooms('h-1', 'lp5001', new Map([['99', 50]])), [])
   assert.equal(fetchMock.mock.callCount(), 1)
-})
-
-test('a saved room whose row is removed later is saved again on the next view', async () => {
-  answers.detail = detailFor('lp5004')
-  assert.deepEqual((await saveOfferedRooms('h-1', 'lp5004', new Map([['12', 210]]))).map((r) => r.liteapi_room_id), ['12'])
-
-  // The row is gone (the sync removed it), so the hotel asks for the room again
-  db = fakeDb()
-  assert.deepEqual((await saveOfferedRooms('h-1', 'lp5004', new Map([['12', 230], ['99', 50]]))).map((r) => [r.liteapi_room_id, r.price_per_night]), [['12', 230]])
-  assert.deepEqual(db.ops.map(([table, op, payload]) => [table, op, payload.map((r) => r.liteapi_room_id)]), [['rooms', 'upsert', ['12']]])
-  assert.equal(fetchMock.mock.callCount(), 2)
-
-  // LiteAPI didn't list 99, so it still isn't asked about again
-  db = fakeDb()
-  assert.deepEqual(await saveOfferedRooms('h-1', 'lp5004', new Map([['99', 50]])), [])
-  assert.equal(fetchMock.mock.callCount(), 2)
 })
 
 test('offered rooms aren’t saved without the secret key, while LiteAPI is down, or when the database refuses them', async () => {

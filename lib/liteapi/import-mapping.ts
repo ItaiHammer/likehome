@@ -408,24 +408,12 @@ export function hotelRowFor(
 
 type Candidate = { priced: boolean; price: number; row: RoomRow }
 
-const roomIdOf = (room: LiteRoom | undefined) => (typeof room?.id === 'number' || typeof room?.id === 'string' ? String(room.id) : '')
-
-// Every room type LiteAPI lists for the hotel, imported or not
-export const roomIdsOf = (rooms: LiteRoom[] | undefined): string[] => [...new Set((rooms ?? []).map(roomIdOf).filter(Boolean))]
-
-// The stored LiteAPI room types the hotel no longer lists. One a run didn't sample stays: the stay page saves the
-// rooms LiteAPI offers other parties and dates.
-export function goneRooms(stored: { id: string; liteapi_room_id: string | null }[], roomIds: string[]): string[] {
-  const listed = new Set(roomIds)
-  return stored.filter((room) => room.liteapi_room_id && !listed.has(room.liteapi_room_id)).map((room) => room.id)
-}
-
 // A repeated room id keeps its first room: one upsert can't touch the same (hotel_id, liteapi_room_id) twice
 export function roomRowsFor(rooms: LiteRoom[] | undefined, sample: SamplePrices, maxRooms = 10, adultsOnly = false): RoomRow[] {
   const seen = new Set<string>()
   const candidates: Candidate[] = []
   for (const room of rooms ?? []) {
-    const id = roomIdOf(room)
+    const id = typeof room?.id === 'number' || typeof room?.id === 'string' ? String(room.id) : ''
     const name = typeof room?.roomName === 'string' ? room.roomName.trim() : ''
     if (!id || !name || seen.has(id)) continue
     seen.add(id)
@@ -592,7 +580,7 @@ function sqlValue(value: string | number | null | readonly string[]): string {
 const updateSet = (columns: readonly string[]) => columns.map((column) => `${column} = excluded.${column}`).join(', ')
 
 // Same writes as the Supabase path (upserts, then dropStaleRooms).
-export function hotelSql(hotel: HotelRow, rooms: RoomRow[], roomIds: string[]): string {
+export function hotelSql(hotel: HotelRow, rooms: RoomRow[]): string {
   let sql = `insert into public.hotels (${HOTEL_COLUMNS.join(', ')})\n` +
     `values (${HOTEL_COLUMNS.map((column) => sqlValue(hotel[column])).join(', ')})\n` +
     `on conflict (liteapi_id) do update set ${updateSet(HOTEL_COLUMNS.filter((column) => column !== 'liteapi_id'))};\n`
@@ -603,9 +591,9 @@ export function hotelSql(hotel: HotelRow, rooms: RoomRow[], roomIds: string[]): 
       `\n) v(${ROOM_COLUMNS.join(', ')})\n` +
       `join public.hotels h on h.liteapi_id = ${sqlString(hotel.liteapi_id)}\n` +
       `on conflict (hotel_id, liteapi_room_id) do update set ${updateSet(ROOM_COLUMNS.filter((column) => column !== 'liteapi_room_id'))};\n`
-    // Room types LiteAPI no longer lists: removed, or repriced when a reservation needs them
+    // Room types this run didn't import keep their old sample price: removed, or repriced when a reservation needs them
     const stale = `r.hotel_id = h.id and h.liteapi_id = ${sqlString(hotel.liteapi_id)} and r.liteapi_room_id is not null\n` +
-      `  and r.liteapi_room_id not in (${roomIds.map(sqlString).join(', ')})`
+      `  and r.liteapi_room_id not in (${rooms.map((room) => sqlString(room.liteapi_room_id)).join(', ')})`
     sql += `delete from public.rooms r using public.hotels h\nwhere ${stale}\n` +
       `  and not exists (select 1 from public.reservations res where res.room_id = r.id);\n` +
       `update public.rooms r set price_per_night = ${Math.min(...rooms.map((room) => room.price_per_night))} from public.hotels h\nwhere ${stale};\n`
