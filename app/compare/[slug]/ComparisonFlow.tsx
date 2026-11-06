@@ -9,22 +9,27 @@ import {
     useMemo,
     useState,
 } from "react";
-import type { Stay } from "../../_data/stays";
-
-export type RecentComparisonStay = {
-    stay: Stay;
-    viewedAt: string;
-};
+import type {ComparisonListing} from "@/lib/comparison";
 
 type ComparisonFlowProps = {
-    currentStay: Stay;
-    recentStays: RecentComparisonStay[];
+    currentStay: ComparisonListing;
+    recentStays: ComparisonListing[];
+    signedIn: boolean;
 };
 
 const COMPARISON_AMENITIES = [
-    { label: "Parking", source: "Parking" },
-    { label: "Pool", source: "Pool" },
-    { label: "Kitchen", source: "Kitchen" },
+    {
+        label: "Parking",
+        source: "Parking",
+    },
+    {
+        label: "Pool",
+        source: "Pool",
+    },
+    {
+        label: "Kitchen",
+        source: "Kitchen",
+    },
     {
         label: "Laundry",
         source: "Washer & Dryer",
@@ -36,35 +41,15 @@ const GOOD_FOR_ORDER = [
     "Kids",
     "Couples",
     "Friends",
+    "Pets",
 ] as const;
 
-function startingPrice(stay: Stay) {
-    const available = stay.rooms.filter(
-        (room) => !room.soldOut,
-    );
-
-    if (available.length === 0) {
-        return null;
-    }
-
-    return Math.min(
-        ...available.map((room) => room.nightly),
-    );
-}
-
 function formatPrice(price: number) {
-    return price.toLocaleString("en-US", {
-        maximumFractionDigits: 0,
-    });
-}
-
-function maxGuests(stay: Stay) {
-    if (stay.rooms.length === 0) {
-        return null;
-    }
-
-    return Math.max(
-        ...stay.rooms.map((room) => room.sleeps),
+    return price.toLocaleString(
+        "en-US",
+        {
+            maximumFractionDigits: 0,
+        },
     );
 }
 
@@ -84,16 +69,14 @@ function StayPhoto({
                        stay,
                        className,
                    }: {
-    stay: Stay;
+    stay: ComparisonListing;
     className: string;
 }) {
-    const photo = stay.photos?.find(Boolean);
-
-    if (photo) {
+    if (stay.photo) {
         return (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-                src={photo}
+                src={stay.photo}
                 alt={`${stay.name} photo`}
                 className={className}
             />
@@ -105,9 +88,9 @@ function StayPhoto({
             className={`${className} relative overflow-hidden bg-blue/10`}
             aria-hidden
         >
-      <span className="absolute inset-0 flex items-center justify-center font-serif text-3xl text-blue/50">
-        {stay.name.charAt(0)}
-      </span>
+            <span className="absolute inset-0 flex items-center justify-center font-serif text-3xl text-blue/50">
+                {stay.name.charAt(0)}
+            </span>
         </div>
     );
 }
@@ -115,15 +98,15 @@ function StayPhoto({
 function CurrentStaySummary({
                                 stay,
                             }: {
-    stay: Stay;
+    stay: ComparisonListing;
 }) {
-    const price = startingPrice(stay);
-    const guests = maxGuests(stay);
-    const rating = formatRating(stay.rating);
+    const rating =
+        formatRating(stay.rating);
 
     return (
         <section className="mt-7">
-            <div className="flex flex-col gap-4 rounded-xl border border-edge bg-surface p-4 sm:flex-row sm:items-center">
+            <div
+                className="flex flex-col gap-4 rounded-xl border border-edge bg-surface p-4 sm:flex-row sm:items-center">
                 <StayPhoto
                     stay={stay}
                     className="h-28 w-full rounded-lg object-cover sm:w-40"
@@ -138,53 +121,53 @@ function CurrentStaySummary({
                         {stay.location}
                     </p>
 
-                    {(rating || guests !== null) && (
-                        <p className="mt-1 text-sm text-slate">
-                            {rating && <>★ {rating}</>}
+                    <p className="mt-1 text-sm text-slate">
+                        {rating && (
+                            <>
+                                ★ {rating}
+                                <span className="mx-2">
+                                    ·
+                                </span>
+                            </>
+                        )}
 
-                            {rating && guests !== null && (
-                                <span className="mx-2">·</span>
-                            )}
-
-                            {guests !== null && (
-                                <>Up to {guests} guests</>
-                            )}
-                        </p>
-                    )}
+                        Up to{" "}
+                        {stay.sleepsUpTo}{" "}
+                        guests
+                    </p>
                 </div>
 
-                {price !== null && (
-                    <div className="shrink-0 sm:min-w-36 sm:text-right">
-                        <p className="text-xs text-slate">
-                            From
-                        </p>
+                <div className="shrink-0 sm:min-w-36 sm:text-right">
+                    <p className="text-xs text-slate">
+                        From
+                    </p>
 
-                        <p className="mt-1 text-lg font-semibold text-ink">
-                            ${formatPrice(price)} / night
-                        </p>
-                    </div>
-                )}
+                    <p className="mt-1 text-lg font-semibold text-ink">
+                        $
+                        {formatPrice(
+                            stay.priceFrom,
+                        )}{" "}
+                        / night
+                    </p>
+                </div>
             </div>
         </section>
     );
 }
 
 function RecentStayRow({
-                           item,
+                           stay,
                            selected,
                            disabled,
                            onToggle,
                        }: {
-    item: RecentComparisonStay;
+    stay: ComparisonListing;
     selected: boolean;
     disabled: boolean;
     onToggle: () => void;
 }) {
-    const { stay } = item;
-
-    const price = startingPrice(stay);
-    const guests = maxGuests(stay);
-    const rating = formatRating(stay.rating);
+    const rating =
+        formatRating(stay.rating);
 
     return (
         <label
@@ -221,17 +204,20 @@ function RecentStayRow({
 
                     {rating && (
                         <>
-                            <span className="mx-2">·</span>
+                            <span className="mx-2">
+                                ·
+                            </span>
                             ★ {rating}
                         </>
                     )}
 
-                    {guests !== null && (
-                        <>
-                            <span className="mx-2">·</span>
-                            Up to {guests} guests
-                        </>
-                    )}
+                    <span className="mx-2">
+                        ·
+                    </span>
+
+                    Up to{" "}
+                    {stay.sleepsUpTo}{" "}
+                    guests
                 </p>
 
                 <p className="mt-1 text-xs text-slate">
@@ -239,71 +225,55 @@ function RecentStayRow({
                 </p>
             </div>
 
-            {price !== null && (
-                <div className="hidden shrink-0 text-right sm:block">
-                    <p className="text-xs text-slate">
-                        From
-                    </p>
+            <div className="hidden shrink-0 text-right sm:block">
+                <p className="text-xs text-slate">
+                    From
+                </p>
 
-                    <p className="mt-1 whitespace-nowrap font-semibold text-ink">
-                        ${formatPrice(price)} / night
-                    </p>
-                </div>
-            )}
+                <p className="mt-1 whitespace-nowrap font-semibold text-ink">
+                    $
+                    {formatPrice(
+                        stay.priceFrom,
+                    )}{" "}
+                    / night
+                </p>
+            </div>
         </label>
     );
-}
-
-function amenityStatus(
-    stay: Stay,
-    source: string,
-) {
-    const offer = stay.offers?.find(
-        (item) =>
-            item.label === source,
-    );
-
-    if (offer) {
-        return offer.someRooms
-            ? "Some rooms"
-            : "Available";
-    }
-
-    if (stay.tags.includes(source)) {
-        return "Available";
-    }
-
-    return "—";
 }
 
 function ComparisonCard({
                             stay,
                             removable,
                             onRemove,
+                            reserveHref,
                         }: {
-    stay: Stay;
+    stay: ComparisonListing;
     removable?: boolean;
     onRemove?: () => void;
+    reserveHref: string;
 }) {
-    const price = startingPrice(stay);
-    const guests = maxGuests(stay);
-    const rating = formatRating(stay.rating);
+    const rating =
+        formatRating(stay.rating);
 
     const goodFor =
-        GOOD_FOR_ORDER.filter((item) =>
-            stay.goodFor?.includes(item),
+        GOOD_FOR_ORDER.filter(
+            (item) =>
+                stay.goodFor.includes(
+                    item,
+                ),
         );
 
     return (
         <article
             className="
-        grid min-w-0 overflow-hidden
-        grid-rows-[auto_auto_auto_auto_auto_auto]
-        rounded-xl border border-edge bg-surface
-        p-4 pb-6
-        sm:p-5 sm:pb-7
-        lg:grid-rows-[auto_110px_66px_100px_142px_48px]
-      "
+                grid min-w-0 overflow-hidden
+                grid-rows-[auto_auto_auto_auto_auto_auto]
+                rounded-xl border border-edge bg-surface
+                p-4 pb-6
+                sm:p-5 sm:pb-7
+                lg:grid-rows-[auto_110px_66px_100px_142px_48px]
+            "
         >
             {/* Photo + action */}
             <div className="min-w-0">
@@ -316,7 +286,9 @@ function ComparisonCard({
                     {removable && (
                         <button
                             type="button"
-                            onClick={onRemove}
+                            onClick={
+                                onRemove
+                            }
                             className="text-xs font-medium text-blue hover:text-blue-dark"
                         >
                             Remove
@@ -326,11 +298,14 @@ function ComparisonCard({
             </div>
 
             {/* Property + starting price */}
-            <div className="flex min-w-0 flex-col justify-center gap-2 py-2 sm:flex-row sm:items-center sm:justify-between lg:py-1">
+            <div
+                className="flex min-w-0 flex-col justify-center gap-2 py-2 sm:flex-row sm:items-center sm:justify-between lg:py-1">
                 <div className="min-w-0 flex-1 pr-3">
                     <h2
                         className="line-clamp-2 text-lg font-semibold leading-snug text-ink"
-                        title={stay.name}
+                        title={
+                            stay.name
+                        }
                     >
                         {stay.name}
                     </h2>
@@ -346,30 +321,31 @@ function ComparisonCard({
                     )}
                 </div>
 
-                {price !== null && (
-                    <div className="shrink-0 sm:text-right">
-                        <p className="text-xs text-slate">
-                            From
-                        </p>
+                <div className="shrink-0 sm:text-right">
+                    <p className="text-xs text-slate">
+                        From
+                    </p>
 
-                        <p className="mt-1 whitespace-nowrap text-lg font-semibold text-ink">
-                            ${formatPrice(price)} / night
-                        </p>
-                    </div>
-                )}
+                    <p className="mt-1 whitespace-nowrap text-lg font-semibold text-ink">
+                        $
+                        {formatPrice(
+                            stay.priceFrom,
+                        )}{" "}
+                        / night
+                    </p>
+                </div>
             </div>
 
             {/* Guests */}
             <div className="flex min-w-0 items-center justify-between border-t border-edge py-4 lg:py-0">
-        <span className="text-base text-slate">
-          Guests
-        </span>
+                <span className="text-base text-slate">
+                    Guests
+                </span>
 
                 <span className="text-base font-semibold text-ink">
-          {guests !== null
-              ? `Up to ${guests}`
-              : "—"}
-        </span>
+                    Up to{" "}
+                    {stay.sleepsUpTo}
+                </span>
             </div>
 
             {/* Good for */}
@@ -379,21 +355,30 @@ function ComparisonCard({
                 </h3>
 
                 <div className="mt-3">
-                    {goodFor.length > 0 ? (
+                    {goodFor.length >
+                    0 ? (
                         <div className="flex flex-wrap gap-2">
-                            {goodFor.map((item) => (
-                                <span
-                                    key={item}
-                                    className="rounded-full border border-edge px-3 py-1 text-xs text-blue"
-                                >
-                  {item}
-                </span>
-                            ))}
+                            {goodFor.map(
+                                (
+                                    item,
+                                ) => (
+                                    <span
+                                        key={
+                                            item
+                                        }
+                                        className="rounded-full border border-edge px-3 py-1 text-xs text-blue"
+                                    >
+                                        {
+                                            item
+                                        }
+                                    </span>
+                                ),
+                            )}
                         </div>
                     ) : (
                         <span className="text-sm text-slate">
-              —
-            </span>
+                            —
+                        </span>
                     )}
                 </div>
             </div>
@@ -406,37 +391,49 @@ function ComparisonCard({
 
                 <div className="mt-3 grid min-w-0 grid-cols-2 gap-x-6 gap-y-3">
                     {COMPARISON_AMENITIES.map(
-                        (amenity) => {
+                        (
+                            amenity,
+                        ) => {
                             const status =
-                                amenityStatus(
-                                    stay,
-                                    amenity.source,
-                                );
+                                stay.amenities.find(
+                                    (
+                                        item,
+                                    ) =>
+                                        item.label ===
+                                        amenity.source,
+                                )
+                                    ?.status ??
+                                "not-offered";
 
                             return (
                                 <div
-                                    key={amenity.label}
+                                    key={
+                                        amenity.label
+                                    }
                                     className="flex min-w-0 items-center justify-between gap-3 text-sm"
                                 >
-                  <span className="min-w-0 truncate text-ink">
-                    {amenity.label}
-                  </span>
+                                    <span className="min-w-0 truncate text-ink">
+                                        {
+                                            amenity.label
+                                        }
+                                    </span>
 
                                     <span className="shrink-0 text-slate">
-                    {status ===
-                    "Available" ? (
-                        <span className="text-lg font-bold leading-none text-blue">
-                        ✓
-                      </span>
-                    ) : status ===
-                    "Some rooms" ? (
-                        <span className="text-xs font-medium text-blue">
-                        Some rooms
-                      </span>
-                    ) : (
-                        "—"
-                    )}
-                  </span>
+                                        {status ===
+                                        "available" ? (
+                                            <span className="text-lg font-bold leading-none text-blue">
+                                                ✓
+                                            </span>
+                                        ) : status ===
+                                        "some-rooms" ? (
+                                            <span className="text-xs font-medium text-blue">
+                                                Some
+                                                rooms
+                                            </span>
+                                        ) : (
+                                            "—"
+                                        )}
+                                    </span>
                                 </div>
                             );
                         },
@@ -447,7 +444,9 @@ function ComparisonCard({
             {/* View stay */}
             <div className="flex min-w-0 items-end pt-2 lg:pt-1">
                 <Link
-                    href={`/reserve/${stay.slug}`}
+                    href={
+                        reserveHref
+                    }
                     className="flex h-11 w-full items-center justify-center rounded-lg border border-edge text-sm font-semibold text-blue transition-colors hover:border-blue hover:bg-blue/5"
                 >
                     View stay
@@ -460,26 +459,63 @@ function ComparisonCard({
 export function ComparisonFlow({
                                    currentStay,
                                    recentStays,
+                                   signedIn,
                                }: ComparisonFlowProps) {
     const router = useRouter();
     const searchParams =
         useSearchParams();
 
-    const comparedSlugs =
-        useMemo(() => {
-            const slugs =
-                searchParams
-                    .get("compare")
-                    ?.split(",")
-                    .filter(Boolean)
-                    .slice(0, 2) ?? [];
+    /*
+     * Preserve the search context when returning to a stay.
+     * Only the compare-specific parameter is removed.
+     */
+    function reserveHref(
+        id: string,
+    ) {
+        const params =
+            new URLSearchParams(
+                searchParams.toString(),
+            );
 
-            return slugs.filter(
-                (slug) =>
+        params.delete("compare");
+
+        const query =
+            params.toString();
+
+        return `/reserve/${id}${
+            query
+                ? `?${query}`
+                : ""
+        }`;
+    }
+
+    /*
+     * Deduplicate before limiting the comparison to 2 alternatives.
+     * This prevents ?compare=A,A from rendering the same stay twice.
+     */
+    const comparedIds =
+        useMemo(() => {
+            const ids = [
+                ...new Set(
+                    searchParams
+                        .get(
+                            "compare",
+                        )
+                        ?.split(",")
+                        .filter(
+                            Boolean,
+                        ) ?? [],
+                ),
+            ].slice(0, 2);
+
+            return ids.filter(
+                (id) =>
                     recentStays.some(
-                        (item) =>
-                            item.stay.slug ===
-                            slug,
+                        (
+                            stay,
+                        ) =>
+                            stay.id ===
+                            id,
                     ),
             );
         }, [
@@ -488,65 +524,75 @@ export function ComparisonFlow({
         ]);
 
     const comparing =
-        searchParams.has("compare") &&
-        comparedSlugs.length > 0;
+        searchParams.has(
+            "compare",
+        ) &&
+        comparedIds.length > 0;
 
     const [
-        selectedSlugs,
-        setSelectedSlugs,
+        selectedIds,
+        setSelectedIds,
     ] = useState<string[]>([]);
 
-    const activeSlugs = comparing
-        ? comparedSlugs
-        : selectedSlugs;
+    const activeIds =
+        comparing
+            ? comparedIds
+            : selectedIds;
 
     const selectedStays =
         useMemo(
             () =>
-                activeSlugs
-                    .map(
-                        (slug) =>
-                            recentStays.find(
-                                (item) =>
-                                    item.stay.slug ===
-                                    slug,
-                            )?.stay,
+                activeIds
+                    .map((id) =>
+                        recentStays.find(
+                            (
+                                stay,
+                            ) =>
+                                stay.id ===
+                                id,
+                        ),
                     )
                     .filter(
                         (
                             stay,
-                        ): stay is Stay =>
+                        ): stay is ComparisonListing =>
                             !!stay,
                     ),
             [
                 recentStays,
-                activeSlugs,
+                activeIds,
             ],
         );
 
     function toggleStay(
-        slug: string,
+        id: string,
     ) {
-        setSelectedSlugs(
+        setSelectedIds(
             (current) => {
                 if (
-                    current.includes(slug)
+                    current.includes(
+                        id,
+                    )
                 ) {
                     return current.filter(
-                        (item) =>
-                            item !== slug,
+                        (
+                            item,
+                        ) =>
+                            item !==
+                            id,
                     );
                 }
 
                 if (
-                    current.length >= 2
+                    current.length >=
+                    2
                 ) {
                     return current;
                 }
 
                 return [
                     ...current,
-                    slug,
+                    id,
                 ];
             },
         );
@@ -554,7 +600,8 @@ export function ComparisonFlow({
 
     function startComparison() {
         if (
-            selectedSlugs.length === 0
+            selectedIds.length ===
+            0
         ) {
             return;
         }
@@ -566,7 +613,7 @@ export function ComparisonFlow({
 
         params.set(
             "compare",
-            selectedSlugs.join(","),
+            selectedIds.join(","),
         );
 
         router.push(
@@ -575,8 +622,8 @@ export function ComparisonFlow({
     }
 
     function changeSelection() {
-        setSelectedSlugs(
-            comparedSlugs,
+        setSelectedIds(
+            comparedIds,
         );
 
         const params =
@@ -597,12 +644,12 @@ export function ComparisonFlow({
     }
 
     function removeStay(
-        slug: string,
+        id: string,
     ) {
         const next =
-            comparedSlugs.filter(
+            comparedIds.filter(
                 (item) =>
-                    item !== slug,
+                    item !== id,
             );
 
         if (next.length === 0) {
@@ -649,7 +696,10 @@ export function ComparisonFlow({
                     </h1>
 
                     <p className="max-w-4xl text-slate">
-                        {currentStay.name} and{" "}
+                        {
+                            currentStay.name
+                        }{" "}
+                        and{" "}
                         {
                             selectedStays.length
                         }{" "}
@@ -658,14 +708,16 @@ export function ComparisonFlow({
                         1
                             ? "stay"
                             : "stays"}
-                        . Starting prices are
-                        shown per night.
+                        . Starting
+                        prices are shown
+                        per night.
                     </p>
                 </header>
 
                 <div
                     className={`mt-7 grid min-w-0 grid-cols-1 gap-4 ${
-                        stays.length === 2
+                        stays.length ===
+                        2
                             ? "mx-auto w-full max-w-4xl md:grid-cols-2"
                             : "lg:grid-cols-3"
                     }`}
@@ -676,19 +728,28 @@ export function ComparisonFlow({
                             index,
                         ) => (
                             <ComparisonCard
-                                key={stay.slug}
-                                stay={stay}
+                                key={
+                                    stay.id
+                                }
+                                stay={
+                                    stay
+                                }
                                 removable={
-                                    index !== 0
+                                    index !==
+                                    0
                                 }
                                 onRemove={
-                                    index === 0
+                                    index ===
+                                    0
                                         ? undefined
                                         : () =>
                                             removeStay(
-                                                stay.slug,
+                                                stay.id,
                                             )
                                 }
+                                reserveHref={reserveHref(
+                                    stay.id,
+                                )}
                             />
                         ),
                     )}
@@ -696,24 +757,28 @@ export function ComparisonFlow({
 
                 <p
                     className={`mt-3 text-xs text-slate ${
-                        stays.length === 2
+                        stays.length ===
+                        2
                             ? "mx-auto w-full max-w-4xl"
                             : ""
                     }`}
                 >
-                    — Amenity not offered
+                    — Amenity not
+                    offered
                 </p>
             </>
         );
     }
 
     const maxSelected =
-        selectedSlugs.length >= 2;
+        selectedIds.length >= 2;
 
     return (
         <>
             <Link
-                href={`/reserve/${currentStay.slug}`}
+                href={reserveHref(
+                    currentStay.id,
+                )}
                 className="text-sm font-medium text-blue hover:text-blue-dark"
             >
                 ← Back to{" "}
@@ -722,18 +787,20 @@ export function ComparisonFlow({
 
             <header className="mt-4 flex flex-col gap-[15px]">
                 <p className="text-sm font-semibold uppercase tracking-wide text-blue">
-                    FIND YOUR PERFECT STAY
+                    FIND YOUR PERFECT
+                    STAY
                 </p>
 
                 <h1 className="font-serif text-4xl leading-none text-ink sm:text-5xl">
-                    Which stay feels like
-                    home?
+                    Which stay feels
+                    like home?
                 </h1>
 
                 <p className="text-slate">
                     Compare{" "}
-                    {currentStay.name} with
-                    up to 2 recently viewed
+                    {currentStay.name}{" "}
+                    with up to 2
+                    recently viewed
                     stays.
                 </p>
             </header>
@@ -746,17 +813,20 @@ export function ComparisonFlow({
                 <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
                     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
                         <h2 className="font-serif text-3xl text-ink">
-                            Recently viewed
+                            Recently
+                            viewed
                         </h2>
 
                         <p className="text-sm text-slate">
-                            Most recently viewed
-                            first
+                            Most recently
+                            viewed first
                         </p>
                     </div>
 
                     <p className="text-sm text-slate">
-                        {recentStays.length}{" "}
+                        {
+                            recentStays.length
+                        }{" "}
                         {recentStays.length ===
                         1
                             ? "stay"
@@ -768,19 +838,22 @@ export function ComparisonFlow({
                 0 ? (
                     <div className="max-h-[29rem] overflow-y-auto rounded-xl border border-edge bg-surface">
                         {recentStays.map(
-                            (item) => {
+                            (
+                                stay,
+                            ) => {
                                 const selected =
-                                    selectedSlugs.includes(
-                                        item.stay.slug,
+                                    selectedIds.includes(
+                                        stay.id,
                                     );
 
                                 return (
                                     <RecentStayRow
                                         key={
-                                            item.stay
-                                                .slug
+                                            stay.id
                                         }
-                                        item={item}
+                                        stay={
+                                            stay
+                                        }
                                         selected={
                                             selected
                                         }
@@ -790,8 +863,7 @@ export function ComparisonFlow({
                                         }
                                         onToggle={() =>
                                             toggleStay(
-                                                item.stay
-                                                    .slug,
+                                                stay.id,
                                             )
                                         }
                                     />
@@ -802,22 +874,28 @@ export function ComparisonFlow({
                 ) : (
                     <div className="rounded-xl border border-edge bg-surface px-6 py-10 text-center">
                         <h3 className="font-semibold text-ink">
-                            No recently viewed
-                            stays yet
+                            {signedIn
+                                ? "No recently viewed stays yet"
+                                : "Sign in to see recently viewed stays"}
                         </h3>
 
                         <p className="mt-2 text-sm text-slate">
-                            View another stay
-                            first and it will
-                            appear here for
-                            comparison.
+                            {signedIn
+                                ? "View another stay first and it will appear here for comparison."
+                                : "Recently viewed stays are saved to your account so you can come back and compare them."}
                         </p>
 
                         <Link
-                            href="/search"
+                            href={
+                                signedIn
+                                    ? "/search"
+                                    : "/auth/login"
+                            }
                             className="mt-5 inline-flex text-sm font-semibold text-blue hover:text-blue-dark"
                         >
-                            Explore stays →
+                            {signedIn
+                                ? "Explore stays →"
+                                : "Sign in →"}
                         </Link>
                     </div>
                 )}
@@ -825,45 +903,48 @@ export function ComparisonFlow({
 
             <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-slate">
-                    {selectedSlugs.length >
+                    {selectedIds.length >
                     0 ? (
                         <>
                             <p>
                                 {
-                                    selectedSlugs.length
-                                }{" "}
-                                {selectedSlugs.length ===
-                                1
-                                    ? "stay"
-                                    : "stays"}{" "}
+                                    selectedIds.length
+                                }
+                                /2 stays
                                 selected ·{" "}
-                                {currentStay.name} is
-                                included
+                                {
+                                    currentStay.name
+                                }{" "}
+                                is included
                             </p>
 
                             {maxSelected && (
                                 <p className="mt-1 text-xs">
-                                    Uncheck a stay to
-                                    choose another.
+                                    Uncheck a
+                                    stay to
+                                    choose
+                                    another.
                                 </p>
                             )}
                         </>
                     ) : (
                         <p>
-                            Select 1 or 2 stays
-                            to compare with{" "}
-                            {currentStay.name}.
+                            0/2 stays
+                            selected ·
+                            Select at least
+                            1 stay to
+                            compare.
                         </p>
                     )}
                 </div>
 
                 <div className="flex items-center justify-end gap-5">
-                    {selectedSlugs.length >
+                    {selectedIds.length >
                         0 && (
                             <button
                                 type="button"
                                 onClick={() =>
-                                    setSelectedSlugs(
+                                    setSelectedIds(
                                         [],
                                     )
                                 }
@@ -876,7 +957,7 @@ export function ComparisonFlow({
                     <button
                         type="button"
                         disabled={
-                            selectedSlugs.length ===
+                            selectedIds.length ===
                             0
                         }
                         onClick={
@@ -884,11 +965,11 @@ export function ComparisonFlow({
                         }
                         className="min-h-11 rounded-lg bg-blue px-6 py-3 text-sm font-semibold text-on-blue transition-colors hover:bg-blue-dark disabled:cursor-not-allowed disabled:bg-[#E6EBF3] disabled:text-[#536383]"
                     >
-                        {selectedSlugs.length ===
+                        {selectedIds.length ===
                         0
                             ? "Compare stays"
                             : `Compare ${
-                                selectedSlugs.length +
+                                selectedIds.length +
                                 1
                             } stays`}
                     </button>
