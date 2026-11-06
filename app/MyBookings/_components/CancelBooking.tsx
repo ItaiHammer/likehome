@@ -178,20 +178,29 @@ export function CancelBookingButton({
   className?: string;
 }) {
   const open = useContext(OpenCancelDialog);
+  const reasonId = useId();
   if (!open) throw new Error("CancelBookingButton must be inside a CancelBookingDialog");
 
   const unavailable = !quote ? "Cancellation isn’t available right now." : !quote.canCancel ? "It’s too late to cancel this reservation online." : null;
 
   return (
-    <Button
-      variant="secondary"
-      onClick={() => quote && open({ booking, quote })}
-      disabled={!!unavailable}
-      title={unavailable ?? undefined}
-      className={className}
-    >
-      Cancel reservation
-    </Button>
+    <>
+      <Button
+        variant="secondary"
+        onClick={() => quote && open({ booking, quote })}
+        disabled={!!unavailable}
+        aria-describedby={unavailable ? reasonId : undefined}
+        className={className}
+      >
+        Cancel reservation
+      </Button>
+      {/* w-0 min-w-full: a full row under the buttons that never widens the button column */}
+      {unavailable && (
+        <p id={reasonId} className="w-0 min-w-full text-sm text-slate">
+          {unavailable}
+        </p>
+      )}
+    </>
   );
 }
 
