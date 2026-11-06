@@ -22,9 +22,12 @@ const OpenCancelDialog = createContext<((target: Target) => void) | null>(null);
 // A native <dialog> opened with showModal(), like the listings ConfirmDialog: the browser traps focus,
 // closes it on Escape and makes the page behind it inert. The database works out the refund; this only shows it.
 export function CancelBookingDialog({
+  returnFocusTo,
   sample = false,
   children,
 }: {
+  /** Id of what to focus on close when the card that opened the dialog is gone */
+  returnFocusTo: string;
   /** Dev-only sample bookings: nothing is cancelled */
   sample?: boolean;
   children: React.ReactNode;
@@ -51,6 +54,9 @@ export function CancelBookingDialog({
   // Runs however the dialog closes (Done, Keep reservation, Escape)
   function onClose() {
     if (dialogRef.current?.open) return; // already reopened with the result (see confirm)
+    // Focus stays stuck in the closed dialog when the card that opened it was cancelled and removed
+    const focused = document.activeElement;
+    if (!focused || focused === document.body || dialogRef.current?.contains(focused)) document.getElementById(returnFocusTo)?.focus();
     // Here, not in open(): showModal() would focus the old Sign in link just before it disappears
     setError(null);
     setDone(null);
