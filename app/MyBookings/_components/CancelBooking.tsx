@@ -38,7 +38,6 @@ export function CancelBooking({
   const unavailable = !quote ? "Cancellation isn’t available right now." : !quote.canCancel ? "It’s too late to cancel this reservation online." : null;
 
   function open() {
-    setError(null);
     dialogRef.current?.showModal();
   }
 
@@ -48,6 +47,8 @@ export function CancelBooking({
 
   // Runs however the dialog closes (Done, Keep reservation, Escape)
   function onClose() {
+    // Here, not in open(): showModal() would focus the old Sign in link just before it disappears
+    setError(null);
     if (!done) return;
     if (sample) setDone(null);
     else router.refresh(); // moves the booking to "Cancelled reservations"
