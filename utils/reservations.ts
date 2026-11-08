@@ -249,6 +249,7 @@ export async function checkoutReservation(
   const supabase = createClient(cookieStore)
 
   const { data, error } = await supabase.rpc('checkout_reservation', {
+    // reservation
     p_account_id: reservation.account_id,
     p_room_id: reservation.room_id,
     p_check_in: reservation.check_in,
@@ -256,7 +257,10 @@ export async function checkoutReservation(
     p_guests: reservation.guests ?? null,
     p_adults: reservation.adults ?? null,
     p_children: reservation.children ?? null,
+    p_status: reservation.status ?? null,
+    // options
     p_time_zone: options.time_zone,
+    // payment
     p_has_insurance: payment.has_insurance,
     p_booking_total: payment.total_price,
     p_insurance_premium: payment.insurance_premium,

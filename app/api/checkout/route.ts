@@ -110,7 +110,8 @@ export async function POST(request: Request) {
       check_out: input.check_out,
       guests: input.guests,
       adults: input.adults,
-      children: input.children
+      children: input.children,
+      status: inputBody.status as string
     },
     {
       total_price: totalPrice,

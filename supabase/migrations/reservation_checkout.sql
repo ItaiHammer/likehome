@@ -14,7 +14,8 @@ create or replace function public.checkout_reservation(
   p_insurance_premium numeric,
   p_card_last4 text,
   p_exp_month integer,
-  p_exp_year integer
+  p_exp_year integer,
+  p_status text
 ) returns jsonb
 language plpgsql security definer
 set search_path = ''
@@ -126,7 +127,7 @@ begin
     ) values (
       p_account_id, v_room.hotel_id, p_room_id,
       p_check_in::timestamptz, p_check_out::timestamptz, 
-      p_guests, p_children, v_total, 'confirmed', p_has_insurance
+      p_guests, p_children, v_total, coalesce(p_status, 'confirmed'), p_has_insurance
     ) returning * into v_reservation;
   exception when exclusion_violation then
     raise exception 'Room is not available for the selected dates.' using errcode = 'PT409';
