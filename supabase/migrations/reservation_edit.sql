@@ -10,6 +10,9 @@ create or replace function public.edit_reservation(
   p_check_in date,
   p_check_out date,
   p_guests integer,
+  p_adults integer,
+  p_children integer,
+  p_total_price numeric,
   p_payment_method text,
   p_time_zone text,
   p_expected jsonb
@@ -23,7 +26,6 @@ declare
   v_reservation public.reservations%rowtype;
   v_room public.rooms%rowtype;
   v_today date;
-  v_guests integer;
   v_total numeric;
   v_difference numeric;
   v_paid numeric;
@@ -81,6 +83,7 @@ begin
       v_reservation.check_out at time zone 'UTC', 'YYYY-MM-DD'
     ),
     'guests', v_reservation.guests,
+    'children', v_reservation.children,
     'total_price', v_reservation.total_price
   ) then
     raise exception 'This booking changed. Reload it before saving again.'
@@ -109,10 +112,25 @@ begin
   end if;
 
   -- validate guests
-  v_guests := coalesce(p_guests, v_reservation.guests);
-  if v_guests is not null and v_guests < 1 then
-    raise exception 'guests must be a whole number of at least 1.'
-      using errcode = 'PT400';
+  if p_guests is not null then
+    if p_adults is null then
+      raise exception 'Adults cannot be null when guests is not null' using errcode = 'PT400';
+    end if;
+    if p_adults < 1 then
+      raise exception 'Adults must be at least 1.' using errcode = 'PT400';
+    end if;
+    if p_children is null then
+      raise exception 'Children cannot be null when guests is not null' using errcode = 'PT400';
+    end if;
+    if p_children < 0 then
+      raise exception 'Children cannot be less than 0.' using errcode = 'PT400';
+    end if;
+    if p_guests < 1 then
+      raise exception 'Guests must be at least 1.' using errcode = 'PT400';
+    end if;
+    if p_guests != p_adults + p_children then
+      raise exception 'Guests must equal total adults and children.' using errcode = 'PT400';
+    end if;
   end if;
 
   -- Keep the rate and capacity stable until this edit commits.
@@ -128,25 +146,27 @@ begin
   end if;
 
   -- validate capacity
-  if v_room.capacity is not null and v_guests > v_room.capacity then
+  if v_room.capacity is not null and p_guests is not null and p_guests > v_room.capacity then
     raise exception 'Guest count exceeds the room capacity.'
       using errcode = 'PT400';
   end if;
 
-  -- validate nightly price
-  if v_room.price_per_night is null
-    or v_room.price_per_night::text in ('NaN', 'Infinity', '-Infinity')
-    or v_room.price_per_night::numeric <= 0 then
-    raise exception 'The room does not have a valid booking price.'
-      using errcode = 'PT409';
+  if v_room.max_adults is not null and p_adults is not null and p_adults > v_room.max_adults then
+    raise exception 'Adult count exceeds the room adult capacity.'
+      using errcode = 'PT400';
   end if;
 
-  v_total := round(
-    (p_check_out - p_check_in) * v_room.price_per_night::numeric, 2
-  );
+  if v_room.max_children is not null and p_children is not null and p_children > v_room.max_children then
+    raise exception 'Children count exceeds the room children capacity.'
+      using errcode = 'PT400';
+  end if;
+
+  -- validate price
+  v_total := round(total_price::numeric, 2);
+
   if v_total <= 0 then
-    raise exception 'The room does not have a valid booking price.'
-      using errcode = 'PT409';
+    raise exception 'The price must be greater than 0.'
+      using errcode = 'PT400';
   end if;
 
   -- Checkout creates one payment. Select the original funded payment
@@ -191,7 +211,8 @@ begin
       hotel_id = v_room.hotel_id,
       check_in = p_check_in::timestamptz,
       check_out = p_check_out::timestamptz,
-      guests = v_guests,
+      guests = coalesce(p_guests, v_reservation.guests),
+      children = coalesce(p_children, v_reservation.children),
       total_price = v_total
   where id = p_reservation_id
     and account_id = v_user_id

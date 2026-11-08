@@ -2,6 +2,8 @@
 import { getUserId } from '../../../../utils/user.ts'
 import { editReservation, getReservation } from '../../../../utils/reservations.ts'
 import {
+  bookingParty,
+  calculateTotalPrice,
   checkCapacity,
   checkPartyLimits,
   validateReservationInput,
@@ -94,6 +96,17 @@ export async function PATCH(
   }
   const input = result.value
 
+  // Early return if reservation is unchanged
+  if (
+    input.room_id === curReservation.room_id 
+    && input.check_in === curReservation.check_in
+    && input.check_out === curReservation.check_out 
+    && input.guests === curReservation.guests
+    && input.children === (curReservation.children ?? 0)
+  ) {
+    return Response.json({ reservation: curReservation }, { status: 200})
+  }
+
   // Look up the room (price, capacity, hotel). `*` keeps this working before liteapi_hotels.sql is applied.
   const { data: room, error: roomError } = await supabase
     .from('rooms')
@@ -116,14 +129,36 @@ export async function PATCH(
     return Response.json({ error: partyError }, { status: 400 })
   }
 
+  // Price. A change is quoted for its adults and children, as the change page priced it.
+  const { adults, children } = bookingParty(input)
+  let nightly: number | string = room.price_per_night
+  let pricedLive = false
+  if (room.hotels?.liteapi_id) {
+    const live = await liveRoomPrice(
+      { liteapiHotelId: room.hotels.liteapi_id, liteapiRoomId: room.liteapi_room_id ?? null, roomType: room.room_type ?? '' },
+      { checkIn: input.check_in, checkOut: input.check_out, ...partyOf(adults, children) }
+    )
+    if (live.status === 'sold_out') {
+      return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
+    }
+    if (live.status === 'live') {
+      nightly = live.value.perNight
+      pricedLive = true
+    }
+  }
+  const totalPrice = calculateTotalPrice(input.check_in, input.check_out, nightly)
+
   // The RPC reprices and settles the edit inside one database transaction.
   const { data, error } = await editReservation(
     reservationId,
     {
-      room_id: room.id,
-      guests: input.guests,
+      room_id: input.room_id,
       check_in: input.check_in,
       check_out: input.check_out,
+      guests: input.guests,
+      adults: input.adults,
+      children: input.children,
+      total_price: totalPrice
     },
     {
       payment_method: paymentMethod,
@@ -133,6 +168,7 @@ export async function PATCH(
         check_in: curReservation.check_in,
         check_out: curReservation.check_out,
         guests: curReservation.guests ?? null,
+        children: curReservation.children ?? null,
         total_price: Number(curReservation.total_price),
       },
     }

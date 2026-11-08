@@ -143,6 +143,9 @@ export async function editReservation(
     check_in: string
     check_out: string
     guests?: number
+    adults?: number
+    children?: number
+    total_price: number
   },
   options: {
     payment_method: 'card' | 'points'
@@ -152,6 +155,7 @@ export async function editReservation(
       check_in: string
       check_out: string
       guests: number | null
+      children: number | null
       total_price: number
     }
   }
