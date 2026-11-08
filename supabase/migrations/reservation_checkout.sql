@@ -164,11 +164,11 @@ end;
 $$;
 
 revoke execute on function public.checkout_reservation(
-  uuid, uuid, date, date, integer, integer, integer, text, boolean, numeric, numeric, text, integer, integer
+  uuid, uuid, date, date, integer, integer, integer, text, boolean, numeric, numeric, text, integer, integer, text
 ) from public, anon;
 
 grant execute on function public.checkout_reservation(
-  uuid, uuid, date, date, integer, integer, integer, text, boolean, numeric, numeric, text, integer, integer
+  uuid, uuid, date, date, integer, integer, integer, text, boolean, numeric, numeric, text, integer, integer, text
 ) to authenticated;
 
 commit;

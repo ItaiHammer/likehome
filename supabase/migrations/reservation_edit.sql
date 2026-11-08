@@ -162,7 +162,7 @@ begin
   end if;
 
   -- validate price
-  v_total := round(total_price::numeric, 2);
+  v_total := round(p_total_price::numeric, 2);
 
   if v_total <= 0 then
     raise exception 'The price must be greater than 0.'
@@ -276,11 +276,11 @@ end;
 $$;
 
 revoke execute on function public.edit_reservation(
-  uuid, uuid, date, date, integer, text, text, jsonb
+  uuid, uuid, date, date, integer, integer, integer, numeric, text, text, jsonb
 ) from public, anon;
 
 grant execute on function public.edit_reservation(
-  uuid, uuid, date, date, integer, text, text, jsonb
+  uuid, uuid, date, date, integer, integer, integer, numeric, text, text, jsonb
 ) to authenticated;
 
 commit;
