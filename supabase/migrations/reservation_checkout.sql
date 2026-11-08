@@ -6,6 +6,8 @@ create or replace function public.checkout_reservation(
   p_check_in date,
   p_check_out date,
   p_guests integer,
+  p_adults integer,
+  p_children integer,
   p_time_zone text,
   p_has_insurance boolean,
   p_booking_total numeric,
@@ -40,33 +42,68 @@ begin
   exception when invalid_parameter_value then
     v_today := (now() at time zone 'UTC')::date;
   end;
+
   if p_check_in is null or p_check_out is null
     or not isfinite(p_check_in) or not isfinite(p_check_out)
     or p_check_in < v_today or p_check_out <= p_check_in
     or p_check_out - p_check_in > 30 then
     raise exception 'Choose valid dates for a stay of 1 to 30 nights.' using errcode = 'PT400';
   end if;
-  if p_guests is not null and p_guests < 1 then
-    raise exception 'guests must be at least 1.' using errcode = 'PT400';
-  end if;
+
+  if p_guests is not null then
+    if p_adults is null then
+      raise exception 'Adults cannot be null when guests is not null' using errcode = 'PT400';
+    end if;
+    if p_adults < 1 then
+      raise exception 'Adults must be at least 1.' using errcode = 'PT400';
+    end if;
+    if p_children is null then
+      raise exception 'Children cannot be null when guests is not null' using errcode = 'PT400';
+    end if;
+    if p_children < 0 then
+      raise exception 'Children cannot be less than 0.' using errcode = 'PT400';
+    end if;
+    if p_guests < 1 then
+      raise exception 'Guests must be at least 1.' using errcode = 'PT400';
+    end if;
+    if p_guests != p_adults + p_children then
+      raise exception 'Guests must equal total adults and children.' using errcode = 'PT400';
+    end if;
+  end if; 
 
   -- Hold the rate and capacity stable until checkout commits.
   select * into v_room from public.rooms where id = p_room_id for share;
   if not found then
     raise exception 'Room not found.' using errcode = 'PT404';
   end if;
+
   if v_room.capacity is not null and p_guests > v_room.capacity then
     raise exception 'Guest count exceeds the room capacity.' using errcode = 'PT400';
   end if;
+
+  if p_adults is not null and v_room.max_adults is not null and p_adults > v_room.max_adults then
+    raise exception 'Adult count exceeds the room adult capacity.' using errcode = 'PT400';
+  end if;
+
+  if p_children is not null and v_room.max_children is not null and p_children > v_room.max_children then
+    if v_room.max_children = 0 then
+      raise exception 'Room is for adults only.' using errcode = 'PT400';
+    else
+      raise exception 'Children count exceeds the room child capacity.' using errcode = 'PT400';
+    end if;
+  end if;
+  
   if v_room.price_per_night is null
     or v_room.price_per_night::text in ('NaN', 'Infinity', '-Infinity')
     or v_room.price_per_night::numeric <= 0 then
     raise exception 'The room does not have a valid booking price.' using errcode = 'PT409';
   end if;
+
   v_total := round((p_check_out - p_check_in) * v_room.price_per_night::numeric, 2);
   if v_total <= 0 or p_booking_total is distinct from v_total then
     raise exception 'The booking price changed. Refresh and try again.' using errcode = 'PT409';
   end if;
+
   if p_has_insurance is null or p_insurance_premium is null
     or p_insurance_premium::text in ('NaN', 'Infinity', '-Infinity')
     or p_insurance_premium <> round(p_insurance_premium, 2)
@@ -74,6 +111,7 @@ begin
     or (not p_has_insurance and p_insurance_premium <> 0) then
     raise exception 'Invalid insurance premium.' using errcode = 'PT400';
   end if;
+
   if p_card_last4 is null or p_card_last4 !~ '^[0-9]{4}$'
     or p_exp_month is null or p_exp_month not between 1 and 12
     or p_exp_year is null or p_exp_year not between extract(year from v_today) and 9999 
@@ -83,12 +121,12 @@ begin
 
   begin
     insert into public.reservations (
-      account_id, hotel_id, room_id, check_in, check_out, guests,
-      total_price, status, has_insurance
+      account_id, hotel_id, room_id, check_in, check_out, 
+      guests, children, total_price, status, has_insurance
     ) values (
       p_account_id, v_room.hotel_id, p_room_id,
-      p_check_in::timestamptz, p_check_out::timestamptz, p_guests,
-      v_total, 'confirmed', p_has_insurance
+      p_check_in::timestamptz, p_check_out::timestamptz, 
+      p_guests, p_children, v_total, 'confirmed', p_has_insurance
     ) returning * into v_reservation;
   exception when exclusion_violation then
     raise exception 'Room is not available for the selected dates.' using errcode = 'PT409';
@@ -110,7 +148,6 @@ begin
     returning amount into v_cancel_insurance_amount;
   end if;
 
-  -- Any insert error rolls back all preceding writes automatically.
   return jsonb_build_object(
     'reservation', to_jsonb(v_reservation),
     'payment', to_jsonb(v_payment),
@@ -126,11 +163,11 @@ end;
 $$;
 
 revoke execute on function public.checkout_reservation(
-  uuid, uuid, date, date, integer, text, boolean, numeric, numeric, text, integer, integer
+  uuid, uuid, date, date, integer, integer, integer, text, boolean, numeric, numeric, text, integer, integer
 ) from public, anon;
 
 grant execute on function public.checkout_reservation(
-  uuid, uuid, date, date, integer, text, boolean, numeric, numeric, text, integer, integer
+  uuid, uuid, date, date, integer, integer, integer, text, boolean, numeric, numeric, text, integer, integer
 ) to authenticated;
 
 commit;

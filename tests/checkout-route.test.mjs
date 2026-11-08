@@ -48,6 +48,9 @@ mock.module('@/utils/reservations', {
   },
 })
 
+const liveRoomPrice = mock.fn(async () => ({ status: 'unavailable' }))
+mock.module('@/lib/liteapi/rates', { namedExports: { liveRoomPrice } })
+
 const { POST } = await import('../app/api/checkout/route.ts')
 
 function future(days) {
@@ -93,8 +96,16 @@ const checkoutCalls = () => checkoutReservation.mock.callCount()
 beforeEach(() => {
   userId = 'user-1'
   roomResult = { data: { ...ROOM }, error: null }
-  checkoutReservation.mock.resetCalls()
-  consoleError.mock.resetCalls()
+
+  for (const fn of [
+    checkoutReservation,
+    liveRoomPrice,
+    consoleError,
+  ]) {
+    fn.mock.resetCalls()
+  }
+  
+  liveRoomPrice.mock.mockImplementation(async () => ({ status: 'unavailable' }))
 
   checkoutReservation.mock.mockImplementation(async (stay, payment, options) => {
     const totalPrice = payment.total_price
@@ -229,6 +240,7 @@ describe('pricing & insurance', () => {
     assert.equal(r.status, 201)
     assert.equal(checkoutReservation.mock.calls[0].arguments[1].total_price, 389.97)
     assert.equal(r.json.reservation.total_price, 389.97)
+    assert.equal(liveRoomPrice.mock.callCount(), 0)
   })
 
   test('handles a numeric-string price from Postgres', async () => {
@@ -287,10 +299,8 @@ describe('LiteAPI hotels', () => {
     const body = validBody()
     const r = await post(body)
     assert.equal(r.status, 201)
-    assert.equal(createLiveReservation.mock.calls[0].arguments[0].total_price, 163.66)
-    assert.equal(createLiveReservation.mock.calls[0].arguments[0].account_id, 'user-1')
-    assert.deepEqual(recordLiveCharge.mock.calls[0].arguments, ['pay-1', 163.66])
-    assert.equal(createReservation.mock.callCount() + recordCheckoutCharge.mock.callCount(), 0)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[1].total_price, 163.66)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[0].account_id, 'user-1')
     assert.equal(r.json.reservation.total_price, 163.66)
     assert.equal(r.json.transaction.amount, 163.66)
     assert.deepEqual(liveRoomPrice.mock.calls[0].arguments, [
@@ -310,10 +320,10 @@ describe('LiteAPI hotels', () => {
       adults: 2,
       children: [8, 8],
     })
-    const saved = createLiveReservation.mock.calls[0].arguments[0]
-    assert.equal(saved.guests, 4)
-    assert.equal(saved.children, 2)
-    assert.equal(saved.total_price, 198.94)
+    const saved = checkoutReservation.mock.calls[0]
+    assert.equal(saved.arguments[0].guests, 4)
+    assert.equal(saved.arguments[0].children, 2)
+    assert.equal(saved.arguments[1].total_price, 198.94)
   })
 
   test('without a guest count, LiteAPI is asked for 2 adults', async () => {
@@ -330,33 +340,22 @@ describe('LiteAPI hotels', () => {
     liveRoomPrice.mock.mockImplementation(async () => ({ status: 'sold_out' }))
     const r = await post(validBody())
     assert.deepEqual(r, { status: 409, json: { error: 'Room is not available for those dates.' } })
-    assert.equal(writes(), 0)
+    assert.equal(checkoutReservation.mock.callCount(), 0)
   })
 
   test('LiteAPI unavailable: falls back to the stored price', async () => {
     const r = await post(validBody())
     assert.equal(r.status, 201)
     assert.equal(liveRoomPrice.mock.callCount(), 1)
-    assert.equal(createReservation.mock.calls[0].arguments[0].total_price, 389.97)
-    assert.deepEqual(recordCheckoutCharge.mock.calls[0].arguments, ['pay-1'])
-    assert.equal(createLiveReservation.mock.callCount() + recordLiveCharge.mock.callCount(), 0)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[1].total_price, 389.97)
     assert.equal(r.json.transaction.amount, 389.97)
   })
 
-  test('a live booking whose charge can’t be recorded is cancelled', async () => {
+  test('a live booking that clashes with another one: 409', async () => {
     liveRoomPrice.mock.mockImplementation(async () => live(163.66, 3))
-    recordLiveCharge.mock.mockImplementation(async () => ({ data: null, error: { code: '23514' } }))
-    const r = await post(validBody())
-    assert.equal(r.status, 500)
-    assert.deepEqual(updateReservation.mock.calls[0].arguments, ['res-1', { status: 'cancelled' }])
-  })
-
-  test('a live booking that clashes with another one: 409, no payment saved', async () => {
-    liveRoomPrice.mock.mockImplementation(async () => live(163.66, 3))
-    createLiveReservation.mock.mockImplementation(async () => ({ data: null, error: { code: '23P01' } }))
+    checkoutReservation.mock.mockImplementation(async () => ({ data: null, error: { code: '23P01' } }))
     const r = await post(validBody())
     assert.deepEqual(r, { status: 409, json: { error: 'Room is not available for those dates.' } })
-    assert.equal(createPayment.mock.callCount(), 0)
   })
 
   test('an owner hotel (no liteapi_id) never calls LiteAPI', async () => {
@@ -455,7 +454,7 @@ describe('success', () => {
         status: 'confirmed',
         has_insurance: false,
       },
-      payment: { id: 'pay-1', last4: '4242' },
+      payment: { id: 'pay-1', brand: 'visa', last4: '4242' },
       transaction: { id: 'txn-1', amount: 389.97, status: 'completed' },
       insurance_premium: 0,
       total_charged: 389.97,
@@ -472,6 +471,7 @@ describe('success', () => {
       check_in: validBody().check_in,
       check_out: validBody().check_out,
       guests: 2,
+      adults: 2,
       children: 0,
     })
     assert.deepEqual(paymentDetails, {

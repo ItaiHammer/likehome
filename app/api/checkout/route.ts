@@ -1,4 +1,7 @@
-// Mock payments only. All checkout records are saved in one database transaction.
+// Checkout API (US 5.1.3): mock payment, real database writes. Nothing is actually charged.
+//   POST /api/checkout -> validate, price on the server, run the mock charge, then save
+//                         the reservation, its payment (last 4 digits only) and the charge.
+// Never log the request body: it contains card details.
 import { getUserId } from '@/utils/user'
 import {
   bookingParty,
@@ -10,6 +13,8 @@ import {
   type RoomForBooking,
 } from '@/utils/reservation-logic'
 import { authorizeMockPayment, validatePaymentInput } from '@/utils/payment-logic'
+import { partyOf } from '@/lib/liteapi/party'
+import { liveRoomPrice } from '@/lib/liteapi/rates'
 import { checkoutReservation, getCancelInsurancePremium } from '@/utils/reservations'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
@@ -67,8 +72,25 @@ export async function POST(request: Request) {
     return Response.json({ error: partyError }, { status: 400 })
   }
 
-  // 3. Price is always calculated here, never taken from the browser
-  const totalPrice = calculateTotalPrice(input.check_in, input.check_out, room.price_per_night)
+  // 3. Price is always calculated here, never taken from the browser. LiteAPI hotels are charged the
+  //    live quote for the same adults and children (the stay page's cached one when the same server
+  //    instance handles both); if LiteAPI is down or live prices are off, the stored estimate is charged instead.
+  let nightly: number | string = room.price_per_night
+  const liteapiHotelId = room.hotels?.liteapi_id
+  if (liteapiHotelId) {
+    const { adults, children } = bookingParty(input)
+    const live = await liveRoomPrice(
+      { liteapiHotelId, liteapiRoomId: room.liteapi_room_id ?? null, roomType: room.room_type ?? '' },
+      { checkIn: input.check_in, checkOut: input.check_out, ...partyOf(adults, children) }
+    )
+    if (live.status === 'sold_out') {
+      return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
+    }
+    if (live.status === 'live') {
+      nightly = live.value.perNight
+    }
+  }
+  const totalPrice = calculateTotalPrice(input.check_in, input.check_out, nightly)
 
   if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
     return Response.json({ error: 'The room does not have a valid booking price.' }, { status: 422 })
@@ -83,10 +105,12 @@ export async function POST(request: Request) {
   const { data, error } = await checkoutReservation(
     {
       account_id: userId,
-      room_id: room.id,
+      room_id: input.room_id,
       check_in: input.check_in,
       check_out: input.check_out,
       guests: input.guests,
+      adults: input.adults,
+      children: input.children
     },
     {
       total_price: totalPrice,
@@ -115,19 +139,23 @@ export async function POST(request: Request) {
   }
 
   const reservation = data.reservation
-  return Response.json({
-    reservation: {
-      id: reservation.id,
-      check_in: reservation.check_in,
-      check_out: reservation.check_out,
-      guests: reservation.guests,
-      total_price: reservation.total_price,
-      status: reservation.status,
-      has_insurance: reservation.has_insurance,
+  return Response.json(
+    {
+      reservation: {
+        id: reservation.id,
+        check_in: reservation.check_in,
+        check_out: reservation.check_out,
+        guests: reservation.guests,
+        children: reservation.children,
+        total_price: reservation.total_price,
+        status: reservation.status,
+        has_insurance: reservation.has_insurance,
+      },
+      payment: { id: data.payment.id, brand: payment.brand, last4: data.payment.card_number },
+      transaction: data.transaction,
+      insurance_premium: data.insurance_premium,
+      total_charged: data.total_charged,
     },
-    payment: { id: data.payment.id, last4: data.payment.card_number },
-    transaction: data.transaction,
-    insurance_premium: data.insurance_premium,
-    total_charged: data.total_charged,
-  }, { status: 201 })
+    { status: 201 }
+  )
 }
