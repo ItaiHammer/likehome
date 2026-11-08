@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { formatDate } from "../../_components/dates";
 import { RangeCalendar, type RangeField } from "../../_components/RangeCalendar";
 import { labelClass } from "../../_components/ui";
@@ -12,6 +12,7 @@ const fieldClass = (active: boolean, error: boolean, filled: boolean) =>
   } ${filled ? "text-ink" : "text-slate"}`;
 
 export function DateRangePicker({
+  id = "checkIn",
   checkIn,
   checkOut,
   onChange,
@@ -21,6 +22,8 @@ export function DateRangePicker({
   onDone,
   error,
 }: {
+  /** The check-in field's id, for focusing it. Pages with several pickers give each its own. */
+  id?: string;
   checkIn: string;
   checkOut: string;
   onChange: (checkIn: string, checkOut: string) => void;
@@ -36,6 +39,7 @@ export function DateRangePicker({
   const [field, setField] = useState<RangeField>("in");
   // Bumped whenever a field opens the calendar, so it jumps to that field's month.
   const [session, setSession] = useState(0);
+  const uid = useId();
   const ref = useRef<HTMLDivElement>(null);
   const inRef = useRef<HTMLButtonElement>(null);
   const outRef = useRef<HTMLButtonElement>(null);
@@ -81,43 +85,43 @@ export function DateRangePicker({
     <div ref={ref} className="relative">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <span id="check-in-label" className={labelClass}>
+          <span id={`${uid}-in-label`} className={labelClass}>
             Check-in
           </span>
           <button
             ref={inRef}
-            id="checkIn"
+            id={id}
             type="button"
             onClick={() => openField("in")}
-            aria-labelledby="check-in-label check-in-value"
+            aria-labelledby={`${uid}-in-label ${uid}-in-value`}
             aria-expanded={open && !pickingOut}
             aria-haspopup="dialog"
-            aria-describedby={error ? "dates-error" : undefined}
+            aria-describedby={error ? `${uid}-error` : undefined}
             className={fieldClass(open && !pickingOut, !!error, !!checkIn)}
           >
-            <span id="check-in-value">{checkIn ? formatDate(checkIn) : "Add date"}</span>
+            <span id={`${uid}-in-value`}>{checkIn ? formatDate(checkIn) : "Add date"}</span>
           </button>
         </div>
         <div>
-          <span id="check-out-label" className={labelClass}>
+          <span id={`${uid}-out-label`} className={labelClass}>
             Check-out
           </span>
           <button
             ref={outRef}
             type="button"
             onClick={() => openField("out")}
-            aria-labelledby="check-out-label check-out-value"
+            aria-labelledby={`${uid}-out-label ${uid}-out-value`}
             aria-expanded={open && pickingOut}
             aria-haspopup="dialog"
-            aria-describedby={error ? "dates-error" : undefined}
+            aria-describedby={error ? `${uid}-error` : undefined}
             className={fieldClass(open && pickingOut, !!error, !!checkOut)}
           >
-            <span id="check-out-value">{checkOut ? formatDate(checkOut) : "Add date"}</span>
+            <span id={`${uid}-out-value`}>{checkOut ? formatDate(checkOut) : "Add date"}</span>
           </button>
         </div>
       </div>
       {error && (
-        <p id="dates-error" role="alert" className="mt-1.5 text-sm text-danger">
+        <p id={`${uid}-error`} role="alert" className="mt-1.5 text-sm text-danger">
           {error}
         </p>
       )}

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Button, Card, Field, IconButton, Select, Stars, Tag, TextArea } from "../_components/ui";
+import { Button, Card, Field, FormError, IconButton, Select, Stars, Tag, TextArea } from "../_components/ui";
 import { InteractiveDemos } from "./InteractiveDemos";
 
 export const metadata: Metadata = {
@@ -168,7 +168,10 @@ export default function ComponentsPage() {
         </Row>
       </Group>
 
-      <Group title="Fields" usage='<Field id="email" label="Email address" error={…} />  ·  <Select id="sort" label="Sort by" options={[…]} />  ·  <TextArea id="notes" label="Notes" />'>
+      <Group
+        title="Fields"
+        usage='<Field id="email" label="Email address" error={…} />  ·  <Select id="sort" label="Sort by" options={[…]} />  ·  <TextArea id="notes" label="Notes" />  ·  <FormError message={…} signInHref={…} />'
+      >
         <div className="grid gap-6 md:grid-cols-2">
           <Field id="demo-default" label="First name" placeholder="Alex" hint="As it appears on your ID." />
           <Field id="demo-error" label="Email address" defaultValue="alex@" error="Enter a valid email address." />
@@ -184,6 +187,7 @@ export default function ComponentsPage() {
             ]}
           />
           <TextArea id="demo-textarea" label="Special requests (optional)" placeholder="Arriving late, need a crib…" className="md:col-span-2" />
+          <FormError message="Your sign-in has ended. Sign in again to save your changes." signInHref="/auth/login" className="md:col-span-2" />
         </div>
       </Group>
 

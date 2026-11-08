@@ -1,17 +1,15 @@
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
+import { getHotel, getHotelsByOwner } from "@/utils/hotels";
 import {
-  createHotel,
-  getHotel,
-  getHotelsByOwner,
-  updateHotel,
-} from "@/utils/hotels";
-import {
-  AMENITIES,
   type Listing,
   type ListingDraft,
   type ListingRoom,
 } from "@/types/listing";
+import { PROPERTY_TYPES, type PropertyType } from "@/types/listing";
+import { groupRoomRows, parseBedConfiguration, planRoomChanges, type RoomRow } from "@/lib/listing-rooms";
+import { removedPhotoPaths } from "@/lib/listing-photos";
+import { amenitiesFromTags, countryFromStored, countryToStored, mergeAmenityTags } from "@/lib/listing-storage";
 
 type HotelRow = {
   id: string;
@@ -22,88 +20,14 @@ type HotelRow = {
   city: string;
   region: string | null;
   country: string | null;
+  property_type?: string | null;
+  postal_code?: string | null;
   photo_urls: string[] | null;
   tags: string[] | null;
 };
 
-type RoomRow = {
-  id: string;
-  hotel_id: string;
-  room_type: string;
-  price_per_night: number | string;
-  capacity: number | string;
-  num_beds: number;
-  bed_size: string | null;
-  tags: string[] | null;
-  created_at: string;
-};
-
 async function getSupabase() {
   return createClient(await cookies());
-}
-
-function parseBedConfiguration(text: string) {
-  const match = text.trim().match(
-    /^(\d+)\s+(Twin XL|Twin|Double|Queen|King)\s+bed(?:s)?$/i
-  );
-
-  if (!match) {
-    return {
-      num_beds: 1,
-      bed_size: null as string | null,
-    };
-  }
-
-  const normalizedBedSize =
-    match[2].toLowerCase() === "twin xl"
-      ? "Twin XL"
-      : match[2].charAt(0).toUpperCase() +
-        match[2].slice(1).toLowerCase();
-
-  return {
-    num_beds: Number(match[1]),
-    bed_size: normalizedBedSize,
-  };
-}
-
-function roomRowToListingRoom(room: RoomRow): ListingRoom {
-  const price = Number(room.price_per_night);
-
-  return {
-    id: room.id,
-    roomType: room.room_type,
-    bedConfiguration: `${room.num_beds} ${
-      room.bed_size?.toLowerCase() ?? "bed"
-    } bed${room.num_beds === 1 ? "" : "s"}`,
-    maxGuests: Number(room.capacity),
-    roomCount: 1,
-    nightlyRateCents: Math.round(price * 100),
-    description: "",
-  };
-}
-
-function groupRooms(rows: RoomRow[]): ListingRoom[] {
-  const groups = new Map<string, ListingRoom>();
-
-  for (const row of rows) {
-    const key = [
-      row.room_type,
-      row.price_per_night,
-      row.capacity,
-      row.num_beds,
-      row.bed_size ?? "",
-    ].join("|");
-
-    const existing = groups.get(key);
-
-    if (existing) {
-      existing.roomCount += 1;
-    } else {
-      groups.set(key, roomRowToListingRoom(row));
-    }
-  }
-
-  return [...groups.values()];
 }
 
 async function getRoomsForHotel(hotelId: string) {
@@ -124,17 +48,20 @@ function toListing(hotel: HotelRow, rooms: RoomRow[]): Listing {
     ownerId: hotel.owner_id ?? "",
     name: hotel.name,
 
-    // Temporarily unsupported database fields.
-    propertyType: "hotel",
-    postalCode: "",
+    propertyType: PROPERTY_TYPES.includes(hotel.property_type as PropertyType)
+      ? (hotel.property_type as PropertyType)
+      : "hotel",
+    postalCode: hotel.postal_code ?? "",
 
     streetAddress: hotel.address,
     city: hotel.city,
     region: hotel.region ?? "",
-    country: hotel.country ?? "",
+    // Stored in search's spelling ("USA", "Canada"); the editor works with ISO codes
+    country: countryFromStored(hotel.country),
     description: hotel.description ?? "",
 
-    amenities: AMENITIES.filter((amenity) => tags.includes(amenity)),
+    // Stored as the tags search filters on ("Free Wi-Fi"); older saves used raw ids ("wifi")
+    amenities: amenitiesFromTags(tags),
 
     photos: (hotel.photo_urls ?? []).map((url, index) => ({
       id: `${hotel.id}-photo-${index}`,
@@ -142,44 +69,57 @@ function toListing(hotel: HotelRow, rooms: RoomRow[]): Listing {
       caption: "",
     })),
 
-    rooms: groupRooms(rooms),
+    rooms: groupRoomRows(rooms).map((g) => g.room),
   };
 }
 
-function draftRoomToRows(hotelId: string, room: ListingRoom) {
-  const bed = parseBedConfiguration(room.bedConfiguration);
-  const count = Math.max(1, room.roomCount);
-
-  return Array.from({ length: count }, () => ({
-    hotel_id: hotelId,
-    room_type: room.roomType,
-    price_per_night: room.nightlyRateCents / 100,
-    capacity: room.maxGuests,
-    num_beds: bed.num_beds,
-    bed_size: bed.bed_size,
-    tags: [],
-  }));
+// The rooms table rejects num_beds < 1 and capacity < 1. Checking before ANY write means a bad
+// room no longer leaves a half-saved listing (hotel updated, rooms deleted, insert rejected).
+function checkRooms(rooms: ListingRoom[]): Error | null {
+  for (const room of rooms) {
+    const bed = parseBedConfiguration(room.bedConfiguration);
+    if (!(bed.num_beds >= 1) || !(room.maxGuests >= 1) || !(room.nightlyRateCents > 0)) {
+      return new Error(`Room "${room.roomType}" needs at least 1 bed, 1 guest and a price.`);
+    }
+  }
+  return null;
 }
 
-async function replaceRooms(hotelId: string, rooms: ListingRoom[]) {
+// Saves the hotel details and its rooms in ONE database transaction (save_listing, audit F1/R3):
+// rooms are updated in place so their bookings are kept, booked rooms are never deleted, and if
+// anything fails nothing is saved (no half-saved listing). Returns the hotel id.
+async function saveListing(hotelId: string | null, draft: ListingDraft, existingTags: string[]) {
+  const roomError = checkRooms(draft.rooms);
+  if (roomError) return { id: null, error: roomError };
+
+  let rows: RoomRow[] = [];
+  if (hotelId) {
+    const current = await getRoomsForHotel(hotelId);
+    if (current.error) return { id: null, error: current.error };
+    rows = (current.data ?? []) as RoomRow[];
+  }
+
+  const hotel = {
+    name: draft.name,
+    description: draft.description,
+    address: draft.streetAddress,
+    city: draft.city,
+    region: draft.region,
+    country: countryToStored(draft.country),
+    property_type: draft.propertyType,
+    postal_code: draft.postalCode,
+    // Keep tags the editor doesn't manage (e.g. imported "EV Charging")
+    tags: mergeAmenityTags(existingTags, draft.amenities),
+    photo_urls: draft.photos.map((photo) => photo.url),
+  };
+
   const supabase = await getSupabase();
-
-  const { error: deleteError } = await supabase
-    .from("rooms")
-    .delete()
-    .eq("hotel_id", hotelId);
-
-  if (deleteError) return { error: deleteError };
-
-  const rows = rooms.flatMap((room) => draftRoomToRows(hotelId, room));
-
-  if (rows.length === 0) return { error: null };
-
-  const { error: insertError } = await supabase
-    .from("rooms")
-    .insert(rows);
-
-  return { error: insertError };
+  const { data, error } = await supabase.rpc("save_listing", {
+    p_hotel_id: hotelId,
+    p_hotel: hotel,
+    p_changes: planRoomChanges(rows, draft.rooms),
+  });
+  return { id: (data as string | null) ?? null, error };
 }
 
 export async function getMyListings(ownerId: string) {
@@ -233,58 +173,35 @@ export async function createListing(
   ownerId: string,
   draft: ListingDraft
 ) {
-  const { data, error } = await createHotel({
-    owner_id: ownerId,
-    name: draft.name,
-    description: draft.description,
-    address: draft.streetAddress,
-    city: draft.city,
-    region: draft.region,
-    country: draft.country,
-    tags: draft.amenities,
-    photo_urls: draft.photos.map((photo) => photo.url),
-  });
-
-  const hotel = Array.isArray(data) ? data[0] : data;
-
-  if (error || !hotel) {
-    return { data: null, error };
-  }
-
-  const roomsResult = await replaceRooms(hotel.id, draft.rooms);
-
-  if (roomsResult.error) {
-    return { data: null, error: roomsResult.error };
-  }
-
-  return getListing(hotel.id);
+  // The database makes the caller the owner (save_listing uses auth.uid())
+  void ownerId;
+  const { id, error } = await saveListing(null, draft, []);
+  if (error || !id) return { data: null, error };
+  return getListing(id);
 }
 
 export async function updateListing(
   id: string,
   draft: ListingDraft
 ) {
-  const { data, error } = await updateHotel(id, {
-    name: draft.name,
-    description: draft.description,
-    address: draft.streetAddress,
-    city: draft.city,
-    region: draft.region,
-    country: draft.country,
-    tags: draft.amenities,
-    photo_urls: draft.photos.map((photo) => photo.url),
-  });
+  const { data } = await getHotel(id);
+  const current = data as HotelRow | null;
+  const existingTags = (current?.tags ?? []) as string[];
 
-  const hotel = Array.isArray(data) ? data[0] : data;
+  const { error } = await saveListing(id, draft, existingTags);
+  if (error) return { data: null, error };
 
-  if (error || !hotel) {
-    return { data: null, error };
-  }
-
-  const roomsResult = await replaceRooms(id, draft.rooms);
-
-  if (roomsResult.error) {
-    return { data: null, error: roomsResult.error };
+  // Photos removed by this save: delete their uploaded files too, so they stop being public.
+  // Only after the save worked; a failed delete is logged and doesn't fail the save.
+  const removed = removedPhotoPaths(
+    current?.photo_urls ?? [],
+    draft.photos.map((photo) => photo.url),
+    current?.owner_id ?? "",
+  );
+  if (removed.length > 0) {
+    const supabase = await getSupabase();
+    const { error: removeError } = await supabase.storage.from("listing-photos").remove(removed);
+    if (removeError) console.error("Removing listing photos failed:", removeError.message);
   }
 
   return getListing(id);

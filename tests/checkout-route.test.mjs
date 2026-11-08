@@ -161,6 +161,11 @@ describe('request body', () => {
       { check_in: 'tomorrow' },
       { guests: 0 },
       { guests: '2' },
+      { children: -1 },
+      { children: 1.5 },
+      { children: '1' },
+      // every booking needs an adult
+      { guests: 2, children: 2 },
     ]
     for (const patch of cases) {
       const r = await post({ ...validBody(), ...patch })
@@ -258,6 +263,109 @@ describe('pricing & insurance', () => {
     assert.equal(r.json.total_charged, 389.97)
     assert.equal(checkoutReservation.mock.calls[0].arguments[1].has_insurance, false)
     assert.equal(checkoutReservation.mock.calls[0].arguments[1].insurance_premium, 0)
+  })
+})
+
+describe('LiteAPI hotels', () => {
+  const LITE_ROOM = {
+    ...ROOM,
+    room_type: 'Standard King Room',
+    liteapi_room_id: '2617267',
+    hotels: { liteapi_id: 'lp1897' },
+  }
+  const live = (total, nights) => ({
+    status: 'live',
+    value: { total, perNight: total / nights, offerId: 'offer-1', rateName: 'Standard King Room', boardType: 'RO', refundable: true, dueAtProperty: 0 },
+  })
+
+  beforeEach(() => {
+    roomResult = { data: { ...LITE_ROOM }, error: null }
+  })
+
+  test('priced live: the quote total is saved and charged with the server key, to the cent', async () => {
+    liveRoomPrice.mock.mockImplementation(async () => live(163.66, 3))
+    const body = validBody()
+    const r = await post(body)
+    assert.equal(r.status, 201)
+    assert.equal(createLiveReservation.mock.calls[0].arguments[0].total_price, 163.66)
+    assert.equal(createLiveReservation.mock.calls[0].arguments[0].account_id, 'user-1')
+    assert.deepEqual(recordLiveCharge.mock.calls[0].arguments, ['pay-1', 163.66])
+    assert.equal(createReservation.mock.callCount() + recordCheckoutCharge.mock.callCount(), 0)
+    assert.equal(r.json.reservation.total_price, 163.66)
+    assert.equal(r.json.transaction.amount, 163.66)
+    assert.deepEqual(liveRoomPrice.mock.calls[0].arguments, [
+      { liteapiHotelId: 'lp1897', liteapiRoomId: '2617267', roomType: 'Standard King Room' },
+      { checkIn: body.check_in, checkOut: body.check_out, adults: 2, children: [] },
+    ])
+  })
+
+  test('children are priced as children, the party the stay page quoted, and saved with the booking', async () => {
+    roomResult = { data: { ...LITE_ROOM, capacity: 4 }, error: null }
+    liveRoomPrice.mock.mockImplementation(async () => live(198.94, 3))
+    const r = await post({ ...validBody(), guests: 4, children: 2 })
+    assert.equal(r.status, 201)
+    assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1], {
+      checkIn: validBody().check_in,
+      checkOut: validBody().check_out,
+      adults: 2,
+      children: [8, 8],
+    })
+    const saved = createLiveReservation.mock.calls[0].arguments[0]
+    assert.equal(saved.guests, 4)
+    assert.equal(saved.children, 2)
+    assert.equal(saved.total_price, 198.94)
+  })
+
+  test('without a guest count, LiteAPI is asked for 2 adults', async () => {
+    liveRoomPrice.mock.mockImplementation(async () => live(163.66, 3))
+    const body = validBody()
+    delete body.guests
+    delete body.children
+    assert.equal((await post(body)).status, 201)
+    assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].adults, 2)
+    assert.deepEqual(liveRoomPrice.mock.calls[0].arguments[1].children, [])
+  })
+
+  test('sold out: 409 before the card is charged, nothing written', async () => {
+    liveRoomPrice.mock.mockImplementation(async () => ({ status: 'sold_out' }))
+    const r = await post(validBody())
+    assert.deepEqual(r, { status: 409, json: { error: 'Room is not available for those dates.' } })
+    assert.equal(writes(), 0)
+  })
+
+  test('LiteAPI unavailable: falls back to the stored price', async () => {
+    const r = await post(validBody())
+    assert.equal(r.status, 201)
+    assert.equal(liveRoomPrice.mock.callCount(), 1)
+    assert.equal(createReservation.mock.calls[0].arguments[0].total_price, 389.97)
+    assert.deepEqual(recordCheckoutCharge.mock.calls[0].arguments, ['pay-1'])
+    assert.equal(createLiveReservation.mock.callCount() + recordLiveCharge.mock.callCount(), 0)
+    assert.equal(r.json.transaction.amount, 389.97)
+  })
+
+  test('a live booking whose charge can’t be recorded is cancelled', async () => {
+    liveRoomPrice.mock.mockImplementation(async () => live(163.66, 3))
+    recordLiveCharge.mock.mockImplementation(async () => ({ data: null, error: { code: '23514' } }))
+    const r = await post(validBody())
+    assert.equal(r.status, 500)
+    assert.deepEqual(updateReservation.mock.calls[0].arguments, ['res-1', { status: 'cancelled' }])
+  })
+
+  test('a live booking that clashes with another one: 409, no payment saved', async () => {
+    liveRoomPrice.mock.mockImplementation(async () => live(163.66, 3))
+    createLiveReservation.mock.mockImplementation(async () => ({ data: null, error: { code: '23P01' } }))
+    const r = await post(validBody())
+    assert.deepEqual(r, { status: 409, json: { error: 'Room is not available for those dates.' } })
+    assert.equal(createPayment.mock.callCount(), 0)
+  })
+
+  test('an owner hotel (no liteapi_id) never calls LiteAPI', async () => {
+    for (const hotels of [null, { liteapi_id: null }]) {
+      roomResult = { data: { ...LITE_ROOM, liteapi_room_id: null, hotels }, error: null }
+      const r = await post(validBody())
+      assert.equal(r.json.reservation.total_price, 389.97)
+    }
+    assert.equal(liveRoomPrice.mock.callCount(), 0)
   })
 })
 
@@ -364,6 +472,7 @@ describe('success', () => {
       check_in: validBody().check_in,
       check_out: validBody().check_out,
       guests: 2,
+      children: 0,
     })
     assert.deepEqual(paymentDetails, {
       total_price: 389.97,
@@ -385,7 +494,9 @@ describe('success', () => {
 
   test('guests is optional (database default applies)', async () => {
     const body = validBody()
+    // A child count needs a guest or adult count to go with it
     delete body.guests
+    delete body.children
     assert.equal((await post(body)).status, 201)
     assert.equal(checkoutReservation.mock.calls[0].arguments[0].guests, undefined)
   })

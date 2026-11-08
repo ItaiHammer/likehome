@@ -30,7 +30,7 @@ const argsOfCall = () => {
 beforeEach(() => rpc.mock.resetCalls())
 
 // The names must match search_hotels.sql: PostgREST picks the function by its argument names
-test('every search_hotels argument is sent, as null when not given', async () => {
+test('every search_hotels argument but p_liteapi_ids is sent, as null when not given', async () => {
   await searchAvailableHotels({})
   assert.deepEqual(argsOfCall(), {
     p_query: null, p_city: null, p_region: null, p_country: null, p_check_in: null, p_check_out: null,
@@ -47,4 +47,13 @@ test('adults and children reach search_hotels as p_adults and p_children', async
   rpc.mock.resetCalls()
   await searchAvailableHotels({ guests: 2, adults: 2, children: 0 })
   assert.equal(argsOfCall().p_children, 0, 'no children is a real 0, not null')
+})
+
+test('LiteAPI ids are sent only when there are some', async () => {
+  await searchAvailableHotels({ liteapi_ids: ['lp1', 'lp2'] })
+  assert.deepEqual(argsOfCall().p_liteapi_ids, ['lp1', 'lp2'])
+
+  rpc.mock.resetCalls()
+  await searchAvailableHotels({ liteapi_ids: [] })
+  assert.equal('p_liteapi_ids' in argsOfCall(), false)
 })

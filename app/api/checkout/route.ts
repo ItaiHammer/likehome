@@ -1,8 +1,10 @@
 // Mock payments only. All checkout records are saved in one database transaction.
 import { getUserId } from '@/utils/user'
 import {
+  bookingParty,
   calculateTotalPrice,
   checkCapacity,
+  checkPartyLimits,
   todayInTimeZone,
   validateReservationInput,
   type RoomForBooking,
@@ -45,10 +47,11 @@ export async function POST(request: Request) {
   const input = stay.value
   const payment = card.value
 
-  // 2. Look up the room and check capacity
+  // 2. Look up the room and check capacity. `*` rather than the LiteAPI columns by name, so booking
+  //    keeps working (at stored prices) on a database without supabase/migrations/liteapi_hotels.sql.
   const { data: room, error: roomError } = await supabase
     .from('rooms')
-    .select('id, hotel_id, price_per_night, capacity')
+    .select('*, hotels(*)')
     .eq('id', input.room_id)
     .single<RoomForBooking>()
   if (roomError || !room) {
@@ -57,6 +60,11 @@ export async function POST(request: Request) {
   const capacityError = checkCapacity(input.guests, room)
   if (capacityError) {
     return Response.json({ error: capacityError }, { status: 400 })
+  }
+  // The room's own adult/child limits (e.g. adults-only), not just the total
+  const partyError = checkPartyLimits(input, room)
+  if (partyError) {
+    return Response.json({ error: partyError }, { status: 400 })
   }
 
   // 3. Price is always calculated here, never taken from the browser

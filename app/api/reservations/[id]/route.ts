@@ -3,10 +3,13 @@ import { getUserId } from '../../../../utils/user.ts'
 import { editReservation, getReservation } from '../../../../utils/reservations.ts'
 import {
   checkCapacity,
+  checkPartyLimits,
   validateReservationInput,
   type RoomForBooking,
   todayInTimeZone,
 } from '../../../../utils/reservation-logic.ts'
+import { partyOf } from '../../../../lib/liteapi/party.ts'
+import { liveRoomPrice } from '../../../../lib/liteapi/rates.ts'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
 const EXCLUSION_VIOLATION = '23P01'
@@ -91,10 +94,10 @@ export async function PATCH(
   }
   const input = result.value
 
-  // Look up the room (price, capacity, hotel)
+  // Look up the room (price, capacity, hotel). `*` keeps this working before liteapi_hotels.sql is applied.
   const { data: room, error: roomError } = await supabase
     .from('rooms')
-    .select('id, hotel_id, price_per_night, capacity')
+    .select('*, hotels(*)')
     .eq('id', input.room_id)
     .single<RoomForBooking>()
 
@@ -106,6 +109,11 @@ export async function PATCH(
   const capacityError = checkCapacity(input.guests, room)
   if (capacityError) {
     return Response.json({ error: capacityError }, { status: 400 })
+  }
+  // The room's own adult/child limits (e.g. adults-only), not just the total
+  const partyError = checkPartyLimits(input, room)
+  if (partyError) {
+    return Response.json({ error: partyError }, { status: 400 })
   }
 
   // The RPC reprices and settles the edit inside one database transaction.

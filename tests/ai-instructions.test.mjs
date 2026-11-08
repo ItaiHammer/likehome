@@ -11,6 +11,6 @@ test('AI instructions are not a module-level constant', async () => {
 
 test('AI "today" comes from the guest time zone, not UTC', async () => {
     const source = await readFile(new URL('../app/api/search/ai/route.ts', import.meta.url), 'utf8');
-    assert.match(source, /const \{ messages, tz \} = await req\.json\(\)/);
+    assert.match(source, /const \{ messages, tz \} = \(body \?\? \{\}\)/);
     assert.doesNotMatch(source, /todayUTC|in UTC/);
 });
