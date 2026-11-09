@@ -88,7 +88,7 @@ const databasePrice =
   h.min_price != null ? Number(h.min_price) : null;
 
 const databaseRoomPrices = (h.rooms ?? [])
-  .map((room: any) => Number(room.price_per_night || 0))
+  .map((room: { price_per_night?: number | string | null }) => Number(room.price_per_night || 0))
   .filter((price: number) => Number.isFinite(price) && price > 0);
 
 const databaseRoomPrice =
