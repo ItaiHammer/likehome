@@ -11,7 +11,8 @@ export function safeNext(raw: unknown): string | null {
   if (typeof raw !== 'string' || !raw.startsWith('/')) return null
   if (/[\u0000- \u007f\\]/.test(raw)) return null
   const url = new URL(raw, BASE)
-  if (url.origin !== BASE) return null
+  // Dot segments can collapse "/a/..//x" into "//x", so check the cleaned path too
+  if (url.origin !== BASE || url.pathname.startsWith('//')) return null
   const path = url.pathname.toLowerCase()
   if (NOT_A_TARGET.some((p) => path === p || path.startsWith(p.endsWith('/') ? p : p + '/'))) return null
   return url.pathname + url.search

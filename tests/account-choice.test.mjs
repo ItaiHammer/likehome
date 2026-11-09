@@ -28,6 +28,13 @@ test('safeNext refuses anything that is not a plain same-site path', () => {
   for (const raw of bad) assert.equal(safeNext(raw), null, JSON.stringify(raw))
 })
 
+test('safeNext refuses paths that only become protocol-relative after dot segments are resolved', () => {
+  for (const raw of ['/a/..//evil.com', '/.//evil.com', '/x/%2e%2e//evil.com', '/x/..//evil.com/path?q=1']) {
+    assert.equal(safeNext(raw), null, raw)
+    assert.equal(afterChoicePath(raw, 'personal'), '/', raw)
+  }
+})
+
 test('safeNext keeps the path and query of a same-site path', () => {
   assert.equal(safeNext('/listings/new?x=1'), '/listings/new?x=1')
   assert.equal(safeNext('/%2F%2Fevil.com'), '/%2F%2Fevil.com')
