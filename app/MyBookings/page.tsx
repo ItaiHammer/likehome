@@ -2,21 +2,22 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Button } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { firstName, groupBookings, type Booking } from "@/lib/bookings";
+import { firstName, groupBookings, toCancellationQuote, type Booking, type CancellationQuote } from "@/lib/bookings";
 import { getAccount } from "@/utils/accounts";
 import { getHotelsByIds, getHotels } from "@/utils/hotels";
 import { guestToday } from "@/utils/guest-today";
-import { getReservationsByAccount } from "@/utils/reservations";
+import { getCancellationQuote, getReservationsByAccount } from "@/utils/reservations";
 import { getRoomsByIds } from "@/utils/rooms";
 import { getUserId } from "@/utils/user";
 import { STAYS } from "@/app/_data/stays";
 import { AccountSidebar, type AccountTab } from "./_components/AccountSidebar";
 import { AccountTabContent, type Transaction } from "./_components/AccountTabContent";
+import { CancelBookingDialog } from "./_components/CancelBooking";
 import { PastBooking } from "./_components/PastBooking";
 import { SampleNotice } from "./_components/SampleNotice";
 import { SavedHotelsList } from "./_components/SavedHotelsList";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
-import { getSampleBookings } from "./sampleBookings";
+import { getSampleBookings, getSampleQuote } from "./sampleBookings";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
 
@@ -62,6 +63,7 @@ async function loadMyBookings() {
       city: hotel?.city ?? null,
       photoUrl: hotel?.photo_urls?.find(Boolean) ?? null,
       roomType: roomById.get(r.room_id)?.room_type ?? null,
+      unlisted: !hotel || !!hotel.liteapi_deleted_at,
     };
   });
 
@@ -96,6 +98,17 @@ const allHotels = (allHotelsRes.data ?? []).map((h) => {
 });
 
   return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, allHotels };
+
+// What cancelling each upcoming stay would cost. A quote that fails only leaves that cancel button unavailable.
+async function loadQuotes(bookings: Booking[]) {
+  const quotes = await Promise.all(
+    bookings.map(async (b) => {
+      const { data, error } = await getCancellationQuote(b.id);
+      if (error) console.error("getCancellationQuote failed:", error);
+      return [b.id, toCancellationQuote(data)] as const;
+    }),
+  );
+  return new Map<string, CancellationQuote | null>(quotes);
 }
 
 export default async function MyBookingsPage({
@@ -123,6 +136,7 @@ export default async function MyBookingsPage({
       : await loadMyBookings();
 
   const { upcoming, past, cancelled } = groupBookings(bookings, today);
+  const quotes = showSample ? new Map(upcoming.map((b) => [b.id, getSampleQuote(b, today)])) : await loadQuotes(upcoming);
   const first = firstName(name);
 
   const transactions: Transaction[] = bookings.map((b) => ({
@@ -134,84 +148,58 @@ export default async function MyBookingsPage({
   }));
 
   return (
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
-        {showSample && (
-            <SampleNotice>
-              Sample bookings, shown only on your local dev server. Take ?sample off the address to see your real bookings.
-            </SampleNotice>
-        )}
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
+      {showSample && (
+        <SampleNotice>Sample bookings, shown only on your local dev server. Take ?sample off the address to see your real bookings.</SampleNotice>
+      )}
 
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate">Your account</p>
-        <h1 className="mt-1.5 font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px]">
-          {activeTab === "saved"
-              ? "Saved hotels"
-              : activeTab === "account"
-                  ? "Your account"
-                  : first
-                      ? `Welcome back, ${first}`
-                      : "Welcome back"}
-        </h1>
-        <p className="mt-2 text-base leading-6 text-slate">
-          {activeTab === "saved"
-              ? "Places you'd like to come back to."
-              : activeTab === "account"
-                  ? "Manage your details, rewards and payments."
-                  : "Your upcoming and past reservations."}
-        </p>
+      {/* Ink, not blue or slate: lighter text on the sky strip is too faint to read */}
+      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-ink">Your account</p>
+      <h1 className="mt-2 font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px]">
+        {first ? `Welcome back, ${first}` : "Welcome back"}
+      </h1>
+      <p className="mt-2 text-lg leading-7 text-ink">Your upcoming and past reservations.</p>
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[248px_minmax(0,1fr)] lg:items-start lg:gap-8">
-          <div className="space-y-10 lg:col-start-2 lg:row-start-1 min-w-0 max-w-[800px]">
-            {activeTab === "reservations" && (
-                <>
-                  {/* Upcoming Reservations Section */}
-                  <section aria-labelledby="upcoming-heading">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 id="upcoming-heading" className="font-serif text-[28px] leading-8 font-bold text-ink">
-                        Upcoming reservations
-                      </h2>
-                      <button type="button" className="text-xs font-semibold text-blue hover:text-blue-dark transition-colors">
-                        View all &rarr;
-                      </button>
-                    </div>
+      {/* Reservations come first in the DOM (and on phones); grid placement moves the sidebar left from lg */}
+      <div className="mt-10 grid gap-10 lg:grid-cols-[248px_minmax(0,1fr)] lg:items-start lg:gap-8">
+        <div className="space-y-10 lg:col-start-2 lg:row-start-1">
+          <section aria-labelledby="upcoming-heading">
+            <h2 id="upcoming-heading" tabIndex={-1} className={`${sectionHeading} outline-none`}>
+              {upcoming.length === 1 ? "Upcoming reservation" : "Upcoming reservations"}
+            </h2>
+            {/* Above the list, so the dialog stays open with the result once the cancelled card is gone */}
+            <CancelBookingDialog returnFocusTo="upcoming-heading" sample={showSample}>
+              {upcoming.length > 0 ? (
+                <ul className="mt-4 space-y-4">
+                  {upcoming.map((booking, i) => (
+                    <li key={booking.id}>
+                      <UpcomingBooking
+                        booking={booking}
+                        href={`${PAGE_ROUTES.MY_BOOKINGS}/${booking.id}${showSample ? "?sample" : ""}`}
+                        cancellation={quotes.get(booking.id) ?? null}
+                        priority={i === 0}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <NoUpcoming firstTrip={past.length + cancelled.length === 0} />
+              )}
+            </CancelBookingDialog>
+          </section>
 
-                    {upcoming.length > 0 ? (
-                        <ul className="space-y-4">
-                          {upcoming.map((booking, i) => (
-                              <li key={booking.id}>
-                                <UpcomingBooking
-                                    booking={booking}
-                                    href={`${PAGE_ROUTES.MY_BOOKINGS}/${booking.id}${showSample ? "?sample" : ""}`}
-                                    priority={i === 0}
-                                />
-                              </li>
-                          ))}
-                        </ul>
-                    ) : (
-                        <NoUpcoming firstTrip={past.length + cancelled.length === 0} />
-                    )}
-                  </section>
-
-                  {/* Past Reservations Section */}
-                  {past.length > 0 && (
-                      <section aria-labelledby="past-heading">
-                        <div className="flex items-center justify-between mb-4">
-                          <h2 id="past-heading" className="font-serif text-[28px] leading-8 font-bold text-ink">
-                            Past reservations
-                          </h2>
-                          <button type="button" className="text-xs font-semibold text-blue hover:text-blue-dark transition-colors">
-                            View all &rarr;
-                          </button>
-                        </div>
-
-                        <ul className="space-y-3">
-                          {past.map((booking) => (
-                              <li key={booking.id}>
-                                <PastBooking booking={booking} />
-                              </li>
-                          ))}
-                        </ul>
-                      </section>
-                  )}
+          {past.length > 0 && (
+            <section aria-labelledby="past-heading">
+              <h2 id="past-heading" className={sectionHeading}>
+                Past reservations
+              </h2>
+              <ul className="mt-4 space-y-3">
+                {past.map((booking) => (
+                  <PastBooking key={booking.id} booking={booking} sample={showSample} />
+                ))}
+              </ul>
+            </section>
+          )}
 
                   {/* Cancelled Reservations Section */}
                   {cancelled.length > 0 && (

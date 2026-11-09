@@ -1,24 +1,9 @@
-"use client";
+import { Tag } from "@/app/_components/ui";
+import { formatStayDates, type Booking } from "@/lib/bookings";
+import { RebookButton } from "./RebookButton";
 
-import Link from "next/link";
-import type { Booking } from "@/lib/bookings";
-
-interface PastBookingProps {
-    booking: Booking;
-    isCancelled?: boolean;
-}
-
-function formatDate(dateStr: string) {
-    if (!dateStr) return "";
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
-    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
-}
-
-export function PastBooking({ booking, isCancelled = false }: PastBookingProps) {
-    const dates = booking.checkIn && booking.checkOut
-        ? `${formatDate(booking.checkIn)} – ${formatDate(booking.checkOut)}`
-        : booking.checkIn || "";
+export function PastBooking({ booking, sample = false }: { booking: Booking; sample?: boolean }) {
+  const cancelled = booking.status === "cancelled";
 
     return (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-edge bg-surface p-4 shadow-sm">
@@ -55,5 +40,9 @@ export function PastBooking({ booking, isCancelled = false }: PastBookingProps) 
                 </Link>
             </div>
         </div>
-    );
+        <p className="mt-0.5 text-sm text-slate">{[booking.city, formatStayDates(booking.checkIn, booking.checkOut)].filter(Boolean).join(" · ")}</p>
+      </div>
+      {!cancelled && !booking.unlisted && <RebookButton bookingId={booking.id} hotelName={booking.hotelName} sample={sample} />}
+    </li>
+  );
 }
