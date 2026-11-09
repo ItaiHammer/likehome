@@ -20,6 +20,7 @@ import { UpcomingBooking } from "./_components/UpcomingBooking";
 import { getSampleBookings, getSampleQuote } from "./sampleBookings";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
+const sectionHeading = "font-serif text-[32px] leading-10 text-ink";
 
 async function loadMyBookings() {
   const { userId } = await getUserId();
@@ -75,15 +76,28 @@ async function loadMyBookings() {
 const allHotels = (allHotelsRes.data ?? []).map((h) => {
   const matchedStay = staysByName.get(h.name.toLowerCase().trim());
 
-  const staticPrices =
-    matchedStay?.rooms
-      .map((room) => room.nightly)
-      .filter((price) => Number.isFinite(price) && price > 0) ?? [];
+const staticPrices =
+  matchedStay?.rooms
+    .map((room) => room.nightly)
+    .filter((price) => Number.isFinite(price) && price > 0) ?? [];
 
-  const staticPrice =
-    staticPrices.length > 0 ? Math.min(...staticPrices) : null;
+const staticPrice =
+  staticPrices.length > 0 ? Math.min(...staticPrices) : null;
 
-  const price = staticPrice;
+const databasePrice =
+  h.min_price != null ? Number(h.min_price) : null;
+
+const databaseRoomPrices = (h.rooms ?? [])
+  .map((room: any) => Number(room.price_per_night || 0))
+  .filter((price: number) => Number.isFinite(price) && price > 0);
+
+const databaseRoomPrice =
+  databaseRoomPrices.length > 0 ? Math.min(...databaseRoomPrices) : null;
+
+const price =
+  databasePrice != null && Number.isFinite(databasePrice) && databasePrice > 0
+    ? databasePrice
+    : databaseRoomPrice ?? staticPrice;
 
   return {
     id: h.id,
@@ -98,7 +112,7 @@ const allHotels = (allHotelsRes.data ?? []).map((h) => {
 });
 
   return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, allHotels };
-
+}
 // What cancelling each upcoming stay would cost. A quote that fails only leaves that cancel button unavailable.
 async function loadQuotes(bookings: Booking[]) {
   const quotes = await Promise.all(
@@ -156,13 +170,27 @@ export default async function MyBookingsPage({
       {/* Ink, not blue or slate: lighter text on the sky strip is too faint to read */}
       <p className="text-sm font-semibold uppercase tracking-[0.08em] text-ink">Your account</p>
       <h1 className="mt-2 font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px]">
-        {first ? `Welcome back, ${first}` : "Welcome back"}
+        {activeTab === "saved"
+          ? "Saved hotels"
+          : activeTab === "account"
+            ? "Your account"
+            : first
+              ? `Welcome back, ${first}`
+              : "Welcome back"}
       </h1>
-      <p className="mt-2 text-lg leading-7 text-ink">Your upcoming and past reservations.</p>
+      <p className="mt-2 text-lg leading-7 text-ink">
+        {activeTab === "saved"
+          ? "Places you'd like to come back to."
+          : activeTab === "account"
+            ? "Manage your details, rewards and payments."
+            : "Your upcoming and past reservations."}
+      </p>
 
       {/* Reservations come first in the DOM (and on phones); grid placement moves the sidebar left from lg */}
       <div className="mt-10 grid gap-10 lg:grid-cols-[248px_minmax(0,1fr)] lg:items-start lg:gap-8">
         <div className="space-y-10 lg:col-start-2 lg:row-start-1">
+          {activeTab === "reservations" && (
+            <>
           <section aria-labelledby="upcoming-heading">
             <h2 id="upcoming-heading" tabIndex={-1} className={`${sectionHeading} outline-none`}>
               {upcoming.length === 1 ? "Upcoming reservation" : "Upcoming reservations"}
@@ -205,7 +233,7 @@ export default async function MyBookingsPage({
                   {cancelled.length > 0 && (
                       <section aria-labelledby="cancelled-heading">
                         <div className="flex items-center justify-between mb-4">
-                          <h2 id="cancelled-heading" className="font-serif text-[28px] leading-8 font-bold text-ink">
+                          <h2 id="cancelled-heading" className={sectionHeading}>
                             Cancelled reservations
                           </h2>
                           <button type="button" className="text-xs font-semibold text-blue hover:text-blue-dark transition-colors">
@@ -216,7 +244,7 @@ export default async function MyBookingsPage({
                         <ul className="space-y-3">
                           {cancelled.map((booking) => (
                               <li key={booking.id}>
-                                <PastBooking booking={booking} isCancelled />
+                                <PastBooking booking={booking} sample={showSample} />
                               </li>
                           ))}
                         </ul>
