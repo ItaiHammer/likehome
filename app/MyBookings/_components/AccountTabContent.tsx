@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { cardErrors } from "@/lib/card";
 
 export interface PaymentMethod {
     id: string;
@@ -65,7 +66,7 @@ export function AccountTabContent({
             setLoading(true);
 
             try {
-                const response = await fetch("/api/saved-payment-methods");
+                const response = await fetch("/api/saved-payment")
                 const result = await response.json();
 
                 if (!response.ok) {
@@ -152,52 +153,24 @@ export function AccountTabContent({
         setCardError("");
     };
 
-    const validateLuhn = (num: string) => {
-        const clean = num.replace(/\D/g, "");
-        let sum = 0;
-        let shouldDouble = false;
-        for (let i = clean.length - 1; i >= 0; i--) {
-            let digit = parseInt(clean.charAt(i), 10);
-            if (shouldDouble) {
-                digit *= 2;
-                if (digit > 9) digit -= 9;
-            }
-            sum += digit;
-            shouldDouble = !shouldDouble;
-        }
-        return sum % 10 === 0;
-    };
-
     const handleAddCardSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        const validation = cardErrors(cardNumber, expiry, cvc);
+        const validationMessage =
+            validation.cardNumber ?? validation.expiry ?? validation.cvc;
+
+        if (validationMessage) {
+            setCardError(validationMessage);
+            return;
+        }
+
         const rawDigits = cardNumber.replace(/\D/g, "");
         const brand = getCardBrand(rawDigits);
-        const requiredDigits = brand === "Amex" ? 15 : 16;
-
-        if (rawDigits.length !== requiredDigits) {
-            setCardError(`Please enter a valid ${brand === "Amex" ? "15" : "16"}-digit card number.`);
-            return;
-        }
-
-        if (!validateLuhn(rawDigits)) {
-            setCardError("Invalid card number. Please check for typos.");
-            return;
-        }
-
         const [monthStr = "", yearStr = ""] = expiry.split("/");
-        const month = parseInt(monthStr, 10);
-        if (!monthStr || month < 1 || month > 12 || expiry.length < 5) {
-            setCardError("Please enter a valid expiration date (MM/YY).");
-            return;
-        }
+        const month = Number(monthStr);
 
-        const requiredCvcLen = brand === "Amex" ? 4 : 3;
-        if (cvc.length !== requiredCvcLen) {
-            setCardError(`CVC must be ${requiredCvcLen} digits for ${brand}.`);
-            return;
-        }
-
-        const response = await fetch("/api/saved-payment-methods", {
+        const response = await fetch("/api/saved-payment", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

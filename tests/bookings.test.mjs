@@ -4,6 +4,7 @@ import {
   bookingCode,
   bookingSummary,
   changeBlocker,
+  datesProblem,
   findOverlap,
   firstName,
   formatStayDates,
@@ -11,6 +12,7 @@ import {
   initials,
   money,
   overlapMessage,
+  toCancellationQuote,
 } from '../lib/bookings.ts'
 
 const TODAY = '2026-10-10'
@@ -107,6 +109,17 @@ test('a booking can be changed until check-in day (UTC)', () => {
   assert.match(changeBlocker(stay('2026-10-20', '2026-10-24', 'cancelled'), TODAY), /cancelled/)
 })
 
+test('new dates need both days, at most 30 nights, and no check-in before today', () => {
+  assert.equal(datesProblem('2026-10-20', '2026-10-24', TODAY), null)
+  assert.equal(datesProblem(TODAY, '2026-10-11', TODAY), null)
+  assert.equal(datesProblem('2026-10-20', '2026-11-19', TODAY), null)
+  assert.match(datesProblem('', '', TODAY), /Pick your new check-in and check-out/)
+  assert.match(datesProblem('2026-10-20', '', TODAY), /Pick your new check-in and check-out/)
+  assert.match(datesProblem('2026-10-24', '2026-10-20', TODAY), /Pick your new check-in and check-out/)
+  assert.match(datesProblem('2026-10-20', '2026-11-20', TODAY), /up to 30 nights/)
+  assert.match(datesProblem('2026-10-09', '2026-10-12', TODAY), /too soon/)
+})
+
 test('finds a booking at another hotel that the new dates overlap', () => {
   const others = [
     { checkIn: '2026-10-20', checkOut: '2026-10-23', hotelName: 'Casa del Sol' },
@@ -132,4 +145,32 @@ test('money shows cents only when there are some', () => {
   assert.equal(money(1234.5), '$1,234.50')
   assert.equal(money(569.97), '$569.97')
   assert.equal(money(64.4 * 15), '$966')
+})
+
+test('reads a cancellation quote, with numerics that arrive as strings', () => {
+  assert.deepEqual(
+    toCancellationQuote({
+      has_insurance: true,
+      can_cancel: true,
+      booking_paid: '456.00',
+      insurance_paid: 30,
+      refund: '456.00',
+      cancellation_fee: 0,
+      refund_points: 45600,
+    }),
+    { hasInsurance: true, canCancel: true, bookingPaid: 456, insurancePaid: 30, refund: 456, refundPoints: 45600 }
+  )
+})
+
+test('an uninsured quote refunds nothing, and missing values read as zero or false', () => {
+  assert.deepEqual(toCancellationQuote({ has_insurance: false, can_cancel: null, booking_paid: 300, refund: 0, refund_points: 0 }), {
+    hasInsurance: false,
+    canCancel: false,
+    bookingPaid: 300,
+    insurancePaid: 0,
+    refund: 0,
+    refundPoints: 0,
+  })
+  assert.equal(toCancellationQuote(null), null)
+  assert.equal(toCancellationQuote(undefined), null)
 })

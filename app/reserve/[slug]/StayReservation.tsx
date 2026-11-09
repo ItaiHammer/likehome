@@ -85,23 +85,6 @@ const formatExpiry = (v: string) => {
   return d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
 };
 
-// Luhn Algorithm Check
-const validateLuhn = (num: string) => {
-  const clean = num.replace(/\D/g, "");
-  let sum = 0;
-  let shouldDouble = false;
-  for (let i = clean.length - 1; i >= 0; i--) {
-    let digit = parseInt(clean.charAt(i), 10);
-    if (shouldDouble) {
-      digit *= 2;
-      if (digit > 9) digit -= 9;
-    }
-    sum += digit;
-    shouldDouble = !shouldDouble;
-  }
-  return sum % 10 === 0;
-};
-
 function Line({ label, value }: { label: string; value: string }) {
   return (
       <div className="flex justify-between text-slate">
@@ -462,28 +445,15 @@ export function StayReservation({
 
     // Validate only if a new card is selected
     if (selectedCardId === "new") {
-      const rawDigits = text("cardNumber").replace(/\D/g, "");
-      const brand = getCardBrand(rawDigits);
-      const requiredDigits = brand === "Amex" ? 15 : 16;
+      Object.assign(
+        next,
+        cardErrors(text("cardNumber"), text("expiry"), text("cvc"))
+      );
 
-      if (rawDigits.length !== requiredDigits) {
-        next.cardNumber = `Enter a valid ${requiredDigits}-digit card number.`;
-      } else if (!validateLuhn(rawDigits)) {
-        next.cardNumber = "Invalid card number. Please check for typos.";
+      if (!text("cardName")) {
+        next.cardName = "Enter the name on your card.";
       }
 
-      const [monthStr = "", yearStr = ""] = text("expiry").split("/");
-      const month = parseInt(monthStr, 10);
-      if (!monthStr || month < 1 || month > 12 || text("expiry").length < 5) {
-        next.expiry = "Enter a valid expiration date (MM/YY).";
-      }
-
-      const requiredCvcLen = brand === "Amex" ? 4 : 3;
-      if (text("cvc").length !== requiredCvcLen) {
-        next.cvc = `CVC must be ${requiredCvcLen} digits.`;
-      }
-
-      if (!text("cardName")) next.cardName = "Enter the name on your card.";
       if (!text("postalCode") || !/^\d{5}$/.test(text("postalCode"))) {
         next.postalCode = "Enter a valid 5-digit billing postal code.";
       }
@@ -860,19 +830,6 @@ export function StayReservation({
               ) : (
                   <p className="mt-5 border-t border-edge pt-5 text-sm text-slate">Add your dates to see the total for your stay.</p>
               )}
-            {nights > 0 ? (
-              <dl className="mt-5 space-y-3 border-t border-edge pt-5 text-sm">
-                <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
-                {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
-                {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
-                <div className="flex justify-between border-t border-edge pt-3 text-lg font-bold text-ink">
-                  <dt>Total</dt>
-                  <dd>{money(total)}</dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="mt-5 border-t border-edge pt-5 text-sm text-slate">Add your dates to see the total for your stay.</p>
-            )}
             {dueAtProperty > 0 && <p className="mt-2 text-sm text-slate">{dueAtPropertyText(dueAtProperty)}</p>}
 
             {checkIn && (
