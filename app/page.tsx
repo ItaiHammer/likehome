@@ -6,7 +6,12 @@ import { SearchExperience } from "./_components/SearchExperience";
 import { ShinyLabel } from "./_components/ShinyLabel";
 import { SkyBackground } from "./_components/SkyBackground";
 import { Button, SectionHeading, Stars, Tag } from "./_components/ui";
+import { WelcomeBanner } from "./_components/WelcomeBanner";
 import { WindowScene } from "./_components/WindowScene";
+import { redirect } from "next/navigation";
+import { choicePathFor } from "@/lib/account/choice";
+import { homeContentFor } from "@/lib/account/home";
+import { getViewer } from "@/utils/viewer";
 import { STAYS } from "./_data/stays";
 import { PAGE_ROUTES } from "@/constants/routes";
 import coastalRoom from "./_assets/coastal-room.webp";
@@ -46,7 +51,11 @@ function Arrow({ className }: { className?: string }) {
 
 const perks = ["Member prices on every stay", "Rewards on every night you book", "Change your dates or room online"];
 
-export default function Home() {
+export default async function Home() {
+  const viewer = await getViewer();
+  if (viewer.role === "unchosen") redirect(choicePathFor(null));
+  const { hero, welcome } = homeContentFor(viewer.role);
+
   return (
     <main className="flex flex-1 flex-col">
       {/* Hero: z-10 so the search bar's dropdowns open over the sections below */}
@@ -56,9 +65,12 @@ export default function Home() {
           <SkyBackground />
         </div>
         <div className="mx-auto max-w-5xl">
+          {hero.eyebrow && (
+            <p className="mb-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-ink/80">{hero.eyebrow}</p>
+          )}
           <BlurText
             as="h1"
-            text="Feel at home, anywhere."
+            text={hero.title}
             delay={120}
             stepDuration={1}
             // transform, not y: motion runs it as a browser animation, so it doesn't stutter while the page loads
@@ -67,9 +79,7 @@ export default function Home() {
             easing={[0.33, 1, 0.68, 1]}
             className="justify-center text-center font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px] lg:text-[72px] lg:leading-[80px]"
           />
-          <p className="mx-auto mt-3 max-w-xl text-center text-xl leading-7 text-ink">
-            A new favorite stay starts with a hello.
-          </p>
+          <p className="mx-auto mt-3 max-w-xl text-center text-xl leading-7 text-ink">{hero.line}</p>
 
           {/* Mykaela's search bar (fields, filters, AI mode): it sends people to /search */}
           <div className="mt-10">
@@ -79,7 +89,16 @@ export default function Home() {
       </section>
 
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-12 sm:px-6">
-        {/* Promo and feature cards sit close together, as one block */}
+        {welcome ? (
+          <WelcomeBanner title={welcome.title} body={welcome.body}>
+            {welcome.actions.map((a) => (
+              <Button key={a.href} href={a.href} variant={a.variant}>
+                {a.label}
+              </Button>
+            ))}
+          </WelcomeBanner>
+        ) : (
+        /* Promo and feature cards sit close together, as one block */
         <div className="flex flex-col gap-4">
           {/* Promo: the "Come on in." card sets the row height; the illustration
               sits beside it in its own card, portrait-sized to that height */}
@@ -158,6 +177,7 @@ export default function Home() {
             ))}
           </section>
         </div>
+        )}
 
         <PopularDestinations />
 
@@ -165,6 +185,7 @@ export default function Home() {
             One row of four from lg up. The row breaks out of the page column to use
             more of a wide screen (up to 1400px, keeping 3rem clear at each edge);
             max(100%, …) keeps it from ever getting narrower than the column. */}
+        {!welcome && (
         <section id="stays" className="scroll-mt-6">
           <SectionHeading title="Stays that feel like yours" subtitle="Handpicked places our guests keep coming back to." />
           <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:mx-[calc((100%_-_max(100%,_min(100vw_-_6rem,_1400px)))_/_2)] lg:grid-cols-4">
@@ -205,6 +226,7 @@ export default function Home() {
             ))}
           </ul>
         </section>
+        )}
       </div>
     </main>
   );
