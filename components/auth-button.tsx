@@ -1,18 +1,6 @@
-import { createClient } from "@/utils/supabase/server";
-import { cookies } from "next/headers";
 import { SignInButton } from "./sign-in-button";
-import { SignOutButton } from "./sign-out-button";
 
-export async function AuthButton() {
-    const supabase = createClient(await cookies());
-
-    // Faster than getUser()
-    const { data } = await supabase.auth.getClaims();
-    const user = data?.claims; 
-
-    return user ? (
-        <SignOutButton />
-    ) : (
-        <SignInButton/>
-    );
+// The header checks the session once (getViewer) and passes the signed-in controls in
+export function AuthButton({ signedIn, children }: { signedIn: boolean; children: React.ReactNode }) {
+  return signedIn ? children : <SignInButton />;
 }
