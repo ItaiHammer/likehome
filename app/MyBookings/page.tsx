@@ -243,9 +243,7 @@ export default async function MyBookingsPage({
 
                         <ul className="space-y-3">
                           {cancelled.map((booking) => (
-                              <li key={booking.id}>
-                                <PastBooking booking={booking} sample={showSample} />
-                              </li>
+                            <PastBooking key={booking.id} booking={booking} sample={showSample} />
                           ))}
                         </ul>
                       </section>

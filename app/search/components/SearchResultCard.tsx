@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
-import { WindowScene, type SceneVariant } from "../../_components/WindowScene";
 
 export type PriceStatus = "checking" | "needs-dates" | "sold-out" | "unavailable";
 
@@ -116,8 +115,24 @@ export function SearchResultCard({ stay, eager = false, search = "" }: { stay: H
           )}
         </div>
 
+        <div className="flex flex-1 flex-col p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-semibold text-ink">
+                {stay.name || "LikeHome stay"}
+              </h2>
+              <p className="mt-1 flex items-start gap-1.5 text-sm leading-5 text-slate">
+                <PinIcon />
+                <span>{formatLocation(stay)}</span>
+              </p>
+            </div>
+            {rating !== null && (
+              <span className="shrink-0 rounded-full bg-blue/10 px-2.5 py-1 text-xs font-semibold text-blue-dark">
+                ★ {rating.toFixed(1)}
+              </span>
+            )}
+          </div>
         {stay.description && <p className="mt-4 line-clamp-2 text-sm leading-6 text-slate">{stay.description}</p>}
-
         {stay.tags && stay.tags.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-1.5">
             {stay.tags.slice(0, 3).map((tag) => (
@@ -168,55 +183,8 @@ export function SearchResultCard({ stay, eager = false, search = "" }: { stay: H
               <span className="text-sm font-semibold text-slate">Sample stay</span>
             )}
           </div>
-
-          {stay.description && <p className="mt-4 line-clamp-2 text-sm leading-6 text-slate">{stay.description}</p>}
-
-          {stay.tags && stay.tags.length > 0 && (
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                {stay.tags.slice(0, 3).map((tag) => (
-                    <span key={tag} className="rounded-full border border-blue/20 bg-blue/5 px-2.5 py-1 text-xs font-medium text-blue-dark">
-                {tag}
-              </span>
-                ))}
-              </div>
-          )}
-
-          <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-slate">
-            {capacity !== null && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-paper/40 px-2.5 py-1.5">
-              <UsersIcon /> Up to {capacity} guests
-            </span>
-            )}
-            {availableRooms !== null && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-paper/40 px-2.5 py-1.5">
-              <BedIcon /> {availableRooms} available
-            </span>
-            )}
-          </div>
-
-          {/* Pinned to the bottom so prices line up across a row of cards */}
-          <div className="mt-auto pt-5">
-            <div className="flex items-end justify-between gap-4 border-t border-edge pt-4">
-              <div>
-                <p className="text-xs text-slate">From</p>
-                <p className="mt-0.5 text-lg font-semibold text-ink">
-                  {price !== null ? `$${price.toFixed(0)}` : "Price on request"}
-                  {price !== null && <span className="text-sm font-normal text-slate"> / night</span>}
-                </p>
-              </div>
-              {href ? (
-                  <Link
-                      href={href}
-                      className="rounded-control text-sm font-semibold text-blue hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
-                  >
-                    View stay<span className="sr-only"> at {stay.name || "this hotel"}</span>
-                  </Link>
-              ) : (
-                  <span className="text-sm font-semibold text-slate">Sample stay</span>
-              )}
-            </div>
-          </div>
         </div>
-      </article>
+      </div>
+    </article>
   );
 }
