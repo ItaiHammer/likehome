@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Serif_Display, Inter } from "next/font/google";
+import { getViewer } from "@/utils/viewer";
+import { ChoiceGate } from "./_components/ChoiceGate";
+import { DevRoleSwitch } from "./_components/DevRoleSwitch";
 import { SiteFooter, SiteHeader } from "./_components/SiteChrome";
 import { TimeZoneCookie } from "./_components/TimeZoneCookie";
 import { buttonClass } from "./_components/ui";
@@ -32,7 +35,8 @@ export const viewport: Viewport = {
 // (for both the theme and reduced motion).
 const themeScript = `(function(){var d=document.documentElement;try{var t=localStorage.getItem("theme");if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.setAttribute("data-theme",t)}catch(e){}try{localStorage.removeItem("motion");var q=matchMedia("(prefers-reduced-motion: reduce)"),f=function(){d.setAttribute("data-motion",q.matches?"reduce":"full")};f();q.addEventListener("change",f)}catch(e){}})()`;
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const viewer = await getViewer();
   return (
     <html
       lang="en"
@@ -52,9 +56,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <SiteHeader />
         {/* Wraps every page, so the skip link works without each page's <main> needing an id */}
         <div id="content" className="flex flex-1 flex-col">
-          {children}
+          {/* No Suspense around or above the gate: its redirect must happen before the page streams */}
+          {viewer.role === "unchosen" ? <ChoiceGate>{children}</ChoiceGate> : children}
         </div>
         <SiteFooter />
+        {process.env.NODE_ENV === "development" && (
+          <DevRoleSwitch devRole={viewer.devRole} realType={viewer.realType} signedIn={viewer.role !== "signed-out"} />
+        )}
       </body>
     </html>
   );
