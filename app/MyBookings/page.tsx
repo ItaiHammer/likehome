@@ -6,8 +6,7 @@ import { firstName, groupBookings, toCancellationQuote, money, type Booking, typ
 import { getAccount } from "@/utils/accounts";
 import { getHotels } from "@/utils/hotels";
 import { guestToday } from "@/utils/guest-today";
-import { getCancellationQuote, getReservationsByAccount } from "@/utils/reservations";
-import { getRoomsByIds } from "@/utils/rooms";
+import { getCancellationQuote } from "@/utils/reservations";
 import { getUserId } from "@/utils/user";
 import { STAYS } from "@/app/_data/stays";
 import { AccountSidebar, type AccountTab } from "./_components/AccountSidebar";
@@ -17,8 +16,8 @@ import { PastBooking } from "./_components/PastBooking";
 import { SampleNotice } from "./_components/SampleNotice";
 import { SavedHotelsList } from "./_components/SavedHotelsList";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
-import { getSampleBookings } from "./sampleBookings";
-import { getMyBookings, getTransactionHistory } from "@/utils/history";
+import { getSampleBookings, getSampleQuote } from "./sampleBookings";
+import { getMyBookings, getTransactionHistory, type TransactionHistoryRow } from "@/utils/history";
 import { getPointsBalance } from "@/utils/points";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
@@ -58,34 +57,10 @@ async function loadMyBookings() {
   }
 
   const bookings = bookingHistory.data ?? [];
-
-  type TransactionHistoryRow = {
-    id: string;
-    payment_id: string;
-    amount: number | string;
-    transaction_type: string;
-    status: string;
-    created_at: string;
-  };
-
+  
   const transactionRows =
     (transactionHistory.data ?? []) as TransactionHistoryRow[];
 
-  const bookings: Booking[] = rows.map((r) => {
-    const hotel = hotelById.get(r.hotel_id);
-    return {
-      id: r.id,
-      checkIn: r.check_in,
-      checkOut: r.check_out,
-      guests: r.guests ?? null,
-      status: r.status ?? "confirmed",
-      hotelName: hotel?.name ?? "Hotel no longer listed",
-      city: hotel?.city ?? null,
-      photoUrl: hotel?.photo_urls?.find(Boolean) ?? null,
-      roomType: roomById.get(r.room_id)?.room_type ?? null,
-      unlisted: !hotel || !!hotel.liteapi_deleted_at,
-    };
-  });
   const transactions: Transaction[] = transactionRows.map((row) => ({
     id: row.id,
     title:
@@ -103,7 +78,6 @@ async function loadMyBookings() {
         : row.status,
     image: null,
   }));
-
   // Create lookup map from STAYS static data for reliable price/image matching
   const staysByName = new Map(
     STAYS.map((stay) => [stay.name.toLowerCase().trim(), stay])

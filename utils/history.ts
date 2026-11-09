@@ -26,6 +26,15 @@ export type BookingHistoryRow = {
   points_refunded: number;
 };
 
+export type TransactionHistoryRow = {
+  id: string;
+  payment_id: string;
+  amount: number | string;
+  transaction_type: string;
+  status: string;
+  created_at: string;
+};
+
 export function toBooking(row: BookingHistoryRow): Booking {
   return {
     id: row.reservation_id,
