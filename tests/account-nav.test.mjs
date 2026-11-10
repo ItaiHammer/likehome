@@ -33,11 +33,13 @@ test('avatar menu link per role', () => {
   assert.equal(accountMenuLinkFor('signed-out'), null)
 })
 
-// Itai's #169: the links stay visible before a type is chosen and lead back to the choice screen
 test('every unchosen header link leads to the choice screen with that page as next', () => {
   for (const item of navItemsFor('unchosen')) {
     assert.equal(choiceRedirect(item.href, ''), choicePathFor(item.href), item.href)
   }
+})
+
+test('after choosing from an unchosen header link, Stays and your own area are kept and the other area goes home', () => {
   const landings = [
     ['/search', 'personal', '/search'],
     ['/search', 'business', '/search'],
