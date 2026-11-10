@@ -41,12 +41,15 @@ export const createClient = async (request: NextRequest) => {
   const url = request.nextUrl.clone();
 
   switch (access) {
-    case 'permitted':
+    case ROUTE_ACCESS.PERMITTED:
       return supabaseResponse
-    case 'unauthorized':
+    case ROUTE_ACCESS.UNAUTHORIZED:
       url.pathname = PAGE_ROUTES.AUTHORIZATION_ERROR;
       break;
-    case 'unauthenticated':
+    case ROUTE_ACCESS.INVALID_ACCOUNT_TYPE:
+      url.pathname = PAGE_ROUTES.ACCOUNT_TYPE;
+      break;
+    case ROUTE_ACCESS.UNAUTHENTICATED:
     default:
       url.pathname = PAGE_ROUTES.LOGIN;
   }
@@ -66,8 +69,7 @@ const getRouteAccess = async (request: NextRequest): Promise<RouteAccess> => {
   if (isBusinessRoute || isPersonalRoute) {
     if (userId) {
       const { data, error } = await getAccountType(userId);
-      // navigate to sign in/up
-      if (!data || error) return ROUTE_ACCESS.UNAUTHENTICATED;
+      if (!data || error) return ROUTE_ACCESS.INVALID_ACCOUNT_TYPE;
 
       switch (data as AccountType) {
         case 'business':
@@ -77,7 +79,7 @@ const getRouteAccess = async (request: NextRequest): Promise<RouteAccess> => {
           if (isPersonalRoute) return ROUTE_ACCESS.PERMITTED;
           return ROUTE_ACCESS.UNAUTHORIZED;
         default:
-          return ROUTE_ACCESS.UNAUTHORIZED;
+          return ROUTE_ACCESS.INVALID_ACCOUNT_TYPE;
       }
     } 
     return ROUTE_ACCESS.UNAUTHENTICATED;
