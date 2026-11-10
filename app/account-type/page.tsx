@@ -31,7 +31,12 @@ export default async function AccountTypePage({ searchParams }: PageProps<"/acco
       className={styles.card}
       contentClassName={styles.content}
     >
-      {notice && <SampleNotice label="Dev">{notice}</SampleNotice>}
+      {notice && (
+        // The project hostname is one long word, so let it break inside the box
+        <div className="[overflow-wrap:anywhere]">
+          <SampleNotice label="Dev">{notice}</SampleNotice>
+        </div>
+      )}
       <AccountTypeForm next={next} />
     </AuthCardLayout>
   );
