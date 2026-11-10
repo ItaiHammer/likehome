@@ -35,7 +35,7 @@ export async function SiteHeader() {
           <AccountPill label={label} />
           <AuthButton signedIn={viewer.role !== "signed-out"}>
             {viewer.role === "unchosen" ? (
-              <SignOutButton />
+              <SignOutButton inHeader />
             ) : (
               <AccountMenu name={viewer.name} email={viewer.email} link={accountMenuLinkFor(viewer.role)} />
             )}
