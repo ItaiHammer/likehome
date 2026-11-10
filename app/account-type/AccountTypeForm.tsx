@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import { Button, FormError } from "@/app/_components/ui";
 import type { AccountType } from "@/utils/accounts";
 import { chooseAccountType, type ChooseState } from "./actions";
@@ -38,7 +38,15 @@ export function AccountTypeForm({ next }: { next: string | null }) {
   const chosen = OPTIONS.find((o) => o.value === type)!;
 
   return (
-    <form action={action}>
+    <form
+      // Not action={action}: React resets the form after an action, which would
+      // tick Personal again while the button still says the chosen type
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startTransition(() => action(data));
+      }}
+    >
       <input type="hidden" name="next" value={next ?? ""} />
       <fieldset className={styles.options}>
         <legend className="sr-only">Account type</legend>
