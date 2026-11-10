@@ -3,6 +3,7 @@ import { LogoMark } from "./LogoMark";
 import { DesktopNav, MobileNav } from "./SiteNav";
 import { ThemeToggle } from "./ThemeToggle";
 import { AuthButton } from "@/components/auth-button";
+import { SignOutButton } from "@/components/sign-out-button";
 import { accountMenuLinkFor, navItemsFor } from "@/lib/account/nav";
 import { accountLabel } from "@/lib/account/role";
 import { getViewer } from "@/utils/viewer";
@@ -33,7 +34,11 @@ export async function SiteHeader() {
           <ThemeToggle />
           <AccountPill label={label} />
           <AuthButton signedIn={viewer.role !== "signed-out"}>
-            <AccountMenu name={viewer.name} email={viewer.email} link={accountMenuLinkFor(viewer.role)} />
+            {viewer.role === "unchosen" ? (
+              <SignOutButton />
+            ) : (
+              <AccountMenu name={viewer.name} email={viewer.email} link={accountMenuLinkFor(viewer.role)} />
+            )}
           </AuthButton>
           <MobileNav items={items} accountLabel={label} />
         </div>

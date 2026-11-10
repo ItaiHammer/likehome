@@ -33,7 +33,7 @@ export function DesktopNav({ items }: { items: NavLink[] }) {
 }
 
 // Phones: the same links behind a Menu button, in a panel under the header,
-// with the account type as the panel's first row
+// with the account type (when there is one) as the panel's first row
 export function MobileNav({ items, accountLabel }: { items: NavLink[]; accountLabel: string | null }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
@@ -62,8 +62,6 @@ export function MobileNav({ items, accountLabel }: { items: NavLink[]; accountLa
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
-
-  if (items.length === 0) return null;
 
   return (
     <div

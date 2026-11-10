@@ -27,7 +27,7 @@ export function SignOutButton() {
       onClick={signOut}
       className="rounded-control px-3 py-2 text-base font-semibold text-blue hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
     >
-      Sign Out
+      Sign out
     </button>
   );
 }
