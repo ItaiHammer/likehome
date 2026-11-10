@@ -23,6 +23,7 @@ export async function SiteHeader() {
   const viewer = await getViewer();
   const items = navItemsFor(viewer.role);
   const label = accountLabel(viewer.role);
+  const menuLink = accountMenuLinkFor(viewer.role);
   return (
     <header className="relative border-b border-edge bg-surface">
       <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
@@ -34,10 +35,10 @@ export async function SiteHeader() {
           <ThemeToggle />
           <AccountPill label={label} />
           <AuthButton signedIn={viewer.role !== "signed-out"}>
-            {viewer.role === "unchosen" ? (
-              <SignOutButton inHeader />
+            {menuLink ? (
+              <AccountMenu name={viewer.name} email={viewer.email} link={menuLink} />
             ) : (
-              <AccountMenu name={viewer.name} email={viewer.email} link={accountMenuLinkFor(viewer.role)} />
+              <SignOutButton inHeader />
             )}
           </AuthButton>
           <MobileNav items={items} accountLabel={label} />

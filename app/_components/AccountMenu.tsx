@@ -6,7 +6,7 @@ import { initials } from "@/lib/bookings";
 import type { NavLink } from "@/lib/account/nav";
 import { Popover } from "./ui";
 
-export function AccountMenu({ name, email, link }: { name: string | null; email: string | null; link: NavLink | null }) {
+export function AccountMenu({ name, email, link }: { name: string | null; email: string | null; link: NavLink }) {
   return (
     <Popover
       label="Account"
@@ -30,13 +30,11 @@ export function AccountMenu({ name, email, link }: { name: string | null; email:
               {email && <p className="truncate text-sm text-slate">{email}</p>}
             </div>
           )}
-          {link && (
-            // The header lives in the root layout, so the panel would stay open after navigating
-            <Link href={link.href} onClick={close} className="mt-2 rounded-control px-3 py-2 text-base font-medium text-ink hover:text-blue">
-              {link.label}
-            </Link>
-          )}
-          <div className={link ? "" : "mt-2"}>
+          {/* The header lives in the root layout, so the panel would stay open after navigating */}
+          <Link href={link.href} onClick={close} className="mt-2 rounded-control px-3 py-2 text-base font-medium text-ink hover:text-blue">
+            {link.label}
+          </Link>
+          <div>
             <SignOutButton />
           </div>
         </div>
