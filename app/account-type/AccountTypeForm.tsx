@@ -79,7 +79,7 @@ export function AccountTypeForm({ next }: { next: string | null }) {
 
       <p className={styles.note}>Your account type can&apos;t be changed after setup.</p>
 
-      <Button type="submit" loading={pending} className="w-full">
+      <Button type="submit" loading={pending} className="w-full h-[52px]!">
         Continue as {chosen.title}
         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
           <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
