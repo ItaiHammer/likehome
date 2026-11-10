@@ -8,9 +8,8 @@ const MY_BOOKINGS: NavLink = { label: 'My Bookings', href: PAGE_ROUTES.MY_BOOKIN
 const MY_LISTINGS: NavLink = { label: 'My Listings', href: PAGE_ROUTES.LISTINGS }
 
 export function navItemsFor(role: ViewerRole): NavLink[] {
-  if (role === 'unchosen') return []
   const own = accountMenuLinkFor(role)
-  return own ? [STAYS, own] : [STAYS]
+  return own ? [STAYS, own] : [STAYS, MY_BOOKINGS, MY_LISTINGS]
 }
 
 export function accountMenuLinkFor(role: ViewerRole): NavLink | null {
