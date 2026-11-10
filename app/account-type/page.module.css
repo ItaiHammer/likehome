@@ -3,6 +3,11 @@
     font-size: 48px;
     line-height: 52px;
   }
+
+  /* The 436px column then fits the sign-in card's 486px height, as in the frame */
+  .card .content {
+    padding-block: 9px;
+  }
 }
 
 .card h1 + p {

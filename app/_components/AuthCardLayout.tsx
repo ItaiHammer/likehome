@@ -6,11 +6,13 @@ export function AuthCardLayout({
   title,
   subtitle,
   className = "",
+  contentClassName = "",
   children,
 }: {
   title: string;
   subtitle: string;
   className?: string;
+  contentClassName?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -20,7 +22,7 @@ export function AuthCardLayout({
       </div>
 
       <section className={`${styles.authCard} ${className}`}>
-        <div className={styles.content}>
+        <div className={`${styles.content} ${contentClassName}`}>
           <h1 className={styles.title}>{title}</h1>
           <p className={styles.subtitle}>{subtitle}</p>
           {children}

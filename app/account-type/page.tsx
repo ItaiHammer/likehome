@@ -25,7 +25,12 @@ export default async function AccountTypePage({ searchParams }: PageProps<"/acco
         : `This saves to ${new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://unknown").hostname}, once and for good.`;
 
   return (
-    <AuthCardLayout title="Make LikeHome yours." subtitle="Choose your account type." className={styles.card}>
+    <AuthCardLayout
+      title="Make LikeHome yours."
+      subtitle="Choose your account type."
+      className={styles.card}
+      contentClassName={styles.content}
+    >
       {notice && <SampleNotice label="Dev">{notice}</SampleNotice>}
       <AccountTypeForm next={next} />
     </AuthCardLayout>
