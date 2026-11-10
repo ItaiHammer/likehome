@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { authLinkClass, headerAuthLinkClass } from "@/app/_components/ui";
 import { createClient } from "@/utils/supabase/client";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { authLinkClass, headerAuthLinkClass } from "./sign-in-button";
 
 export function SignOutButton({ inHeader = false }: { inHeader?: boolean }) {
   const router = useRouter();
