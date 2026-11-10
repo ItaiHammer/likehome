@@ -6,25 +6,28 @@ import type { AccountType } from "@/utils/accounts";
 import { chooseAccountType, type ChooseState } from "./actions";
 import styles from "./page.module.css";
 
-const OPTIONS: { value: AccountType; title: string; line: string; area: string; icon: React.ReactNode }[] = [
+const OPTIONS: { value: AccountType; title: string; line: string; icon: React.ReactNode }[] = [
   {
     value: "personal",
     title: "Personal",
-    line: "Book your next stay",
-    area: "My Bookings",
-    icon: <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20c0-3.3 3.1-6 7-6s7 2.7 7 6" strokeLinecap="round" strokeLinejoin="round" />,
+    line: "Book stays and manage reservations.",
+    icon: (
+      <>
+        <circle cx="12" cy="7" r="4" />
+        <path d="M4 21v-1a8 8 0 0 1 16 0v1z" />
+      </>
+    ),
   },
   {
     value: "business",
     title: "Business",
-    line: "Welcome your next guests",
-    area: "My Listings",
+    line: "Manage listings and welcome guests.",
     icon: (
-      <path
-        d="M4 8h16v11H4zM9 8V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M4 13h16M10.5 13v2h3v-2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <>
+        <rect x="3" y="7" width="18" height="14" rx="3" />
+        <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12a20 20 0 0 0 18 0" />
+        <rect x="10" y="11" width="4" height="4" rx="1" />
+      </>
     ),
   },
 ];
@@ -49,24 +52,32 @@ export function AccountTypeForm({ next }: { next: string | null }) {
               onChange={() => setType(o.value)}
               className={styles.radio}
             />
-            <svg viewBox="0 0 24 24" className={styles.icon} fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+            <svg
+              viewBox="0 0 24 24"
+              className={styles.icon}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
               {o.icon}
             </svg>
             <span className={styles.text}>
               <span className={styles.optionTitle}>{o.title}</span>
               <span>{o.line}</span>
-              <span>{o.area}</span>
             </span>
             <span className={styles.check} aria-hidden>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                <path d="M6 12.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" />
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path d="M2 6l2.5 2.5L10 3" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
           </label>
         ))}
       </fieldset>
 
-      <p className={styles.note}>Your choice is saved once and can&apos;t be changed.</p>
+      <p className={styles.note}>Your account type can&apos;t be changed after setup.</p>
 
       <Button type="submit" loading={pending} className="w-full">
         Continue as {chosen.title}

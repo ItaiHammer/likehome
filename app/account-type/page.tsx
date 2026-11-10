@@ -5,6 +5,7 @@ import { PAGE_ROUTES } from "@/constants/routes";
 import { afterChoicePath, choicePathFor, safeNext } from "@/lib/account/choice";
 import { getViewer } from "@/utils/viewer";
 import { AccountTypeForm } from "./AccountTypeForm";
+import styles from "./page.module.css";
 
 export const metadata = { title: "Choose your account type — LikeHome" };
 
@@ -24,7 +25,7 @@ export default async function AccountTypePage({ searchParams }: PageProps<"/acco
         : `This saves to ${new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://unknown").hostname}, once and for good.`;
 
   return (
-    <AuthCardLayout title="Your space." subtitle="Choose your account type.">
+    <AuthCardLayout title="Make LikeHome yours." subtitle="Choose your account type." className={styles.card}>
       {notice && <SampleNotice label="Dev">{notice}</SampleNotice>}
       <AccountTypeForm next={next} />
     </AuthCardLayout>

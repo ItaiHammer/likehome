@@ -1,3 +1,14 @@
+@media (min-width: 801px) {
+  .card h1 {
+    font-size: 48px;
+    line-height: 52px;
+  }
+}
+
+.card h1 + p {
+  margin-bottom: 20px;
+}
+
 .options {
   display: flex;
   flex-direction: column;
@@ -12,7 +23,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 14px 20px;
+  padding: 11px 15px;
   border: 1px solid var(--edge);
   border-radius: var(--radius-control);
   background: var(--surface);
@@ -28,7 +39,7 @@
 
 .option:has(.radio:checked) {
   border: 2px solid var(--blue);
-  padding: 13px 19px;
+  padding: 10px 14px;
   background: color-mix(in srgb, var(--blue) 6%, var(--surface));
 }
 
@@ -56,22 +67,22 @@
   flex-direction: column;
   min-width: 0;
   color: var(--slate);
-  font-size: 15px;
-  line-height: 22px;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .optionTitle {
   color: var(--ink);
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 24px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
 }
 
 .check {
   display: grid;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   place-items: center;
   border: 1.5px solid var(--edge);
   border-radius: 999px;
@@ -79,8 +90,8 @@
 }
 
 .check svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
 .option:has(.radio:checked) .check {
@@ -90,7 +101,7 @@
 }
 
 .note {
-  margin: 16px 0;
+  margin: 12px 0;
   color: var(--slate);
   font-size: 14px;
   line-height: 20px;
