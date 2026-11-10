@@ -23,6 +23,7 @@ export default function SignInPage() {
           </button>
         ))}
       </div>
+      <p className={styles.hint}>New to LikeHome? Choose your account type after signing in.</p>
     </AuthCardLayout>
   );
 }
