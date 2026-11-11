@@ -38,7 +38,7 @@ export async function chooseAccountType(_prev: ChooseState, formData: FormData):
     storedType = reread.error ? null : reread.data
   }
 
-  const outcome = choiceOutcome({ requested: type, errorCode: error?.code ?? null, storedType })
+  const outcome = choiceOutcome({ requested: type, error, storedType })
   if (outcome.kind === 'error') return { message: outcome.message }
   if (outcome.kind === 'already-set') {
     return {

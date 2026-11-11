@@ -96,13 +96,20 @@ test('parseAccountType', () => {
 })
 
 test('choiceOutcome', () => {
-  assert.deepEqual(choiceOutcome({ requested: 'business', errorCode: null, storedType: null }), { kind: 'continue', type: 'business' })
-  assert.deepEqual(choiceOutcome({ requested: 'personal', errorCode: 'P0001', storedType: 'personal' }), { kind: 'continue', type: 'personal' })
-  assert.deepEqual(choiceOutcome({ requested: 'business', errorCode: 'P0001', storedType: 'personal' }), { kind: 'already-set', type: 'personal' })
-  assert.deepEqual(choiceOutcome({ requested: 'business', errorCode: 'P0001', storedType: null }), { kind: 'error', message: TRY_AGAIN })
-  assert.deepEqual(choiceOutcome({ requested: 'business', errorCode: 'P0002', storedType: null }), {
+  const err = (code) => ({ code, message: 'x' })
+  assert.deepEqual(choiceOutcome({ requested: 'business', error: null, storedType: null }), { kind: 'continue', type: 'business' })
+  assert.deepEqual(choiceOutcome({ requested: 'personal', error: err('P0001'), storedType: 'personal' }), { kind: 'continue', type: 'personal' })
+  assert.deepEqual(choiceOutcome({ requested: 'business', error: err('P0001'), storedType: 'personal' }), { kind: 'already-set', type: 'personal' })
+  assert.deepEqual(choiceOutcome({ requested: 'business', error: err('P0001'), storedType: null }), { kind: 'error', message: TRY_AGAIN })
+  assert.deepEqual(choiceOutcome({ requested: 'business', error: err('P0002'), storedType: null }), {
     kind: 'error',
     message: "We couldn't find your account. Sign out and sign in again.",
   })
-  assert.deepEqual(choiceOutcome({ requested: 'business', errorCode: 'XX000', storedType: null }), { kind: 'error', message: TRY_AGAIN })
+  assert.deepEqual(choiceOutcome({ requested: 'business', error: err('XX000'), storedType: null }), { kind: 'error', message: TRY_AGAIN })
+})
+
+test('choiceOutcome: any error is a failure, even one with an empty or missing code', () => {
+  for (const error of [{ code: '', message: 'connection closed' }, { message: 'fetch failed' }, { code: null, message: 'x' }]) {
+    assert.deepEqual(choiceOutcome({ requested: 'personal', error, storedType: null }), { kind: 'error', message: TRY_AGAIN }, JSON.stringify(error))
+  }
 })

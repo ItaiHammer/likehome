@@ -133,4 +133,11 @@ describe('chooseAccountType', () => {
     saveResult = { data: null, error: { code: '42501', message: 'nope' } }
     assert.deepEqual(await chooseAccountType(null, form('business', '/x')), TRY_AGAIN)
   })
+
+  test('an error with an empty code is a failure: nothing is redirected or revalidated', async () => {
+    saveResult = { data: null, error: { code: '', message: 'connection closed' } }
+    assert.deepEqual(await chooseAccountType(null, form('personal', '/search')), TRY_AGAIN)
+    assert.equal(redirect.mock.callCount(), 0)
+    assert.equal(revalidatePath.mock.callCount(), 0)
+  })
 })

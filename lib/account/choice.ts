@@ -57,19 +57,20 @@ const TRY_AGAIN = "We couldn't save that. Try again."
 
 export function choiceOutcome({
   requested,
-  errorCode,
+  error,
   storedType,
 }: {
   requested: AccountType
-  errorCode: string | null
+  error: { code?: string | null } | null
   storedType: AccountType | null
 }): ChoiceOutcome {
-  if (!errorCode) return { kind: 'continue', type: requested }
-  if (errorCode === 'P0001') {
+  // A dropped connection can come back as an error with an empty code
+  if (!error) return { kind: 'continue', type: requested }
+  if (error.code === 'P0001') {
     if (storedType === requested) return { kind: 'continue', type: requested }
     if (storedType) return { kind: 'already-set', type: storedType }
     return { kind: 'error', message: TRY_AGAIN }
   }
-  if (errorCode === 'P0002') return { kind: 'error', message: "We couldn't find your account. Sign out and sign in again." }
+  if (error.code === 'P0002') return { kind: 'error', message: "We couldn't find your account. Sign out and sign in again." }
   return { kind: 'error', message: TRY_AGAIN }
 }
