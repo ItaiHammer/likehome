@@ -1,6 +1,7 @@
 import type { DevRole } from './dev-role'
 
-export type ViewerRole = 'signed-out' | 'unchosen' | 'personal' | 'business'
+// unknown: signed in, but the account read failed, so the type can't be told
+export type ViewerRole = 'signed-out' | 'unchosen' | 'unknown' | 'personal' | 'business'
 
 export function resolveRole({
   signedIn,
@@ -15,8 +16,7 @@ export function resolveRole({
 }): ViewerRole {
   if (!signedIn) return 'signed-out'
   if (devRole) return devRole
-  // A failed read must not trap anyone on a screen whose answer is permanent
-  if (readFailed) return 'personal'
+  if (readFailed) return 'unknown'
   return accountType ?? 'unchosen'
 }
 

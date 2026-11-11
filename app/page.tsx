@@ -54,7 +54,7 @@ const perks = ["Member prices on every stay", "Rewards on every night you book",
 export default async function Home() {
   const viewer = await getViewer();
   if (viewer.role === "unchosen") redirect(choicePathFor(null));
-  const { hero, welcome } = homeContentFor(viewer.role);
+  const { hero, welcome, signedOutSections } = homeContentFor(viewer.role);
 
   return (
     <main className="flex flex-1 flex-col">
@@ -89,7 +89,7 @@ export default async function Home() {
       </section>
 
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-12 sm:px-6">
-        {welcome ? (
+        {welcome && (
           <WelcomeBanner title={welcome.title} body={welcome.body}>
             {welcome.actions.map((a) => (
               <Button key={a.href} href={a.href} variant={a.variant}>
@@ -97,7 +97,8 @@ export default async function Home() {
               </Button>
             ))}
           </WelcomeBanner>
-        ) : (
+        )}
+        {signedOutSections && (
         /* Promo and feature cards sit close together, as one block */
         <div className="flex flex-col gap-4">
           {/* Promo: the "Come on in." card sets the row height; the illustration
@@ -185,7 +186,7 @@ export default async function Home() {
             One row of four from lg up. The row breaks out of the page column to use
             more of a wide screen (up to 1400px, keeping 3rem clear at each edge);
             max(100%, …) keeps it from ever getting narrower than the column. */}
-        {!welcome && (
+        {signedOutSections && (
         <section id="stays" className="scroll-mt-6">
           <SectionHeading title="Stays that feel like yours" subtitle="Handpicked places our guests keep coming back to." />
           <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:mx-[calc((100%_-_max(100%,_min(100vw_-_6rem,_1400px)))_/_2)] lg:grid-cols-4">

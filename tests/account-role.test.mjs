@@ -15,8 +15,9 @@ test('the override beats a failed read and the stored type', () => {
   assert.equal(resolveRole({ ...base, accountType: 'personal', devRole: 'unchosen' }), 'unchosen')
 })
 
-test('a failed read is shown as personal, so nobody is stuck on the choice screen', () => {
-  assert.equal(resolveRole({ ...base, readFailed: true }), 'personal')
+test('a failed read is unknown: not a type we guessed, and not sent to the choice screen', () => {
+  assert.equal(resolveRole({ ...base, readFailed: true }), 'unknown')
+  assert.equal(resolveRole({ ...base, accountType: 'business', readFailed: true }), 'unknown')
 })
 
 test('the stored type wins, and no type means not chosen', () => {
@@ -29,6 +30,7 @@ test('account labels', () => {
   assert.equal(accountLabel('personal'), 'Personal account')
   assert.equal(accountLabel('business'), 'Business account')
   assert.equal(accountLabel('unchosen'), null)
+  assert.equal(accountLabel('unknown'), null)
   assert.equal(accountLabel('signed-out'), null)
 })
 

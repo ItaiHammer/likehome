@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AccountTypeRetry } from "@/app/_components/AccountTypeRetry";
 import { AuthCardLayout } from "@/app/_components/AuthCardLayout";
 import { SampleNotice } from "@/app/MyBookings/_components/SampleNotice";
 import { PAGE_ROUTES } from "@/constants/routes";
@@ -14,7 +15,7 @@ export default async function AccountTypePage({ searchParams }: PageProps<"/acco
   const viewer = await getViewer();
 
   if (viewer.role === "signed-out") redirect(`${PAGE_ROUTES.LOGIN}?next=${encodeURIComponent(choicePathFor(next))}`);
-  if (viewer.role !== "unchosen") redirect(afterChoicePath(next, viewer.role));
+  if (viewer.role === "personal" || viewer.role === "business") redirect(afterChoicePath(next, viewer.role));
 
   // Development only: say where a save would land before it happens
   const notice =
@@ -31,13 +32,13 @@ export default async function AccountTypePage({ searchParams }: PageProps<"/acco
       className={styles.card}
       contentClassName={styles.content}
     >
-      {notice && (
+      {notice && viewer.role === "unchosen" && (
         // The project hostname is one long word, so let it break inside the box
         <div className="[overflow-wrap:anywhere]">
           <SampleNotice label="Dev">{notice}</SampleNotice>
         </div>
       )}
-      <AccountTypeForm next={next} />
+      {viewer.role === "unknown" ? <AccountTypeRetry /> : <AccountTypeForm next={next} />}
     </AuthCardLayout>
   );
 }

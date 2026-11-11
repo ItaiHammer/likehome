@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Serif_Display, Inter } from "next/font/google";
 import { getViewer } from "@/utils/viewer";
+import { AccountTypeRetryNotice } from "./_components/AccountTypeRetry";
 import { ChoiceGate } from "./_components/ChoiceGate";
 import { DevRoleSwitch } from "./_components/DevRoleSwitch";
 import { SiteFooter, SiteHeader } from "./_components/SiteChrome";
@@ -56,6 +57,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <SiteHeader />
         {/* Wraps every page, so the skip link works without each page's <main> needing an id */}
         <div id="content" className="flex flex-1 flex-col">
+          {viewer.role === "unknown" && <AccountTypeRetryNotice />}
           {/* No Suspense around or above the gate: its redirect must happen before the page streams */}
           {viewer.role === "unchosen" ? <ChoiceGate>{children}</ChoiceGate> : children}
         </div>

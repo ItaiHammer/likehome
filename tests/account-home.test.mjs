@@ -18,6 +18,7 @@ test("signed out keeps today's hero and has no welcome banner", () => {
   assert.deepEqual(homeContentFor('signed-out'), {
     hero: { eyebrow: null, title: 'Feel at home, anywhere.', line: 'A new favorite stay starts with a hello.' },
     welcome: null,
+    signedOutSections: true,
   })
 })
 
@@ -32,6 +33,7 @@ test('personal', () => {
         { label: 'Browse stays', href: '/search', variant: 'secondary' },
       ],
     },
+    signedOutSections: false,
   })
 })
 
@@ -50,6 +52,15 @@ test('business', () => {
         { label: 'Add property', href: '/listings/new', variant: 'secondary' },
       ],
     },
+    signedOutSections: false,
+  })
+})
+
+test('unknown (the account read failed): signed in, a neutral hero, no welcome banner and no sign-up promo', () => {
+  assert.deepEqual(homeContentFor('unknown'), {
+    hero: { eyebrow: null, title: 'Where to next?', line: 'Find a place that feels like yours.' },
+    welcome: null,
+    signedOutSections: false,
   })
 })
 

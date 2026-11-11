@@ -86,10 +86,10 @@ describe('getViewer', () => {
     assert.equal((await getViewer()).role, 'unchosen')
   })
 
-  test('a failed read is personal and logged', async () => {
+  test('a failed read is unknown and logged', async () => {
     rowResult = { data: null, error: { message: 'down' } }
     const v = await getViewer()
-    assert.equal(v.role, 'personal')
+    assert.equal(v.role, 'unknown')
     assert.equal(v.realType, null)
     assert.equal(consoleError.mock.callCount(), 1)
   })
