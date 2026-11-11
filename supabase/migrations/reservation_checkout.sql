@@ -103,16 +103,15 @@ begin
     end if;
   end if;
   
-  if v_room.price_per_night is null
-    or v_room.price_per_night::text in ('NaN', 'Infinity', '-Infinity')
-    or v_room.price_per_night::numeric <= 0 then
+  -- The route calculates the price (live LiteAPI quote or the stored rate), so trust it
+  -- and only check that it's a sane amount, same as reservation_edit.
+  if p_booking_total is null
+    or p_booking_total::text in ('NaN', 'Infinity', '-Infinity')
+    or p_booking_total <= 0 then
     raise exception 'The room does not have a valid booking price.' using errcode = 'PT409';
   end if;
 
-  v_total := round((p_check_out - p_check_in) * v_room.price_per_night::numeric, 2);
-  if v_total <= 0 or p_booking_total is distinct from v_total then
-    raise exception 'The booking price changed. Refresh and try again.' using errcode = 'PT409';
-  end if;
+  v_total := round(p_booking_total, 2);
 
   if p_has_insurance is null or p_insurance_premium is null
     or p_insurance_premium::text in ('NaN', 'Infinity', '-Infinity')
