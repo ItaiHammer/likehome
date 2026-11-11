@@ -58,8 +58,8 @@ export default async function Home() {
 
   return (
     <main className="flex flex-1 flex-col">
-      {/* Hero: z-20 so the search bar's dropdowns open over the sections below,
-          including a destination tile lifted to z-10 on hover */}
+      {/* Hero: z-20 so the search bar's dropdowns open over the sections below. Popular
+          destinations is isolated too, so its hovered tile's z-10 stays inside the carousel */}
       <section className="relative isolate z-20 px-4 pb-24 pt-14 sm:px-6 sm:pb-32 sm:pt-20">
         {/* The sky fades out toward the bottom, into the page background (either theme) */}
         <div className="absolute inset-0 -z-10 overflow-hidden [mask-image:linear-gradient(to_bottom,black_45%,transparent)]">

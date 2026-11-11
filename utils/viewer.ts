@@ -12,6 +12,7 @@ export type Viewer = {
   name: string | null
   email: string | null
   realType: AccountType | null
+  readFailed: boolean
   devRole: DevRole | null
 }
 
@@ -26,7 +27,7 @@ export const getViewer = cache(async (): Promise<Viewer> => {
   const { data, error } = await supabase.auth.getClaims()
   const claims = data?.claims
   if (error || !claims?.sub) {
-    return { role: 'signed-out', userId: null, name: null, email: null, realType: null, devRole: null }
+    return { role: 'signed-out', userId: null, name: null, email: null, realType: null, readFailed: false, devRole: null }
   }
 
   const userId = claims.sub as string
@@ -47,6 +48,7 @@ export const getViewer = cache(async (): Promise<Viewer> => {
     name: firstName(account?.full_name, meta.full_name, meta.name),
     email: typeof claims.email === 'string' ? claims.email : null,
     realType,
+    readFailed: Boolean(readError),
     devRole,
   }
 })

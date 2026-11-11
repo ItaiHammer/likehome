@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { resolveRole, accountLabel } from '../lib/account/role.ts'
-import { readDevRole, DEV_ROLE_COOKIE } from '../lib/account/dev-role.ts'
+import { readDevRole, realTypeLabel, DEV_ROLE_COOKIE } from '../lib/account/dev-role.ts'
 
 const base = { signedIn: true, accountType: null, readFailed: false, devRole: null }
 
@@ -39,4 +39,11 @@ test('the dev cookie only counts in development, with an exact value', () => {
   for (const v of ['unchosen', 'personal', 'business']) assert.equal(readDevRole(v, 'development'), v)
   for (const env of ['production', 'test', undefined]) assert.equal(readDevRole('personal', env), null)
   for (const v of [undefined, 'admin', 'Personal', ' personal', '']) assert.equal(readDevRole(v, 'development'), null)
+})
+
+test('the dev switch tells a failed read apart from no type', () => {
+  assert.equal(realTypeLabel({ signedIn: false, realType: null, readFailed: false }), 'Sign in first')
+  assert.equal(realTypeLabel({ signedIn: true, realType: null, readFailed: false }), 'Real: not set')
+  assert.equal(realTypeLabel({ signedIn: true, realType: 'business', readFailed: false }), 'Real: business')
+  assert.equal(realTypeLabel({ signedIn: true, realType: null, readFailed: true }), "Real: couldn't load")
 })

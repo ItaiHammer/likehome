@@ -1,4 +1,4 @@
-import type { DevRole } from "@/lib/account/dev-role";
+import { realTypeLabel, type DevRole } from "@/lib/account/dev-role";
 import type { AccountType } from "@/utils/accounts";
 import { setDevRole } from "./dev-role-actions";
 
@@ -11,7 +11,17 @@ const CHOICES = [
 
 // Development only (the root layout renders it only then): views the app as each account role
 // through a cookie, without saving anything
-export function DevRoleSwitch({ devRole, realType, signedIn }: { devRole: DevRole | null; realType: AccountType | null; signedIn: boolean }) {
+export function DevRoleSwitch({
+  devRole,
+  realType,
+  readFailed,
+  signedIn,
+}: {
+  devRole: DevRole | null;
+  realType: AccountType | null;
+  readFailed: boolean;
+  signedIn: boolean;
+}) {
   const current = devRole ?? "real";
   return (
     <form
@@ -35,7 +45,7 @@ export function DevRoleSwitch({ devRole, realType, signedIn }: { devRole: DevRol
           </button>
         ))}
       </div>
-      <p className="mt-2">{signedIn ? `Real: ${realType ?? "not set"}` : "Sign in first"}</p>
+      <p className="mt-2">{realTypeLabel({ signedIn, realType, readFailed })}</p>
     </form>
   );
 }

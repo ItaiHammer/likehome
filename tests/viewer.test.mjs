@@ -63,7 +63,7 @@ afterEach(() => {
   process.env.NODE_ENV = oldEnv
 })
 
-const SIGNED_OUT = { role: 'signed-out', userId: null, name: null, email: null, realType: null, devRole: null }
+const SIGNED_OUT = { role: 'signed-out', userId: null, name: null, email: null, realType: null, readFailed: false, devRole: null }
 
 describe('getViewer', () => {
   test('a session error or a token without sub is signed out, with no account read', async () => {
@@ -76,7 +76,7 @@ describe('getViewer', () => {
 
   test('no type yet is unchosen, and the read is one select on the right row', async () => {
     assert.deepEqual(await getViewer(), {
-      role: 'unchosen', userId: 'user-1', name: 'Ada Lovelace', email: 'ada@example.com', realType: null, devRole: null,
+      role: 'unchosen', userId: 'user-1', name: 'Ada Lovelace', email: 'ada@example.com', realType: null, readFailed: false, devRole: null,
     })
     assert.deepEqual(selects, [{ table: 'accounts', cols: 'account_type, full_name', col: 'id', id: 'user-1' }])
   })
@@ -91,6 +91,7 @@ describe('getViewer', () => {
     const v = await getViewer()
     assert.equal(v.role, 'unknown')
     assert.equal(v.realType, null)
+    assert.equal(v.readFailed, true)
     assert.equal(consoleError.mock.callCount(), 1)
   })
 
@@ -135,6 +136,7 @@ describe('getViewer', () => {
     const v = await getViewer()
     assert.equal(v.role, 'personal')
     assert.equal(v.realType, null)
+    assert.equal(v.readFailed, true)
   })
 
   for (const env of ['production', 'test']) {

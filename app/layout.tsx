@@ -63,7 +63,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         </div>
         <SiteFooter />
         {process.env.NODE_ENV === "development" && (
-          <DevRoleSwitch devRole={viewer.devRole} realType={viewer.realType} signedIn={viewer.role !== "signed-out"} />
+          <DevRoleSwitch devRole={viewer.devRole} realType={viewer.realType} readFailed={viewer.readFailed} signedIn={viewer.role !== "signed-out"} />
         )}
       </body>
     </html>

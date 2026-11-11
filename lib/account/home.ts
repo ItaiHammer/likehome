@@ -1,4 +1,5 @@
 import { PAGE_ROUTES } from '@/constants/routes'
+import type { ViewerRole } from './role'
 
 export type HomeAction = { label: string; href: string; variant: 'primary' | 'secondary' }
 
@@ -9,7 +10,7 @@ export type HomeContent = {
   signedOutSections: boolean
 }
 
-export type HomeRole = 'signed-out' | 'unknown' | 'personal' | 'business'
+export type HomeRole = Exclude<ViewerRole, 'unchosen'>
 
 const CONTENT: Record<HomeRole, HomeContent> = {
   'signed-out': {
