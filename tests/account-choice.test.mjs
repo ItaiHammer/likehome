@@ -35,6 +35,14 @@ test('safeNext refuses paths that only become protocol-relative after dot segmen
   }
 })
 
+test('safeNext treats a value the URL parser rejects as no next, instead of throwing', () => {
+  for (const raw of ['//', '///', '//:99999', '//[', '//%zz', '//a:b@']) {
+    assert.equal(safeNext(raw), null, raw)
+    assert.equal(afterChoicePath(raw, 'business'), '/', raw)
+    assert.equal(choiceRedirect('/auth/login', `next=${encodeURIComponent(raw)}`), null, raw)
+  }
+})
+
 test('safeNext keeps the path and query of a same-site path', () => {
   assert.equal(safeNext('/listings/new?x=1'), '/listings/new?x=1')
   assert.equal(safeNext('/%2F%2Fevil.com'), '/%2F%2Fevil.com')

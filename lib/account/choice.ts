@@ -10,7 +10,12 @@ const STAY_PUT = ['/account-type', '/auth/error', '/auth/z/error']
 export function safeNext(raw: unknown): string | null {
   if (typeof raw !== 'string' || !raw.startsWith('/')) return null
   if (/[\u0000- \u007f\\]/.test(raw)) return null
-  const url = new URL(raw, BASE)
+  let url: URL
+  try {
+    url = new URL(raw, BASE)
+  } catch {
+    return null
+  }
   // Dot segments can collapse "/a/..//x" into "//x", so check the cleaned path too
   if (url.origin !== BASE || url.pathname.startsWith('//')) return null
   const path = url.pathname.toLowerCase()
