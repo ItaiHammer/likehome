@@ -40,6 +40,16 @@ export async function POST(request: Request) {
   if (typeof hasInsurance !== 'boolean') {
     return Response.json({ error: 'has_insurance must be true or false.' }, { status: 400 })
   }
+
+  // Extract and validate optional points (omission or negative defaults to 0)
+  let pointsToRedeem = 0
+  if (inputBody.points !== undefined) {
+    if (typeof inputBody.points !== 'number' || !Number.isInteger(inputBody.points)) {
+      return Response.json({ error: 'points must be an integer.' }, { status: 400 })
+    }
+    pointsToRedeem = Math.max(0, inputBody.points)
+  }
+
   const timeZone = typeof inputBody.time_zone === 'string' ? inputBody.time_zone : null
   const stay = validateReservationInput(body, todayInTimeZone(timeZone))
   if (!stay.ok) {
@@ -122,7 +132,8 @@ export async function POST(request: Request) {
       exp_year: payment.expYear,
     },
     {
-      time_zone: timeZone
+      time_zone: timeZone,
+      points: pointsToRedeem,
     }
   )
   if (error) {

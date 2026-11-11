@@ -473,6 +473,7 @@ describe('success', () => {
       guests: 2,
       adults: 2,
       children: 0,
+      status: undefined
     })
     assert.deepEqual(paymentDetails, {
       total_price: 389.97,
@@ -483,6 +484,7 @@ describe('success', () => {
       exp_year: 2030,
     })
     assert.deepEqual(options, {
+      points: 0,
       time_zone: null,
     })
   })
@@ -545,6 +547,38 @@ describe('guest time zone', () => {
     const r = await post({ ...validBody(), ...sameDayStay })
     assert.equal(r.status, 400)
     assert.equal(r.json.error, 'check_in cannot be in the past.')
+    assert.equal(checkoutCalls(), 0)
+  })
+})
+
+describe('checkout points redemption', () => {
+  test('passes optional points to checkoutReservation', async () => {
+    const body = { ...validBody(), points: 1500 }
+    const r = await post(body)
+    assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 1500)
+  })
+
+  test('defaults points to 0 when omitted', async () => {
+    const body = validBody()
+    delete body.points
+    const r = await post(body)
+    assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 0)
+  })
+
+  test('treats negative points as 0', async () => {
+    const r = await post({ ...validBody(), points: -500 })
+    assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 0)
+  })
+
+  test('400 when points is not an integer', async () => {
+    for (const points of ['1500', 1500.5, true, {}]) {
+      const r = await post({ ...validBody(), points })
+      assert.equal(r.status, 400)
+      assert.equal(r.json.error, 'points must be an integer.')
+    }
     assert.equal(checkoutCalls(), 0)
   })
 })

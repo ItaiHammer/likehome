@@ -65,12 +65,14 @@ export async function PATCH(
   }
 
   const changes = body as Record<string, unknown>
-  const paymentMethod = changes.payment_method === undefined
-    ? 'card'
-    : changes.payment_method
 
-  if (paymentMethod !== 'card' && paymentMethod !== 'points') {
-    return Response.json({ error: 'payment_method must be card or points.' }, { status: 400 })
+  // Extract and validate optional points (omission or negative defaults to 0)
+  let pointsToRedeem = 0
+  if (changes.points !== undefined) {
+    if (typeof changes.points !== 'number' || !Number.isInteger(changes.points)) {
+      return Response.json({ error: 'points must be an integer.' }, { status: 400 })
+    }
+    pointsToRedeem = Math.max(0, changes.points)
   }
 
   const timeZone = typeof changes.time_zone === 'string'
@@ -132,7 +134,6 @@ export async function PATCH(
   // Price. A change is quoted for its adults and children, as the change page priced it.
   const { adults, children } = bookingParty(input)
   let nightly: number | string = room.price_per_night
-  let pricedLive = false
   if (room.hotels?.liteapi_id) {
     const live = await liveRoomPrice(
       { liteapiHotelId: room.hotels.liteapi_id, liteapiRoomId: room.liteapi_room_id ?? null, roomType: room.room_type ?? '' },
@@ -143,7 +144,6 @@ export async function PATCH(
     }
     if (live.status === 'live') {
       nightly = live.value.perNight
-      pricedLive = true
     }
   }
   const totalPrice = calculateTotalPrice(input.check_in, input.check_out, nightly)
@@ -161,7 +161,7 @@ export async function PATCH(
       total_price: totalPrice
     },
     {
-      payment_method: paymentMethod,
+      points: pointsToRedeem,
       time_zone: timeZone,
       expected: {
         room_id: curReservation.room_id,

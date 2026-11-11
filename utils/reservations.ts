@@ -148,7 +148,7 @@ export async function editReservation(
     total_price: number
   },
   options: {
-    payment_method: 'card' | 'points'
+    points?: number
     time_zone: string | null
     expected: {
       room_id: string
@@ -171,7 +171,7 @@ export async function editReservation(
     p_adults: updates.adults ?? null,
     p_children: updates.children ?? null,
     p_total_price: updates.total_price,
-    p_payment_method: options.payment_method,
+    p_points: options.points ?? 0,
     p_time_zone: options.time_zone,
     p_expected: options.expected,
   })
@@ -243,6 +243,7 @@ export async function checkoutReservation(
   },
   options: {
     time_zone: string | null
+    points?: number
   }
 ) {
   const cookieStore = await cookies()
@@ -260,6 +261,7 @@ export async function checkoutReservation(
     p_status: reservation.status ?? null,
     // options
     p_time_zone: options.time_zone,
+    p_points: options.points ?? 0,
     // payment
     p_has_insurance: payment.has_insurance,
     p_booking_total: payment.total_price,

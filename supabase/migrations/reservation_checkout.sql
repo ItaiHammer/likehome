@@ -15,6 +15,7 @@ create or replace function public.checkout_reservation(
   p_card_last4 text,
   p_exp_month integer,
   p_exp_year integer,
+  p_points integer,
   p_status text
 ) returns jsonb
 language plpgsql security definer
@@ -26,9 +27,17 @@ declare
   v_reservation public.reservations%rowtype;
   v_payment public.payments%rowtype;
   v_transaction public.transactions%rowtype;
-  v_cancel_insurance_amount numeric := 0;
   v_today date;
+  v_cancel_insurance_amount numeric := 0;
   v_total numeric;
+  v_checkout_total numeric;
+  v_user_points_balance integer := 0;
+  v_requested_points integer;
+  v_points_to_redeem integer := 0;
+  v_points_in_dollars numeric := 0;
+  v_stay_points_in_dollars numeric := 0;
+  v_insurance_points_in_dollars numeric := 0;
+  v_card_charge_amount numeric;
 begin
   if (select auth.uid()) is null then
     raise exception 'You must be logged in to book.' using errcode = 'PT401';
@@ -113,12 +122,35 @@ begin
     raise exception 'Invalid insurance premium.' using errcode = 'PT400';
   end if;
 
+  -- Card validation always runs to ensure a valid payment method is on record
   if p_card_last4 is null or p_card_last4 !~ '^[0-9]{4}$'
     or p_exp_month is null or p_exp_month not between 1 and 12
     or p_exp_year is null or p_exp_year not between extract(year from v_today) and 9999 
     or (p_exp_year = extract(year from v_today) and p_exp_month < extract(month from v_today)) then
     raise exception 'Invalid saved card details.' using errcode = 'PT400';
   end if;
+
+  -- Total checkout cost including stay and insurance
+  v_checkout_total := round(v_total + coalesce(p_insurance_premium, 0), 2);
+
+  -- Points calculation covering stay and insurance
+  v_requested_points := greatest(coalesce(p_points, 0), 0);
+  if v_requested_points > 0 then
+    select coalesce(pb.balance, 0) into v_user_points_balance
+    from public.points_balances pb
+    where pb.account_id = p_account_id;
+
+    v_points_to_redeem := least(v_requested_points, v_user_points_balance, public.dollars_to_points(v_checkout_total));
+    if v_points_to_redeem > 0 then
+      v_points_in_dollars := public.points_to_dollars(v_points_to_redeem);
+      -- Splits points into stay first and then insurance if any remaining (insurance never refunded)
+      v_stay_points_in_dollars := least(v_points_in_dollars, v_total);
+      v_insurance_points_in_dollars := least(v_points_in_dollars - v_stay_points_in_dollars, coalesce(p_insurance_premium, 0));
+    end if;
+  end if;
+
+  v_card_charge_amount := round(v_total - v_stay_points_in_dollars, 2);
+  v_cancel_insurance_amount := round(coalesce(p_insurance_premium, 0) - v_insurance_points_in_dollars, 2);
 
   begin
     insert into public.reservations (
@@ -140,13 +172,20 @@ begin
   ) returning * into v_payment;
 
   insert into public.transactions (payment_id, amount, transaction_type, status)
-  values (v_payment.id, v_total, 'charge', 'completed')
+  values (v_payment.id, v_card_charge_amount, 'charge', 'completed')
   returning * into v_transaction;
 
   if p_has_insurance then
     insert into public.transactions (payment_id, amount, transaction_type, status)
-    values (v_payment.id, p_insurance_premium, 'insurance', 'completed')
-    returning amount into v_cancel_insurance_amount;
+    values (v_payment.id, v_cancel_insurance_amount, 'insurance', 'completed');
+  end if;
+
+  if v_points_to_redeem > 0 then
+    insert into public.points_transactions (
+      account_id, reservation_id, type, points, note
+    ) values (
+      p_account_id, v_reservation.id, 'redeem', -v_points_to_redeem, 'Reservation checkout redemption'
+    );
   end if;
 
   return jsonb_build_object(
@@ -164,11 +203,11 @@ end;
 $$;
 
 revoke execute on function public.checkout_reservation(
-  uuid, uuid, date, date, integer, integer, integer, text, boolean, numeric, numeric, text, integer, integer, text
+  uuid, uuid, date, date, integer, integer, integer, text, boolean, numeric, numeric, text, integer, integer, integer, text
 ) from public, anon;
 
 grant execute on function public.checkout_reservation(
-  uuid, uuid, date, date, integer, integer, integer, text, boolean, numeric, numeric, text, integer, integer, text
+  uuid, uuid, date, date, integer, integer, integer, text, boolean, numeric, numeric, text, integer, integer, integer, text
 ) to authenticated;
 
 commit;

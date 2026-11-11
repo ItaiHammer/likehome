@@ -230,36 +230,6 @@ test('returns 400 if guest count exceeds room capacity', async () => {
   assert.equal(mockEditCalls.length, 0)
 })
 
-test('returns 400 for an invalid payment method', async () => {
-  for (const payment_method of ['cash', null]) {
-    const req = createMockRequest({ payment_method })
-    const res = await PATCH(req, {
-      params: Promise.resolve({ id: 'res-1' }),
-    })
-
-    assert.equal(res.status, 400)
-  }
-  assert.equal(mockEditCalls.length, 0)
-})
-
-test('passes an explicit card or points selection to editReservation', async () => {
-  for (const payment_method of ['card', 'points']) {
-    const req = createMockRequest({
-      check_out: getDateFromToday(6),
-      payment_method,
-    })
-    const res = await PATCH(req, {
-      params: Promise.resolve({ id: 'res-1' }),
-    })
-
-    assert.equal(res.status, 200)
-    const call = mockEditCalls[mockEditCalls.length - 1]
-    assert.equal(call.options.payment_method, payment_method)
-  }
-  assert.equal(mockEditCalls.length, 2)
-  assert.equal(liveRoomPrice.mock.callCount(), 0)
-})
-
 test('successfully edits a partial request using the original snapshot', async () => {
   const req = createMockRequest({
     check_out: getDateFromToday(6),
@@ -291,7 +261,7 @@ test('successfully edits a partial request using the original snapshot', async (
       total_price: 400
     },
     options: {
-      payment_method: 'card',
+      points: 0,
       time_zone: null,
       expected: {
         room_id: 'room-1',
@@ -604,4 +574,41 @@ test('a children change alone is not "unchanged"', async () => {
   assert.equal(res.status, 200)
   assert.equal((await res.json()).reservation.total_price, 270)
   assert.equal(liveRoomPrice.mock.callCount(), 1)
+})
+
+test('returns 400 when points is not an integer', async () => {
+  for (const points of ['1000', 100.5, true, {}]) {
+    const req = createMockRequest({ points })
+    const res = await PATCH(req, {
+      params: Promise.resolve({ id: 'res-1' }),
+    })
+    assert.equal(res.status, 400)
+    const json = await res.json()
+    assert.equal(json.error, 'points must be an integer.')
+  }
+  assert.equal(mockEditCalls.length, 0)
+})
+
+test('treats negative points as 0 and passes explicit points to editReservation', async () => {
+  const cases = [
+    [1500, 1500],
+    [-200, 0],
+    [undefined, 0],
+  ]
+  for (const [inputPoints, expectedPoints] of cases) {
+    const body = { check_out: getDateFromToday(6) }
+    if (inputPoints !== undefined) {
+      body.points = inputPoints
+    }
+    const req = createMockRequest(body)
+    const res = await PATCH(req, {
+      params: Promise.resolve({ id: 'res-1' }),
+    })
+
+    assert.equal(res.status, 200)
+    const call = mockEditCalls[mockEditCalls.length - 1]
+    assert.equal(call.options.points, expectedPoints)
+  }
+  assert.equal(mockEditCalls.length, 3)
+  assert.equal(liveRoomPrice.mock.callCount(), 0)
 })

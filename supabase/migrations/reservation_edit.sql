@@ -13,7 +13,7 @@ create or replace function public.edit_reservation(
   p_adults integer,
   p_children integer,
   p_total_price numeric,
-  p_payment_method text,
+  p_points integer,
   p_time_zone text,
   p_expected jsonb
 ) returns setof public.reservations
@@ -30,8 +30,11 @@ declare
   v_difference numeric;
   v_paid numeric;
   v_payment_id uuid;
-  v_points integer;
-  v_balance integer;
+  v_user_balance integer := 0;
+  v_requested_points integer;
+  v_points_to_redeem integer := 0;
+  v_points_in_dollars numeric := 0;
+  v_card_charge_amount numeric;
 begin
   if v_user_id is null then
     raise exception 'You must be logged in to change a reservation.'
@@ -88,13 +91,6 @@ begin
   ) then
     raise exception 'This booking changed. Reload it before saving again.'
       using errcode = 'PT409';
-  end if;
-
-  -- validate payment method
-  if p_payment_method is null
-    or p_payment_method not in ('card', 'points') then
-    raise exception 'payment_method must be card or points.'
-      using errcode = 'PT400';
   end if;
 
   -- validate check in/out
@@ -221,40 +217,37 @@ begin
   -- Price Adjustments
   -- Edit increases price
   if v_difference > 0 then
-    -- User pays price increase with points
-    if p_payment_method = 'points' then
-      v_points := public.dollars_to_points(v_difference);
-
-      insert into public.points_balances (account_id)
-      values (v_user_id)
-      on conflict (account_id) do nothing;
-
-      -- Serializes redemptions across different bookings on this account.
-      select pb.balance into v_balance
+    -- Points used first if edit increases price
+    v_requested_points := greatest(coalesce(p_points, 0), 0);
+    if v_requested_points > 0 then
+      select coalesce(pb.balance, 0) into v_user_balance
       from public.points_balances pb
-      where pb.account_id = v_user_id
-      for update;
+      where pb.account_id = v_user_id;
 
-      if v_balance < v_points then
-        raise exception 'Insufficient points for this price increase.'
-          using errcode = 'PT402';
+      v_points_to_redeem := least(v_requested_points, v_user_balance, public.dollars_to_points(v_difference));
+      if v_points_to_redeem > 0 then
+        v_points_in_dollars := public.points_to_dollars(v_points_to_redeem);
       end if;
+    end if;
 
+    v_card_charge_amount := round(v_difference - v_points_in_dollars, 2);
+
+    if v_points_to_redeem > 0 then
       insert into public.points_transactions (
         account_id, reservation_id, type, points, note
       )
       values (
-        v_user_id, p_reservation_id, 'redeem', -v_points,
-        'Reservation price increase'
+        v_user_id, p_reservation_id, 'redeem', -v_points_to_redeem, 'Reservation price increase points redemption'
       );
-      -- The existing ledger trigger updates the balance.
-    else
-      -- Record a mock charge against the existing payment
+    end if;
+
+    -- Record mock charge for remaining balance using existing payment 
+    if v_card_charge_amount > 0 then
       insert into public.transactions (
         payment_id, amount, transaction_type, status
       )
       values (
-        v_payment_id, v_difference, 'charge', 'completed'
+        v_payment_id, v_card_charge_amount, 'charge', 'completed'
       );
     end if;
   -- Edit decreases price
@@ -276,11 +269,11 @@ end;
 $$;
 
 revoke execute on function public.edit_reservation(
-  uuid, uuid, date, date, integer, integer, integer, numeric, text, text, jsonb
+  uuid, uuid, date, date, integer, integer, integer, numeric, integer, text, jsonb
 ) from public, anon;
 
 grant execute on function public.edit_reservation(
-  uuid, uuid, date, date, integer, integer, integer, numeric, text, text, jsonb
+  uuid, uuid, date, date, integer, integer, integer, numeric, integer, text, jsonb
 ) to authenticated;
 
 commit;
