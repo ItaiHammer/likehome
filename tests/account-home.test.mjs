@@ -24,7 +24,7 @@ test("signed out keeps today's hero and has no welcome banner", () => {
 
 test('personal', () => {
   assert.deepEqual(homeContentFor('personal'), {
-    hero: { eyebrow: 'Your next chapter', title: 'Welcome back. Where to next?', line: 'Find a place that feels like yours.' },
+    hero: { eyebrow: 'Your next chapter', title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: {
       title: 'Plans, in one place.',
       body: 'Your bookings and favorites are always close by.',
@@ -41,7 +41,7 @@ test('business', () => {
   assert.deepEqual(homeContentFor('business'), {
     hero: {
       eyebrow: 'Your places',
-      title: 'Welcome back. Ready for your next guests?',
+      title: 'Ready for your next guests?',
       line: 'Keep your listings fresh and your calendar full.',
     },
     welcome: {
@@ -67,5 +67,11 @@ test('unknown (the account read failed): signed in, a neutral hero, no welcome b
 test('no signed-in state links to sign-in', () => {
   for (const role of ['personal', 'business']) {
     for (const a of homeContentFor(role).welcome.actions) assert.ok(!a.href.startsWith('/auth/'), `${role} ${a.href}`)
+  }
+})
+
+test('no hero says "Welcome back", so it reads right for a brand-new account too', () => {
+  for (const role of ['signed-out', 'unknown', 'personal', 'business']) {
+    assert.ok(!/welcome back/i.test(homeContentFor(role).hero.title), role)
   }
 })

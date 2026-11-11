@@ -23,7 +23,7 @@ const CONTENT: Record<HomeRole, HomeContent> = {
     signedOutSections: false,
   },
   personal: {
-    hero: { eyebrow: 'Your next chapter', title: 'Welcome back. Where to next?', line: 'Find a place that feels like yours.' },
+    hero: { eyebrow: 'Your next chapter', title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: {
       title: 'Plans, in one place.',
       body: 'Your bookings and favorites are always close by.',
@@ -37,7 +37,7 @@ const CONTENT: Record<HomeRole, HomeContent> = {
   business: {
     hero: {
       eyebrow: 'Your places',
-      title: 'Welcome back. Ready for your next guests?',
+      title: 'Ready for your next guests?',
       line: 'Keep your listings fresh and your calendar full.',
     },
     welcome: {
