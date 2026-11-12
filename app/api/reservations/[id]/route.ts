@@ -1,6 +1,6 @@
-//   PATCH /api/reservations/[id]  -> update a reservation for the logged-in user
+//   PATCH /api/reservations/[id] -> update a reservation for the logged-in user
 import { getUserId } from '../../../../utils/user.ts'
-import { updateLiveReservation, updateReservation, getReservation } from '../../../../utils/reservations.ts'
+import { editReservation, getReservation } from '../../../../utils/reservations.ts'
 import {
   bookingParty,
   calculateTotalPrice,
@@ -15,6 +15,15 @@ import { liveRoomPrice } from '../../../../lib/liteapi/rates.ts'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
 const EXCLUSION_VIOLATION = '23P01'
+
+const EDIT_ERROR_STATUS: Record<string, number> = {
+  PT400: 400,
+  PT401: 401,
+  PT402: 402,
+  PT404: 404,
+  PT409: 409,
+  PT422: 422,
+}
 
 export async function PATCH(
   request: Request,
@@ -40,12 +49,10 @@ export async function PATCH(
     return Response.json({ error: 'Reservation change for another user is forbidden. '}, { status: 403 })
   }
 
-  // Only confirmed bookings can be changed: editing a cancelled (or completed) one would
-  // rewrite its history without bringing it back
-  if ((curReservation.status ?? 'confirmed') !== 'confirmed') {
-    return Response.json({ error: 'Only confirmed reservations can be changed.' }, { status: 409 })
+  if (curReservation.status !== 'confirmed') {
+    return Response.json({ error: 'Only confirmed reservations can be changed.' }, { status: 422 })
   }
- 
+
   let body: unknown
   try {
     body = await request.json()
@@ -53,33 +60,36 @@ export async function PATCH(
     return Response.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return Response.json({ error: 'Request body must be a JSON object.' }, { status: 400 })
+  }
+
+  const changes = body as Record<string, unknown>
+
+  // Extract and validate optional points (omission or negative defaults to 0)
+  let pointsToRedeem = 0
+  if (changes.points !== undefined) {
+    if (typeof changes.points !== 'number' || !Number.isInteger(changes.points)) {
+      return Response.json({ error: 'points must be an integer.' }, { status: 400 })
+    }
+    pointsToRedeem = Math.max(0, changes.points)
+  }
+
+  const timeZone = typeof changes.time_zone === 'string'
+    ? changes.time_zone
+    : null
+
   // "Today" is the guest's today, from the time_zone the browser sends
   // (e.g. "America/Los_Angeles"); UTC if it's missing.
-  const today = todayInTimeZone((body as Record<string, unknown> | null)?.time_zone)
+  const today = todayInTimeZone(timeZone)
 
   // Validate reservation in the future
-  if ( curReservation?.check_in <= today) { 
+  if (curReservation?.check_in <= today) {
     return Response.json({ error: 'Reservation for past dates cannot be changed. '}, { status: 422 })
   }
 
-  // Merge current and requested for validation. The saved row has guests and children but no
-  // adults column, so validation works adults out from those. A new guest count with no split
-  // (the Change booking page sends only `guests`) keeps the saved children, as long as at least
-  // one adult is left (audit R2).
-  const changes = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
-  const savedChildren = Number(curReservation.children ?? 0) || 0
-  const party =
-    changes.guests !== undefined && changes.adults === undefined && changes.children === undefined
-      ? typeof changes.guests === 'number' && Number.isInteger(changes.guests)
-        ? { children: Math.max(0, Math.min(savedChildren, changes.guests - 1)) }
-        : {}
-      : {}
-  const saved: Record<string, unknown> = { ...curReservation, children: savedChildren }
-  // A new split without a guest count sets the guest count
-  if (changes.guests === undefined && (changes.adults !== undefined || changes.children !== undefined)) {
-    delete saved.guests
-  }
-  const requestedReservation = { ...saved, ...party, ...changes }
+  // Merge current and requested for validation
+  const requestedReservation = { ...curReservation, ...changes }
 
   // Validate input
   const result = validateReservationInput(requestedReservation, today)
@@ -87,6 +97,17 @@ export async function PATCH(
     return Response.json({ error: result.error }, { status: 400 })
   }
   const input = result.value
+
+  // Early return if reservation is unchanged
+  if (
+    input.room_id === curReservation.room_id 
+    && input.check_in === curReservation.check_in
+    && input.check_out === curReservation.check_out 
+    && input.guests === curReservation.guests
+    && input.children === (curReservation.children ?? 0)
+  ) {
+    return Response.json({ reservation: curReservation }, { status: 200})
+  }
 
   // Look up the room (price, capacity, hotel). `*` keeps this working before liteapi_hotels.sql is applied.
   const { data: room, error: roomError } = await supabase
@@ -110,15 +131,10 @@ export async function PATCH(
     return Response.json({ error: partyError }, { status: 400 })
   }
 
-  // Price. An unchanged booking keeps what was paid instead of picking up today's live rate.
-  // A change is quoted for its adults and children, as the change page priced it.
+  // Price. A change is quoted for its adults and children, as the change page priced it.
   const { adults, children } = bookingParty(input)
-  const unchanged = input.room_id === curReservation.room_id && input.check_in === curReservation.check_in
-    && input.check_out === curReservation.check_out && input.guests === curReservation.guests
-    && children === (curReservation.children ?? 0)
   let nightly: number | string = room.price_per_night
-  let pricedLive = false
-  if (!unchanged && room.hotels?.liteapi_id) {
+  if (room.hotels?.liteapi_id) {
     const live = await liveRoomPrice(
       { liteapiHotelId: room.hotels.liteapi_id, liteapiRoomId: room.liteapi_room_id ?? null, roomType: room.room_type ?? '' },
       { checkIn: input.check_in, checkOut: input.check_out, ...partyOf(adults, children) }
@@ -128,35 +144,56 @@ export async function PATCH(
     }
     if (live.status === 'live') {
       nightly = live.value.perNight
-      pricedLive = true
     }
   }
-  const total_price = unchanged
-    ? Number(curReservation.total_price)
-    : calculateTotalPrice(input.check_in, input.check_out, nightly)
+  const totalPrice = calculateTotalPrice(input.check_in, input.check_out, nightly)
 
-  const update = {
-    room_id: room.id,
-    hotel_id: room.hotel_id,
-    guests: input.guests,
-    children: input.children,
-    check_in: input.check_in,
-    check_out: input.check_out,
-    total_price,
-  }
-  // A live price is saved with the server key: the reservations trigger puts a signed-in user's own change
-  // back at the stored price
-  const { data, error } = pricedLive
-    ? await updateLiveReservation(reservationId, userId, update)
-    : await updateReservation(reservationId, update)
+  // The RPC reprices and settles the edit inside one database transaction.
+  const { data, error } = await editReservation(
+    reservationId,
+    {
+      room_id: input.room_id,
+      check_in: input.check_in,
+      check_out: input.check_out,
+      guests: input.guests,
+      adults: input.adults,
+      children: input.children,
+      total_price: totalPrice
+    },
+    {
+      points: pointsToRedeem,
+      time_zone: timeZone,
+      expected: {
+        room_id: curReservation.room_id,
+        check_in: curReservation.check_in,
+        check_out: curReservation.check_out,
+        guests: curReservation.guests ?? null,
+        children: curReservation.children ?? null,
+        total_price: Number(curReservation.total_price),
+      },
+    }
+  )
 
+  // Error Handling
   if (error) {
     if (error.code === EXCLUSION_VIOLATION) {
       return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
     }
-    console.error('updateReservation failed:', error)
+
+    const status = EDIT_ERROR_STATUS[error.code]
+    if (status) {
+      return Response.json({ error: error.message }, { status })
+    }
+
+    console.error('editReservation failed:', error)
     return Response.json({ error: 'Could not update reservation.' }, { status: 500 })
   }
 
-  return Response.json({ reservation: data?.[0] ?? null }, { status: 200 })
+  const reservation = data?.[0]
+  if (!reservation) {
+    console.error('editReservation returned no reservation')
+    return Response.json({ error: 'Could not update reservation.' }, { status: 500 })
+  }
+
+  return Response.json({ reservation }, { status: 200 })
 }

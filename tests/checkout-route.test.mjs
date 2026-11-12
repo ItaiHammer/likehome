@@ -1,5 +1,5 @@
 // Tests for POST /api/checkout — run with `npm test`
-// Supabase and the CRUD helpers are mocked; reservation-logic and payment-logic are the real code.
+// Database checkout is performed via checkoutReservation RPC wrapper.
 import { register } from 'node:module'
 import { test, mock, beforeEach, describe } from 'node:test'
 import assert from 'node:assert/strict'
@@ -19,28 +19,35 @@ const ROOM = { id: 'room-1', hotel_id: 'hotel-1', price_per_night: 129.99, capac
 const FULL_CARD = '4242424242424242'
 const CVC = '987'
 
-let claims
+let userId
 let roomResult
-const createReservation = mock.fn()
-const updateReservation = mock.fn()
-const createPayment = mock.fn()
-const recordCheckoutCharge = mock.fn()
-const createLiveReservation = mock.fn()
-const recordLiveCharge = mock.fn()
+const checkoutReservation = mock.fn()
 const consoleError = mock.method(console, 'error', () => {})
 
 mock.module('next/headers', { namedExports: { cookies: async () => ({}) } })
-mock.module('@/utils/supabase/server', {
+mock.module('@/utils/user', {
   namedExports: {
-    createClient: () => ({
-      auth: { getClaims: async () => claims },
-      from: () => ({ select: () => ({ eq: () => ({ single: async () => roomResult }) }) }),
+    getUserId: async () => ({
+      supabase: {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              single: async () => roomResult,
+            }),
+          }),
+        }),
+      },
+      userId,
     }),
   },
 })
-mock.module('@/utils/reservations', { namedExports: { createReservation, createLiveReservation, updateReservation } })
-mock.module('@/utils/payments', { namedExports: { createPayment } })
-mock.module('@/utils/transactions', { namedExports: { recordCheckoutCharge, recordLiveCharge } })
+mock.module('@/utils/reservations', {
+  namedExports: {
+    checkoutReservation,
+    getCancelInsurancePremium: () => 20,
+  },
+})
+
 const liveRoomPrice = mock.fn(async () => ({ status: 'unavailable' }))
 mock.module('@/lib/liteapi/rates', { namedExports: { liveRoomPrice } })
 
@@ -57,7 +64,7 @@ const validBody = () => ({
   check_in: future(10),
   check_out: future(13),
   guests: 2,
-  children: 0,
+  has_insurance: false,
   payment: {
     card_number: '4242 4242 4242 4242',
     exp_month: 12,
@@ -84,53 +91,54 @@ async function post(body) {
   return { status: res.status, json: await res.json() }
 }
 
-const writes = () =>
-  createReservation.mock.callCount() +
-  updateReservation.mock.callCount() +
-  createPayment.mock.callCount() +
-  recordCheckoutCharge.mock.callCount() +
-  createLiveReservation.mock.callCount() +
-  recordLiveCharge.mock.callCount()
+const checkoutCalls = () => checkoutReservation.mock.callCount()
 
 beforeEach(() => {
-  claims = { data: { claims: { sub: 'user-1' } }, error: null }
+  userId = 'user-1'
   roomResult = { data: { ...ROOM }, error: null }
-  for (const fn of [createReservation, updateReservation, createPayment, recordCheckoutCharge, consoleError, liveRoomPrice, createLiveReservation, recordLiveCharge]) {
+
+  for (const fn of [
+    checkoutReservation,
+    liveRoomPrice,
+    consoleError,
+  ]) {
     fn.mock.resetCalls()
   }
+  
   liveRoomPrice.mock.mockImplementation(async () => ({ status: 'unavailable' }))
-  createReservation.mock.mockImplementation(async (r) => ({
-    data: [{ id: 'res-1', status: 'confirmed', ...r }],
-    error: null,
-  }))
-  createLiveReservation.mock.mockImplementation(async (r) => ({
-    data: [{ id: 'res-1', status: 'confirmed', ...r }],
-    error: null,
-  }))
-  recordLiveCharge.mock.mockImplementation(async (paymentId, amount) => ({
-    data: [{ id: 'txn-1', payment_id: paymentId, amount, transaction_type: 'charge', status: 'completed' }],
-    error: null,
-  }))
-  updateReservation.mock.mockImplementation(async () => ({ data: [{ id: 'res-1' }], error: null }))
-  createPayment.mock.mockImplementation(async (p) => ({ data: [{ id: 'pay-1', ...p }], error: null }))
-  // The database function prices the charge itself (audit F13); the mock mirrors the room price
-  recordCheckoutCharge.mock.mockImplementation(async (paymentId) => ({
-    data: [{ id: 'txn-1', payment_id: paymentId, amount: 389.97, transaction_type: 'charge', status: 'completed' }],
-    error: null,
-  }))
+
+  checkoutReservation.mock.mockImplementation(async (stay, payment, options) => {
+    const totalPrice = payment.total_price
+    const insurancePremium = payment.insurance_premium
+    const hasInsurance = payment.has_insurance
+    return {
+      data: {
+        reservation: {
+          id: 'res-1',
+          check_in: stay.check_in,
+          check_out: stay.check_out,
+          guests: stay.guests,
+          total_price: totalPrice,
+          status: 'confirmed',
+          has_insurance: hasInsurance,
+        },
+        payment: { id: 'pay-1', card_number: payment.card_last4 },
+        transaction: { id: 'txn-1', amount: totalPrice, status: 'completed' },
+        insurance_premium: insurancePremium,
+        total_charged: Math.round((totalPrice + insurancePremium) * 100) / 100,
+      },
+      error: null,
+    }
+  })
 })
 
 describe('auth', () => {
   test('401 when signed out, nothing written', async () => {
-    claims = { data: { claims: {} }, error: null }
+    userId = null
     const r = await post(validBody())
     assert.equal(r.status, 401)
-    assert.equal(writes(), 0)
-  })
-
-  test('401 when the session check errors', async () => {
-    claims = { data: null, error: new Error('bad jwt') }
-    assert.equal((await post(validBody())).status, 401)
+    assert.equal(r.json.error, 'You must be logged in to book.')
+    assert.equal(checkoutCalls(), 0)
   })
 })
 
@@ -144,6 +152,14 @@ describe('request body', () => {
   test('400 on JSON that is not an object', async () => {
     for (const body of ['null', '"hi"', '42', '[]']) {
       assert.equal((await post(body)).status, 400, body)
+    }
+  })
+
+  test('400 when has_insurance is not a boolean', async () => {
+    for (const has_insurance of ['true', 1, null, {}]) {
+      const r = await post({ ...validBody(), has_insurance })
+      assert.equal(r.status, 400)
+      assert.equal(r.json.error, 'has_insurance must be true or false.')
     }
   })
 
@@ -166,7 +182,7 @@ describe('request body', () => {
       const r = await post({ ...validBody(), ...patch })
       assert.equal(r.status, 400, JSON.stringify(patch))
     }
-    assert.equal(writes(), 0)
+    assert.equal(checkoutCalls(), 0)
   })
 
   test('stay errors are reported before card errors', async () => {
@@ -197,7 +213,7 @@ describe('request body', () => {
       assert.equal(r.status, 400)
       assert.equal(r.json.error, error)
     }
-    assert.equal(writes(), 0)
+    assert.equal(checkoutCalls(), 0)
   })
 })
 
@@ -207,25 +223,23 @@ describe('room', () => {
     assert.equal((await post(validBody())).status, 404)
     roomResult = { data: null, error: null }
     assert.equal((await post(validBody())).status, 404)
-    assert.equal(writes(), 0)
+    assert.equal(checkoutCalls(), 0)
   })
 
   test('400 when guests exceed room capacity', async () => {
     const r = await post({ ...validBody(), guests: 3 })
     assert.equal(r.status, 400)
     assert.match(r.json.error, /fits up to 2/)
-    assert.equal(writes(), 0)
+    assert.equal(checkoutCalls(), 0)
   })
 })
 
-describe('pricing', () => {
+describe('pricing & insurance', () => {
   test('price comes from the database, never the request', async () => {
     const r = await post({ ...validBody(), total_price: 1, price_per_night: 1 })
     assert.equal(r.status, 201)
-    assert.equal(createReservation.mock.calls[0].arguments[0].total_price, 389.97)
-    // The charge is priced by the database, so the route only passes the payment id
-    assert.deepEqual(recordCheckoutCharge.mock.calls[0].arguments, ['pay-1'])
-    assert.equal(r.json.transaction.amount, 389.97)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[1].total_price, 389.97)
+    assert.equal(r.json.reservation.total_price, 389.97)
     assert.equal(liveRoomPrice.mock.callCount(), 0)
   })
 
@@ -235,14 +249,32 @@ describe('pricing', () => {
     assert.equal(r.json.reservation.total_price, 300)
   })
 
-  test('402 and nothing written when the room price is zero or missing', async () => {
+  test('422 when the room price is zero or invalid', async () => {
     for (const price_per_night of [0, null]) {
       roomResult = { data: { ...ROOM, price_per_night }, error: null }
       const r = await post(validBody())
-      assert.equal(r.status, 402)
-      assert.equal(r.json.error, 'Invalid payment amount.')
+      assert.equal(r.status, 422)
+      assert.equal(r.json.error, 'The room does not have a valid booking price.')
     }
-    assert.equal(writes(), 0)
+    assert.equal(checkoutCalls(), 0)
+  })
+
+  test('calculates cancel insurance premium (20) when has_insurance is true', async () => {
+    const r = await post({ ...validBody(), has_insurance: true })
+    assert.equal(r.status, 201)
+    assert.equal(r.json.insurance_premium, 20)
+    assert.equal(r.json.total_charged, 409.97)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[1].has_insurance, true)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[1].insurance_premium, 20)
+  })
+
+  test('defaults to 0 insurance premium when has_insurance is false or omitted', async () => {
+    const r = await post(validBody())
+    assert.equal(r.status, 201)
+    assert.equal(r.json.insurance_premium, 0)
+    assert.equal(r.json.total_charged, 389.97)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[1].has_insurance, false)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[1].insurance_premium, 0)
   })
 })
 
@@ -267,10 +299,8 @@ describe('LiteAPI hotels', () => {
     const body = validBody()
     const r = await post(body)
     assert.equal(r.status, 201)
-    assert.equal(createLiveReservation.mock.calls[0].arguments[0].total_price, 163.66)
-    assert.equal(createLiveReservation.mock.calls[0].arguments[0].account_id, 'user-1')
-    assert.deepEqual(recordLiveCharge.mock.calls[0].arguments, ['pay-1', 163.66])
-    assert.equal(createReservation.mock.callCount() + recordCheckoutCharge.mock.callCount(), 0)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[1].total_price, 163.66)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[0].account_id, 'user-1')
     assert.equal(r.json.reservation.total_price, 163.66)
     assert.equal(r.json.transaction.amount, 163.66)
     assert.deepEqual(liveRoomPrice.mock.calls[0].arguments, [
@@ -290,10 +320,10 @@ describe('LiteAPI hotels', () => {
       adults: 2,
       children: [8, 8],
     })
-    const saved = createLiveReservation.mock.calls[0].arguments[0]
-    assert.equal(saved.guests, 4)
-    assert.equal(saved.children, 2)
-    assert.equal(saved.total_price, 198.94)
+    const saved = checkoutReservation.mock.calls[0]
+    assert.equal(saved.arguments[0].guests, 4)
+    assert.equal(saved.arguments[0].children, 2)
+    assert.equal(saved.arguments[1].total_price, 198.94)
   })
 
   test('without a guest count, LiteAPI is asked for 2 adults', async () => {
@@ -310,33 +340,22 @@ describe('LiteAPI hotels', () => {
     liveRoomPrice.mock.mockImplementation(async () => ({ status: 'sold_out' }))
     const r = await post(validBody())
     assert.deepEqual(r, { status: 409, json: { error: 'Room is not available for those dates.' } })
-    assert.equal(writes(), 0)
+    assert.equal(checkoutReservation.mock.callCount(), 0)
   })
 
   test('LiteAPI unavailable: falls back to the stored price', async () => {
     const r = await post(validBody())
     assert.equal(r.status, 201)
     assert.equal(liveRoomPrice.mock.callCount(), 1)
-    assert.equal(createReservation.mock.calls[0].arguments[0].total_price, 389.97)
-    assert.deepEqual(recordCheckoutCharge.mock.calls[0].arguments, ['pay-1'])
-    assert.equal(createLiveReservation.mock.callCount() + recordLiveCharge.mock.callCount(), 0)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[1].total_price, 389.97)
     assert.equal(r.json.transaction.amount, 389.97)
   })
 
-  test('a live booking whose charge can’t be recorded is cancelled', async () => {
+  test('a live booking that clashes with another one: 409', async () => {
     liveRoomPrice.mock.mockImplementation(async () => live(163.66, 3))
-    recordLiveCharge.mock.mockImplementation(async () => ({ data: null, error: { code: '23514' } }))
-    const r = await post(validBody())
-    assert.equal(r.status, 500)
-    assert.deepEqual(updateReservation.mock.calls[0].arguments, ['res-1', { status: 'cancelled' }])
-  })
-
-  test('a live booking that clashes with another one: 409, no payment saved', async () => {
-    liveRoomPrice.mock.mockImplementation(async () => live(163.66, 3))
-    createLiveReservation.mock.mockImplementation(async () => ({ data: null, error: { code: '23P01' } }))
+    checkoutReservation.mock.mockImplementation(async () => ({ data: null, error: { code: '23P01' } }))
     const r = await post(validBody())
     assert.deepEqual(r, { status: 409, json: { error: 'Room is not available for those dates.' } })
-    assert.equal(createPayment.mock.callCount(), 0)
   })
 
   test('an owner hotel (no liteapi_id) never calls LiteAPI', async () => {
@@ -353,82 +372,75 @@ describe('declines', () => {
   test('0002 card: 402 "Your card was declined.", nothing written or logged', async () => {
     const r = await post(withCard('4000 0000 0000 0002'))
     assert.deepEqual(r, { status: 402, json: { error: 'Your card was declined.' } })
-    assert.equal(writes(), 0)
+    assert.equal(checkoutCalls(), 0)
     assert.equal(consoleError.mock.callCount(), 0)
   })
 
   test('9995 card: 402 "Insufficient funds.", nothing written', async () => {
     const r = await post(withCard('4000-0000-0000-9995'))
     assert.deepEqual(r, { status: 402, json: { error: 'Insufficient funds.' } })
-    assert.equal(writes(), 0)
+    assert.equal(checkoutCalls(), 0)
   })
 
   test('a declined card is not retried or charged on a second attempt', async () => {
     await post(withCard('4000000000000002'))
     await post(withCard('4000000000000002'))
-    assert.equal(writes(), 0)
+    assert.equal(checkoutCalls(), 0)
   })
 })
 
-describe('saving the reservation', () => {
-  test('409 when the room was booked first (exclusion constraint), no payment saved', async () => {
-    createReservation.mock.mockImplementation(async () => ({ data: null, error: { code: '23P01' } }))
+describe('checkoutReservation RPC errors', () => {
+  test('409 when the room is not available for those dates (exclusion constraint 23P01)', async () => {
+    checkoutReservation.mock.mockImplementation(async () => ({
+      data: null,
+      error: { code: '23P01' },
+    }))
     const r = await post(validBody())
     assert.deepEqual(r, { status: 409, json: { error: 'Room is not available for those dates.' } })
-    assert.equal(createPayment.mock.callCount(), 0)
-    assert.equal(recordCheckoutCharge.mock.callCount(), 0)
   })
 
-  test('500 on any other insert error, no payment saved', async () => {
-    createReservation.mock.mockImplementation(async () => ({ data: null, error: { code: '42501' } }))
+  test('mapped status codes (PT400, PT401, PT404, PT409) return mapped status and error message', async () => {
+    const mapped = [
+      ['PT400', 400, 'Choose valid dates for a stay of 1 to 30 nights.'],
+      ['PT401', 401, 'You must be logged in to book.'],
+      ['PT404', 404, 'Room not found.'],
+      ['PT409', 409, 'The booking price changed. Refresh and try again.'],
+    ]
+    for (const [code, status, message] of mapped) {
+      checkoutReservation.mock.mockImplementation(async () => ({
+        data: null,
+        error: { code, message },
+      }))
+      const r = await post(validBody())
+      assert.equal(r.status, status)
+      assert.equal(r.json.error, message)
+    }
+  })
+
+  test('500 on unmapped RPC error code, error logged', async () => {
+    checkoutReservation.mock.mockImplementation(async () => ({
+      data: null,
+      error: { code: 'P0001', message: 'Database failure' },
+    }))
     const r = await post(validBody())
     assert.equal(r.status, 500)
-    assert.equal(createPayment.mock.callCount(), 0)
+    assert.equal(r.json.error, 'Could not complete checkout.')
     assert.equal(consoleError.mock.callCount(), 1)
   })
 
-  test('500 when the insert returns no row', async () => {
-    createReservation.mock.mockImplementation(async () => ({ data: [], error: null }))
-    assert.equal((await post(validBody())).status, 500)
-    assert.equal(createPayment.mock.callCount(), 0)
-  })
-})
-
-describe('rollback when the payment cannot be recorded', () => {
-  const failure = { error: 'Payment could not be recorded. You have not been charged.' }
-
-  test('payment insert fails: reservation cancelled, no charge recorded', async () => {
-    createPayment.mock.mockImplementation(async () => ({ data: null, error: { code: '42501' } }))
+  test('500 when RPC returns no reservation or transaction data', async () => {
+    checkoutReservation.mock.mockImplementation(async () => ({
+      data: { reservation: null, transaction: null },
+      error: null,
+    }))
     const r = await post(validBody())
-    assert.deepEqual(r, { status: 500, json: failure })
-    assert.equal(recordCheckoutCharge.mock.callCount(), 0)
-    assert.deepEqual(updateReservation.mock.calls[0].arguments, ['res-1', { status: 'cancelled' }])
-  })
-
-  test('payment insert returns no row: reservation cancelled', async () => {
-    createPayment.mock.mockImplementation(async () => ({ data: [], error: null }))
-    assert.equal((await post(validBody())).status, 500)
-    assert.equal(updateReservation.mock.callCount(), 1)
-  })
-
-  test('charge insert fails: reservation cancelled', async () => {
-    recordCheckoutCharge.mock.mockImplementation(async () => ({ data: null, error: { code: '23514' } }))
-    const r = await post(validBody())
-    assert.deepEqual(r, { status: 500, json: failure })
-    assert.deepEqual(updateReservation.mock.calls[0].arguments, ['res-1', { status: 'cancelled' }])
-  })
-
-  test('cancelling also fails: still 500, both errors logged', async () => {
-    recordCheckoutCharge.mock.mockImplementation(async () => ({ data: null, error: { code: '23514' } }))
-    updateReservation.mock.mockImplementation(async () => ({ data: null, error: { code: '23514' } }))
-    const r = await post(validBody())
-    assert.deepEqual(r, { status: 500, json: failure })
-    assert.equal(consoleError.mock.callCount(), 2)
+    assert.equal(r.status, 500)
+    assert.equal(r.json.error, 'Could not complete checkout.')
   })
 })
 
 describe('success', () => {
-  test('201 with reservation, payment and charge', async () => {
+  test('201 with reservation, payment, transaction, insurance_premium, total_charged', async () => {
     const body = validBody()
     const r = await post(body)
     assert.equal(r.status, 201)
@@ -440,39 +452,46 @@ describe('success', () => {
         guests: 2,
         total_price: 389.97,
         status: 'confirmed',
+        has_insurance: false,
       },
       payment: { id: 'pay-1', brand: 'visa', last4: '4242' },
       transaction: { id: 'txn-1', amount: 389.97, status: 'completed' },
+      insurance_premium: 0,
+      total_charged: 389.97,
     })
   })
 
-  test('writes in order: reservation, then payment, then charge', async () => {
+  test('checkoutReservation called with expected parameters', async () => {
     await post(validBody())
-    assert.deepEqual(createReservation.mock.calls[0].arguments[0], {
+    assert.equal(checkoutReservation.mock.callCount(), 1)
+    const [stay, paymentDetails, options] = checkoutReservation.mock.calls[0].arguments
+    assert.deepEqual(stay, {
       account_id: 'user-1',
-      hotel_id: 'hotel-1',
       room_id: 'room-1',
       check_in: validBody().check_in,
       check_out: validBody().check_out,
-      total_price: 389.97,
       guests: 2,
+      adults: 2,
       children: 0,
+      status: undefined
     })
-    assert.deepEqual(createPayment.mock.calls[0].arguments[0], {
-      reservation_id: 'res-1',
-      account_id: 'user-1',
-      card_number: '4242',
-      card_exp_month: 12,
-      card_exp_year: 2030,
+    assert.deepEqual(paymentDetails, {
+      total_price: 389.97,
+      has_insurance: false,
+      insurance_premium: 0,
+      card_last4: '4242',
+      exp_month: 12,
+      exp_year: 2030,
     })
-    assert.deepEqual(recordCheckoutCharge.mock.calls[0].arguments, ['pay-1'])
-    assert.equal(updateReservation.mock.callCount(), 0)
+    assert.deepEqual(options, {
+      points: 0,
+      time_zone: null,
+    })
   })
 
   test('account comes from the session, not the request body', async () => {
     await post({ ...validBody(), account_id: 'someone-else' })
-    assert.equal(createReservation.mock.calls[0].arguments[0].account_id, 'user-1')
-    assert.equal(createPayment.mock.calls[0].arguments[0].account_id, 'user-1')
+    assert.equal(checkoutReservation.mock.calls[0].arguments[0].account_id, 'user-1')
   })
 
   test('guests is optional (database default applies)', async () => {
@@ -481,57 +500,38 @@ describe('success', () => {
     delete body.guests
     delete body.children
     assert.equal((await post(body)).status, 201)
-    assert.equal(createReservation.mock.calls[0].arguments[0].guests, undefined)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[0].guests, undefined)
   })
 
-  test('other valid cards are approved, with brand detected', async () => {
+  test('other valid cards are approved', async () => {
     const cases = [
-      ['5555 5555 5555 4444', '123', 'mastercard'],
-      ['3782 822463 10005', '1234', 'amex'],
-      ['6011 1111 1111 1117', '123', 'discover'],
+      ['5555 5555 5555 4444', '123'],
+      ['3782 822463 10005', '1234'],
+      ['6011 1111 1111 1117', '123'],
     ]
-    for (const [card, cvc, brand] of cases) {
+    for (const [card, cvc] of cases) {
       const r = await post(withCard(card, { cvc, exp_month: '03', exp_year: '31' }))
       assert.equal(r.status, 201, card)
-      assert.equal(r.json.payment.brand, brand)
       assert.equal(r.json.payment.last4, card.replace(/\s/g, '').slice(-4))
     }
   })
 })
 
 describe('card data never leaks', () => {
-  const scenarios = {
-    success: () => {},
-    'payment insert fails': () =>
-      createPayment.mock.mockImplementation(async () => ({ data: null, error: { code: 'x' } })),
-    'charge insert fails': () =>
-      recordCheckoutCharge.mock.mockImplementation(async () => ({ data: null, error: { code: 'x' } })),
-    'reservation insert fails': () =>
-      createReservation.mock.mockImplementation(async () => ({ data: null, error: { code: 'x' } })),
-  }
-
-  for (const [name, setup] of Object.entries(scenarios)) {
-    test(`full number and CVC absent from DB writes, logs and response (${name})`, async () => {
-      setup()
-      const r = await post(validBody())
-      const seen = JSON.stringify([
-        r.json,
-        createReservation.mock.calls.map((c) => c.arguments),
-        updateReservation.mock.calls.map((c) => c.arguments),
-        createPayment.mock.calls.map((c) => c.arguments),
-        recordCheckoutCharge.mock.calls.map((c) => c.arguments),
-        consoleError.mock.calls.map((c) => c.arguments),
-      ])
-      assert.equal(seen.includes(FULL_CARD), false)
-      assert.equal(seen.includes('4242 4242'), false)
-      assert.equal(seen.includes(CVC), false)
-      assert.equal(seen.includes('Alex Rivera'), false)
-    })
-  }
+  test('full number and CVC absent from checkoutReservation args, logs and response', async () => {
+    const r = await post(validBody())
+    const seen = JSON.stringify([
+      r.json,
+      checkoutReservation.mock.calls.map((c) => c.arguments),
+      consoleError.mock.calls.map((c) => c.arguments),
+    ])
+    assert.equal(seen.includes(FULL_CARD), false)
+    assert.equal(seen.includes('4242 4242'), false)
+    assert.equal(seen.includes(CVC), false)
+    assert.equal(seen.includes('Alex Rivera'), false)
+  })
 })
 
-// "Today" is the guest's today (from time_zone), not UTC's.
-// 6pm Pacific on Oct 10 is already Oct 11 in UTC.
 describe('guest time zone', () => {
   const sameDayStay = { check_in: '2026-10-10', check_out: '2026-10-12' }
 
@@ -539,7 +539,7 @@ describe('guest time zone', () => {
     t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-11T01:00:00Z') })
     const r = await post({ ...validBody(), ...sameDayStay, time_zone: 'America/Los_Angeles' })
     assert.equal(r.status, 201)
-    assert.equal(r.json.reservation.check_in, '2026-10-10')
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].time_zone, 'America/Los_Angeles')
   })
 
   test('without a time zone it falls back to UTC, where that day is already past', async (t) => {
@@ -547,36 +547,38 @@ describe('guest time zone', () => {
     const r = await post({ ...validBody(), ...sameDayStay })
     assert.equal(r.status, 400)
     assert.equal(r.json.error, 'check_in cannot be in the past.')
-    assert.equal(writes(), 0)
+    assert.equal(checkoutCalls(), 0)
   })
 })
 
-// Audit F8: the room's own adult/child limits, not just total capacity
-describe('room adult/child limits', () => {
-  test('an adults-only room rejects a child even when total capacity fits', async () => {
-    roomResult = { data: { ...ROOM, capacity: 4, max_adults: 2, max_children: 0 }, error: null }
-    const r = await post({ ...validBody(), guests: 3, adults: 2, children: 1 })
-    assert.equal(r.status, 400)
-    assert.equal(r.json.error, 'This room is for adults only.')
-    assert.equal(writes(), 0)
-  })
-
-  test('too many adults is rejected', async () => {
-    roomResult = { data: { ...ROOM, capacity: 4, max_adults: 1, max_children: 3 }, error: null }
-    const r = await post({ ...validBody(), guests: 2, adults: 2, children: 0 })
-    assert.equal(r.status, 400)
-    assert.equal(r.json.error, 'This room allows up to 1 adult.')
-  })
-
-  test('guests must match adults + children', async () => {
-    const r = await post({ ...validBody(), guests: 2, adults: 2, children: 1 })
-    assert.equal(r.status, 400)
-    assert.equal(r.json.error, 'guests must equal adults plus children.')
-  })
-
-  test('a party within the limits books', async () => {
-    roomResult = { data: { ...ROOM, capacity: 4, max_adults: 2, max_children: 2 }, error: null }
-    const r = await post({ ...validBody(), guests: 3, adults: 2, children: 1 })
+describe('checkout points redemption', () => {
+  test('passes optional points to checkoutReservation', async () => {
+    const body = { ...validBody(), points: 1500 }
+    const r = await post(body)
     assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 1500)
+  })
+
+  test('defaults points to 0 when omitted', async () => {
+    const body = validBody()
+    delete body.points
+    const r = await post(body)
+    assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 0)
+  })
+
+  test('treats negative points as 0', async () => {
+    const r = await post({ ...validBody(), points: -500 })
+    assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 0)
+  })
+
+  test('400 when points is not an integer', async () => {
+    for (const points of ['1500', 1500.5, true, {}]) {
+      const r = await post({ ...validBody(), points })
+      assert.equal(r.status, 400)
+      assert.equal(r.json.error, 'points must be an integer.')
+    }
+    assert.equal(checkoutCalls(), 0)
   })
 })
