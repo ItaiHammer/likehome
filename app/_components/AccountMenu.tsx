@@ -6,7 +6,17 @@ import { initials } from "@/lib/bookings";
 import type { NavLink } from "@/lib/account/nav";
 import { Popover } from "./ui";
 
-export function AccountMenu({ name, email, link }: { name: string | null; email: string | null; link: NavLink }) {
+export function AccountMenu({
+  name,
+  email,
+  accountLabel,
+  link,
+}: {
+  name: string | null;
+  email: string | null;
+  accountLabel: string | null;
+  link: NavLink;
+}) {
   return (
     <Popover
       label="Account"
@@ -24,10 +34,11 @@ export function AccountMenu({ name, email, link }: { name: string | null; email:
     >
       {(close) => (
         <div className="flex flex-col">
-          {(name || email) && (
+          {(name || email || accountLabel) && (
             <div className="border-b border-edge pb-3">
               {name && <p className="font-semibold text-ink">{name}</p>}
               {email && <p className="truncate text-sm text-slate">{email}</p>}
+              {accountLabel && <p className="mt-1 text-xs font-semibold text-blue">{accountLabel}</p>}
             </div>
           )}
           {/* The header lives in the root layout, so the panel would stay open after navigating */}

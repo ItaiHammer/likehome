@@ -8,7 +8,6 @@ import { accountMenuLinkFor, navItemsFor } from "@/lib/account/nav";
 import { accountLabel } from "@/lib/account/role";
 import { getViewer } from "@/utils/viewer";
 import { AccountMenu } from "./AccountMenu";
-import { AccountPill } from "./AccountPill";
 
 function Logo() {
   return (
@@ -33,10 +32,9 @@ export async function SiteHeader() {
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <AccountPill label={label} />
           <AuthButton signedIn={viewer.role !== "signed-out"}>
             {menuLink ? (
-              <AccountMenu name={viewer.name} email={viewer.email} link={menuLink} />
+              <AccountMenu name={viewer.name} email={viewer.email} accountLabel={label} link={menuLink} />
             ) : (
               <SignOutButton inHeader />
             )}

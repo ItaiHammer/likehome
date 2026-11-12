@@ -41,8 +41,8 @@ test('business', () => {
   assert.deepEqual(homeContentFor('business'), {
     hero: {
       eyebrow: 'Your places',
-      title: 'Ready for your next guests?',
-      line: 'Keep your listings fresh and your calendar full.',
+      title: 'Where to next?',
+      line: 'Find a stay anywhere. Here are your listings.',
     },
     welcome: {
       title: 'Listings, in one place.',
