@@ -3,15 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { Tag } from "./ui";
-
-// The app header's links, from the Figma "Shared navigation" (Stays · My bookings · My listings).
-// Pages that don't exist yet are shown, but marked "Soon" and not clickable.
-const NAV_ITEMS: { label: string; href?: string }[] = [
-  { label: "Stays", href: "/search" },
-  { label: "My Bookings", href: "/MyBookings" },
-  { label: "My Listings", href: "/listings" },
-];
+import type { NavLink } from "@/lib/account/nav";
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue";
 
@@ -20,41 +12,29 @@ function useIsCurrent() {
   return (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function ComingSoon({ label, className = "" }: { label: string; className?: string }) {
-  return (
-    <span aria-disabled="true" title="Coming soon" className={`inline-flex cursor-not-allowed items-center gap-2 text-slate ${className}`}>
-      {label}
-      <Tag>Soon</Tag>
-    </span>
-  );
-}
-
 // Links shown inline from tablet width up
-export function DesktopNav() {
+export function DesktopNav({ items }: { items: NavLink[] }) {
   const isCurrent = useIsCurrent();
   return (
     <ul className="hidden items-center gap-1 md:flex">
-      {NAV_ITEMS.map((item) => (
+      {items.map((item) => (
         <li key={item.label}>
-          {item.href ? (
-            <Link
-              href={item.href}
-              aria-current={isCurrent(item.href) ? "page" : undefined}
-              className={`rounded-control px-3 py-2 text-base font-medium ${focusRing} ${isCurrent(item.href) ? "bg-blue/10 text-blue-dark" : "text-slate hover:text-ink"}`}
-            >
-              {item.label}
-            </Link>
-          ) : (
-            <ComingSoon label={item.label} className="px-3 py-2 text-base font-medium" />
-          )}
+          <Link
+            href={item.href}
+            aria-current={isCurrent(item.href) ? "page" : undefined}
+            className={`rounded-control px-3 py-2 text-base font-medium ${focusRing} ${isCurrent(item.href) ? "bg-blue/10 text-blue-dark" : "text-slate hover:text-ink"}`}
+          >
+            {item.label}
+          </Link>
         </li>
       ))}
     </ul>
   );
 }
 
-// Phones: the same links behind a Menu button, in a panel under the header
-export function MobileNav() {
+// Phones: the same links behind a Menu button, in a panel under the header,
+// with the account type (when there is one) as the panel's first row
+export function MobileNav({ items, accountLabel }: { items: NavLink[]; accountLabel: string | null }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -111,20 +91,17 @@ export function MobileNav() {
       {open && (
         <nav id={panelId} aria-label="Main" className="absolute inset-x-0 top-16 z-40 border-b border-edge bg-surface px-4 pb-4 shadow-[0_20px_40px_-24px_rgba(7,13,47,0.45)]">
           <ul className="divide-y divide-edge">
-            {NAV_ITEMS.map((item) => (
+            {accountLabel && <li className="py-3 text-sm font-semibold text-slate">{accountLabel}</li>}
+            {items.map((item) => (
               <li key={item.label}>
-                {item.href ? (
-                  <Link
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    aria-current={isCurrent(item.href) ? "page" : undefined}
-                    className={`-mx-2 block rounded-control px-2 py-3 text-base ${focusRing} ${isCurrent(item.href) ? "font-semibold text-blue-dark" : "font-medium text-ink hover:text-blue"}`}
-                  >
-                    {item.label}
-                  </Link>
-                ) : (
-                  <ComingSoon label={item.label} className="py-3 text-base font-medium" />
-                )}
+                <Link
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  aria-current={isCurrent(item.href) ? "page" : undefined}
+                  className={`-mx-2 block rounded-control px-2 py-3 text-base ${focusRing} ${isCurrent(item.href) ? "font-semibold text-blue-dark" : "font-medium text-ink hover:text-blue"}`}
+                >
+                  {item.label}
+                </Link>
               </li>
             ))}
           </ul>

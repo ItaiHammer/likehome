@@ -1,0 +1,113 @@
+@media (min-width: 801px) {
+  .card h1 {
+    font-size: 48px;
+    line-height: 52px;
+  }
+
+  /* The 436px column then fits the sign-in card's 486px height, as in the frame */
+  .card .content {
+    padding-block: 9px;
+  }
+}
+
+.card h1 + p {
+  margin-bottom: 20px;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 11px 15px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.option:hover {
+  border-color: var(--blue);
+}
+
+.option:has(.radio:checked) {
+  border: 2px solid var(--blue);
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--blue) 6%, var(--surface));
+}
+
+.option:has(.radio:focus-visible) {
+  outline: 3px solid color-mix(in srgb, var(--blue) 30%, transparent);
+  outline-offset: 2px;
+}
+
+.radio {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  color: var(--ink);
+}
+
+.text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--slate);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.optionTitle {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.check {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  border: 1.5px solid var(--edge);
+  border-radius: 999px;
+  color: transparent;
+}
+
+.check svg {
+  width: 12px;
+  height: 12px;
+}
+
+.option:has(.radio:checked) .check {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--on-blue);
+}
+
+.note {
+  margin: 12px 0;
+  color: var(--slate);
+  font-size: 14px;
+  line-height: 20px;
+}

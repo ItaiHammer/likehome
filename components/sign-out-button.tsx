@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { authLinkClass, headerAuthLinkClass } from "@/app/_components/ui";
 import { createClient } from "@/utils/supabase/client";
 import { PAGE_ROUTES } from "@/constants/routes";
 
-export function SignOutButton() {
+export function SignOutButton({ inHeader = false }: { inHeader?: boolean }) {
   const router = useRouter();
 
   async function signOut() {
@@ -25,9 +26,9 @@ export function SignOutButton() {
     <button
       type="button"
       onClick={signOut}
-      className="rounded-control px-3 py-2 text-base font-semibold text-blue hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
+      className={inHeader ? headerAuthLinkClass : `${authLinkClass} px-3`}
     >
-      Sign Out
+      Sign out
     </button>
   );
 }
