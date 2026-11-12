@@ -192,14 +192,15 @@ begin
   select q.booking_paid into v_paid
   from public.get_cancellation_quote(p_reservation_id) q;
 
-  if v_paid is distinct from v_reservation.total_price
+  if v_paid is null 
+    or v_paid < v_reservation.total_price
     or v_reservation.total_price <= 0
     or v_reservation.total_price <> round(v_reservation.total_price, 2) then
     raise exception 'Payment records do not match this booking. Reconcile them before editing.'
       using errcode = 'PT409';
   end if;
 
-  v_difference := v_total - v_reservation.total_price;
+  v_difference := v_total - v_paid;
 
   -- Existing exclusion constraints remain responsible for availability.
   update public.reservations
