@@ -42,7 +42,7 @@ test('business', () => {
     hero: {
       eyebrow: 'Your places',
       title: 'Where to next?',
-      line: 'Find a stay anywhere. Here are your listings.',
+      line: 'Find a stay anywhere. Your listings are just below.',
     },
     welcome: {
       title: 'Listings, in one place.',
