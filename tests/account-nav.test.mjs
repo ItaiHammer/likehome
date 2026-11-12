@@ -22,7 +22,7 @@ const MY_LISTINGS = { label: 'My Listings', href: '/listings' }
 test('header links per role', () => {
   assert.deepEqual(navItemsFor('signed-out'), [STAYS, MY_BOOKINGS, MY_LISTINGS])
   assert.deepEqual(navItemsFor('unchosen'), [STAYS, MY_BOOKINGS, MY_LISTINGS])
-  assert.deepEqual(navItemsFor('unknown'), [STAYS, MY_BOOKINGS, MY_LISTINGS])
+  assert.deepEqual(navItemsFor('unknown'), [STAYS])
   assert.deepEqual(navItemsFor('personal'), [STAYS, MY_BOOKINGS])
   assert.deepEqual(navItemsFor('business'), [STAYS, MY_LISTINGS])
 })

@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { PAGE_ROUTES } from '@/constants/routes'
-import { afterChoicePath, choiceOutcome, choicePathFor, parseAccountType, safeNext } from '@/lib/account/choice'
+import { afterChoicePath, choiceOutcome, choicePathFor, landingAfterChoice, parseAccountType, safeNext } from '@/lib/account/choice'
 import { DEV_ROLE_COOKIE } from '@/lib/account/dev-role'
 import { getAccountType, setAccountType, type AccountType } from '@/utils/accounts'
 import { getViewer } from '@/utils/viewer'
@@ -28,7 +28,7 @@ export async function chooseAccountType(_prev: ChooseState, formData: FormData):
     const cookieStore = await cookies()
     cookieStore.set(DEV_ROLE_COOKIE, type, { path: '/', httpOnly: true, sameSite: 'lax' })
     revalidatePath('/', 'layout')
-    redirect(afterChoicePath(next, type))
+    redirect(landingAfterChoice(next, type, viewer))
   }
 
   const { error } = await setAccountType(type)

@@ -49,6 +49,17 @@ export function afterChoicePath(next: unknown, type: AccountType): string {
   return safe
 }
 
+// Route access (#185) checks the stored type, not the dev override, so following
+// next while they disagree would bounce straight back to /account-type
+export function landingAfterChoice(
+  next: unknown,
+  type: AccountType,
+  { devRole, realType }: { devRole: string | null; realType: AccountType | null },
+): string {
+  if (devRole && realType !== type) return '/'
+  return afterChoicePath(next, type)
+}
+
 export function parseAccountType(value: unknown): AccountType | null {
   return value === 'personal' || value === 'business' ? value : null
 }

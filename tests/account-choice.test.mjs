@@ -12,7 +12,7 @@ register(
     }`)
 )
 
-const { safeNext, choicePathFor, choiceRedirect, afterChoicePath, parseAccountType, choiceOutcome } = await import(
+const { safeNext, choicePathFor, choiceRedirect, afterChoicePath, landingAfterChoice, parseAccountType, choiceOutcome } = await import(
   '../lib/account/choice.ts'
 )
 
@@ -120,4 +120,20 @@ test('choiceOutcome: any error is a failure, even one with an empty or missing c
   for (const error of [{ code: '', message: 'connection closed' }, { message: 'fetch failed' }, { code: null, message: 'x' }]) {
     assert.deepEqual(choiceOutcome({ requested: 'personal', error, storedType: null }), { kind: 'error', message: TRY_AGAIN }, JSON.stringify(error))
   }
+})
+
+test('landingAfterChoice follows next when nothing is overridden', () => {
+  assert.equal(landingAfterChoice('/MyBookings', 'personal', { devRole: null, realType: 'personal' }), '/MyBookings')
+  assert.equal(landingAfterChoice('/listings', 'personal', { devRole: null, realType: 'personal' }), '/')
+})
+
+test('landingAfterChoice goes home when a dev override disagrees with the stored type', () => {
+  // Route access checks the stored type, so following next would bounce back to /account-type forever
+  assert.equal(landingAfterChoice('/MyBookings', 'personal', { devRole: 'personal', realType: null }), '/')
+  assert.equal(landingAfterChoice('/listings', 'business', { devRole: 'business', realType: 'personal' }), '/')
+  assert.equal(landingAfterChoice('/MyBookings', 'personal', { devRole: 'unchosen', realType: null }), '/')
+})
+
+test('landingAfterChoice follows next when the dev override matches the stored type', () => {
+  assert.equal(landingAfterChoice('/listings', 'business', { devRole: 'business', realType: 'business' }), '/listings')
 })

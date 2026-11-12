@@ -9,7 +9,10 @@ const MY_LISTINGS: NavLink = { label: 'My Listings', href: PAGE_ROUTES.LISTINGS 
 
 export function navItemsFor(role: ViewerRole): NavLink[] {
   const own = accountMenuLinkFor(role)
-  return own ? [STAYS, own] : [STAYS, MY_BOOKINGS, MY_LISTINGS]
+  if (own) return [STAYS, own]
+  // With the type unreadable, either area link could be the wrong one and end on the no-access page
+  if (role === 'unknown') return [STAYS]
+  return [STAYS, MY_BOOKINGS, MY_LISTINGS]
 }
 
 export function accountMenuLinkFor(role: ViewerRole): NavLink | null {

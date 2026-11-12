@@ -77,11 +77,18 @@ describe('chooseAccountType', () => {
   test('with the dev override the choice goes in the cookie, never the database', async () => {
     viewer = { ...viewer, devRole: 'unchosen' }
     const url = await redirectOf(chooseAccountType(null, form('business', '/listings/new')))
-    assert.equal(url, '/listings/new')
+    // The stored type is still empty, so route access would bounce /listings/new back here
+    assert.equal(url, '/')
     assert.equal(setAccountType.mock.callCount(), 0)
     assert.equal(cookieSet.mock.calls[0].arguments[0], 'lh_dev_role')
     assert.equal(cookieSet.mock.calls[0].arguments[1], 'business')
     assert.deepEqual(revalidatePath.mock.calls[0].arguments, ['/', 'layout'])
+  })
+
+  test('with the dev override matching the stored type, next is followed', async () => {
+    viewer = { ...viewer, devRole: 'business', realType: 'business' }
+    const url = await redirectOf(chooseAccountType(null, form('business', '/listings/new')))
+    assert.equal(url, '/listings/new')
   })
 
   test('in production (no override from the viewer) it saves for real and writes no cookie', async () => {

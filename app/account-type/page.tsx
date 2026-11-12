@@ -3,7 +3,7 @@ import { AccountTypeRetry } from "@/app/_components/AccountTypeRetry";
 import { AuthCardLayout } from "@/app/_components/AuthCardLayout";
 import { SampleNotice } from "@/app/MyBookings/_components/SampleNotice";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { afterChoicePath, choicePathFor, safeNext } from "@/lib/account/choice";
+import { choicePathFor, landingAfterChoice, safeNext } from "@/lib/account/choice";
 import { getViewer } from "@/utils/viewer";
 import { AccountTypeForm } from "./AccountTypeForm";
 import styles from "./page.module.css";
@@ -15,7 +15,7 @@ export default async function AccountTypePage({ searchParams }: PageProps<"/acco
   const viewer = await getViewer();
 
   if (viewer.role === "signed-out") redirect(`${PAGE_ROUTES.LOGIN}?next=${encodeURIComponent(choicePathFor(next))}`);
-  if (viewer.role === "personal" || viewer.role === "business") redirect(afterChoicePath(next, viewer.role));
+  if (viewer.role === "personal" || viewer.role === "business") redirect(landingAfterChoice(next, viewer.role, viewer));
 
   // Development only: say where a save would land before it happens
   const notice =
