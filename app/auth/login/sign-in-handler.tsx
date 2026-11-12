@@ -1,43 +1,49 @@
 "use client";
 import { type Provider } from "@supabase/supabase-js"
 import { createClient } from "@/utils/supabase/client";
-import { API_ROUTES } from "@/constants/routes";
+import { oauthRedirectUrl } from "@/lib/auth-redirect";
 
-export async function signInWithGoogle() {
-    signIn('google');
+export function signInWithGoogle() {
+    return signIn('google');
 }
 
-export async function signInWithFacebook() {
-    signIn('facebook');
+export function signInWithFacebook() {
+    return signIn('facebook');
 }
 
-export async function signInWithGitHub() {
-    signIn('github');
+export function signInWithGitHub() {
+    return signIn('github');
 }
 
-export async function signInWithDiscord() {
-    signIn('discord');
+export function signInWithDiscord() {
+    return signIn('discord');
 }
 
-async function signIn(provider: Provider) {
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: getRedirectUrl() },
-    });
-    if (error) console.error(error.message);
+// Resolves with an error message when the sign-in couldn't start; on success the browser leaves for the provider.
+async function signIn(provider: Provider): Promise<string | null> {
+    try {
+        const supabase = createClient();
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider,
+            options: { redirectTo: getRedirectUrl() },
+        });
+        if (error) {
+            console.error(`[auth] ${provider} sign-in failed:`, error.message);
+            return error.message;
+        }
+        return null;
+    } catch (err) {
+        console.error(`[auth] ${provider} sign-in threw:`, err);
+        return err instanceof Error ? err.message : "Sign-in failed";
+    }
 }
 
 function getRedirectUrl(): string {
-    const primaryUrl = process.env.NEXT_PUBLIC_SITE_URL; // Set this in prod
-    const secondaryUrl = process.env.NEXT_PUBLIC_VERCEL_URL; // Auto set by Vercel
-
-    const url = primaryUrl ?? secondaryUrl ?? 'localhost:3000';
-    const protocol = (url?.includes("localhost")) ? 'http' : 'https';
-    
-    const redirectUrl = `${protocol}://${url}${API_ROUTES.AUTH_CALLBACK}`
-
     // /auth/login?next=/reserve/... (e.g. "Sign in to reserve") → the callback sends people back there
-    const next = new URLSearchParams(window.location.search).get("next");
-    return next?.startsWith("/") ? `${redirectUrl}?next=${encodeURIComponent(next)}` : redirectUrl;
+    return oauthRedirectUrl(
+        window.location.origin,
+        process.env.NEXT_PUBLIC_SITE_URL,
+        process.env.NEXT_PUBLIC_VERCEL_URL,
+        window.location.search,
+    );
 }
