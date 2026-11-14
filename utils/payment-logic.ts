@@ -52,10 +52,7 @@ function toInt(value: unknown): number | null {
 }
 
 /** Validates the `payment` part of a checkout request. The CVC and name are checked but never returned. */
-export function validatePaymentInput(
-  body: unknown,
-  now: Date = new Date()
-): PaymentValidationResult {
+export function validatePaymentInput(body: unknown, now: Date = new Date(), today?: string): PaymentValidationResult {
   if (!body || typeof body !== 'object') {
     return { ok: false, error: 'Payment details are required.' }
   }
@@ -76,7 +73,12 @@ export function validatePaymentInput(
     return { ok: false, error: 'Enter a valid expiry date.' }
   }
   if (expYear < 100) expYear += 2000
-  const thisMonth = now.getUTCFullYear() * 12 + now.getUTCMonth()
+
+  const [currentYear, currentMonth] = today
+    ? today.split("-").map(Number)
+    : [now.getUTCFullYear(), now.getUTCMonth() + 1];
+
+  const thisMonth = currentYear * 12 + (currentMonth - 1);
   if (expYear * 12 + (expMonth - 1) < thisMonth) {
     return { ok: false, error: 'This card has expired.' }
   }
@@ -102,5 +104,11 @@ export function authorizeMockPayment(cardNumber: string, amount: number): Author
   if (Object.hasOwn(DECLINED_TEST_CARDS, cardNumber)) {
     return { approved: false, reason: DECLINED_TEST_CARDS[cardNumber] }
   }
+  return { approved: true }
+}
+
+/** Saved cards contain no full number or CVC, so the mock treats them as already authorized. */
+export function authorizeSavedPayment(amount: number): AuthorizationResult {
+  if (!(amount > 0)) return { approved: false, reason: 'Invalid payment amount.' }
   return { approved: true }
 }

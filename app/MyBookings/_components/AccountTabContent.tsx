@@ -66,7 +66,7 @@ export function AccountTabContent({
             setLoading(true);
 
             try {
-                const response = await fetch("/api/saved-payment")
+                const response = await fetch("/api/saved-payment");
                 const result = await response.json();
 
                 if (!response.ok) {

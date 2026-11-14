@@ -6,6 +6,7 @@ import { getUserId } from '@/utils/user'
 import { createLiveReservation, createReservation, updateReservation } from '@/utils/reservations'
 import { createPayment } from '@/utils/payments'
 import { recordCheckoutCharge, recordLiveCharge } from '@/utils/transactions'
+import { getSavedPaymentMethod } from "@/utils/saved-payment-methods";
 import {
   bookingParty,
   calculateTotalPrice,
@@ -15,12 +16,32 @@ import {
   validateReservationInput,
   type RoomForBooking,
 } from '@/utils/reservation-logic'
-import { authorizeMockPayment, validatePaymentInput } from '@/utils/payment-logic'
+import { authorizeMockPayment, authorizeSavedPayment, validatePaymentInput, type CardBrand } from '@/utils/payment-logic'
 import { partyOf } from '@/lib/liteapi/party'
 import { liveRoomPrice } from '@/lib/liteapi/rates'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
 const EXCLUSION_VIOLATION = '23P01'
+
+type SavedPaymentMethodRow = {
+  id: string
+  account_id: string
+  brand: CardBrand
+  last4: string
+  exp_month: number | string
+  exp_year: number | string
+}
+
+function isSavedPaymentRequest(payment: unknown): payment is { saved_payment_method_id: string } {
+  if (!payment || typeof payment !== 'object') return false
+  const id = (payment as Record<string, unknown>).saved_payment_method_id
+  return typeof id === 'string' && id.trim() !== ''
+}
+
+function isExpired(expMonth: number, expYear: number, today: string) {
+  const [year, month] = today.split("-").map(Number);
+  return expYear * 12 + (expMonth - 1) < year * 12 + (month - 1);
+}
 
 export async function POST(request: Request) {
   const { supabase, userId } = await getUserId()
@@ -38,16 +59,51 @@ export async function POST(request: Request) {
   // 1. Validate the stay and the card. "Today" is the guest's today, from the
   //    time_zone the browser sends (e.g. "America/Los_Angeles"); UTC if it's missing.
   const timeZone = (body as Record<string, unknown> | null)?.time_zone
-  const stay = validateReservationInput(body, todayInTimeZone(timeZone))
+  const today = todayInTimeZone(timeZone);
+  const stay = validateReservationInput(body, today);
   if (!stay.ok) {
     return Response.json({ error: stay.error }, { status: 400 })
   }
-  const card = validatePaymentInput((body as Record<string, unknown>).payment)
-  if (!card.ok) {
-    return Response.json({ error: card.error }, { status: 400 })
-  }
   const input = stay.value
-  const payment = card.value
+  const paymentBody = (body as Record<string, unknown>).payment
+  let savedPaymentMethodId: string | undefined
+  let payment: {
+    last4: string
+    brand: CardBrand
+    expMonth: number
+    expYear: number
+    cardNumber?: string
+  }
+
+  if (isSavedPaymentRequest(paymentBody)) {
+    savedPaymentMethodId = paymentBody.saved_payment_method_id.trim()
+    const { data: saved, error: savedError } = await getSavedPaymentMethod(savedPaymentMethodId)
+    const savedMethod = saved as SavedPaymentMethodRow | null
+
+    // Treat another user's saved method as not found so its existence is not disclosed.
+    if (savedError || !savedMethod || savedMethod.account_id !== userId) {
+      return Response.json({ error: 'Saved payment method not found.' }, { status: 404 })
+    }
+
+    const expMonth = Number(savedMethod.exp_month)
+    const expYear = Number(savedMethod.exp_year)
+    if (!Number.isInteger(expMonth) || expMonth < 1 || expMonth > 12 || !Number.isInteger(expYear) || isExpired(expMonth, expYear, today)) {
+      return Response.json({ error: 'This saved payment method has expired.' }, { status: 400 })
+    }
+
+    payment = {
+      last4: savedMethod.last4,
+      brand: savedMethod.brand,
+      expMonth,
+      expYear,
+    }
+  } else {
+    const card = validatePaymentInput(paymentBody, undefined, today)
+    if (!card.ok) {
+      return Response.json({ error: card.error }, { status: 400 })
+    }
+    payment = card.value
+  }
 
   // 2. Look up the room and check capacity. `*` rather than the LiteAPI columns by name, so booking
   //    keeps working (at stored prices) on a database without supabase/migrations/liteapi_hotels.sql.
@@ -93,7 +149,9 @@ export async function POST(request: Request) {
   const total_price = calculateTotalPrice(input.check_in, input.check_out, nightly)
 
   // 4. Mock charge. A decline writes nothing.
-  const auth = authorizeMockPayment(payment.cardNumber, total_price)
+  const auth = payment.cardNumber
+    ? authorizeMockPayment(payment.cardNumber, total_price)
+    : authorizeSavedPayment(total_price)
   if (!auth.approved) {
     return Response.json({ error: auth.reason }, { status: 402 })
   }
@@ -131,6 +189,7 @@ export async function POST(request: Request) {
     card_number: payment.last4,
     card_exp_month: payment.expMonth,
     card_exp_year: payment.expYear,
+    ...(savedPaymentMethodId ? { saved_payment_method_id: savedPaymentMethodId } : {}),
   })
   const savedPayment = payments?.[0]
 
