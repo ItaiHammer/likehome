@@ -2,12 +2,11 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Button } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { firstName, groupBookings, toCancellationQuote, type Booking, type CancellationQuote } from "@/lib/bookings";
+import { firstName, groupBookings, toCancellationQuote, money, type Booking, type CancellationQuote } from "@/lib/bookings";
 import { getAccount } from "@/utils/accounts";
-import { getHotelsByIds, getHotels } from "@/utils/hotels";
+import { getHotels } from "@/utils/hotels";
 import { guestToday } from "@/utils/guest-today";
-import { getCancellationQuote, getReservationsByAccount } from "@/utils/reservations";
-import { getRoomsByIds } from "@/utils/rooms";
+import { getCancellationQuote } from "@/utils/reservations";
 import { getUserId } from "@/utils/user";
 import { STAYS } from "@/app/_data/stays";
 import { AccountSidebar, type AccountTab } from "./_components/AccountSidebar";
@@ -18,6 +17,8 @@ import { SampleNotice } from "./_components/SampleNotice";
 import { SavedHotelsList } from "./_components/SavedHotelsList";
 import { UpcomingBooking } from "./_components/UpcomingBooking";
 import { getSampleBookings, getSampleQuote } from "./sampleBookings";
+import { getMyBookings, getTransactionHistory, type TransactionHistoryRow } from "@/utils/history";
+import { getPointsBalance } from "@/utils/points";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
 const sectionHeading = "font-serif text-[32px] leading-10 text-ink";
@@ -26,54 +27,63 @@ async function loadMyBookings() {
   const { userId } = await getUserId();
   if (!userId) redirect(PAGE_ROUTES.LOGIN);
 
-  const [account, reservations, allHotelsRes] = await Promise.all([
+  const [
+    account,
+    bookingHistory,
+    transactionHistory,
+    hotelsResult,
+    pointsResult,
+  ] = await Promise.all([
     getAccount(userId),
-    getReservationsByAccount(userId),
+    getMyBookings(),
+    getTransactionHistory(),
     getHotels(),
+    getPointsBalance(userId),
   ]);
 
   if (account.error) throw new Error(account.error.message);
-  if (allHotelsRes.error) {
-    throw new Error(allHotelsRes.error.message);
+  if (bookingHistory.error) {
+    throw new Error(bookingHistory.error.message);
+  }
+  if (transactionHistory.error) {
+    throw new Error(transactionHistory.error.message);
+  }
+  if (hotelsResult.error) {
+    throw new Error(hotelsResult.error.message);
   }
 
-  if (reservations.error) throw new Error(reservations.error.message);
-  const rows = reservations.data ?? [];
+  if (pointsResult.error) {
+    throw new Error(pointsResult.error.message);
+  }
 
-  const hotelIds = [...new Set(rows.map((r) => r.hotel_id))];
-  const roomIds = [...new Set(rows.map((r) => r.room_id))];
-  const [hotels, rooms] = await Promise.all([
-    hotelIds.length ? getHotelsByIds(hotelIds) : { data: [], error: null },
-    roomIds.length ? getRoomsByIds(roomIds) : { data: [], error: null },
-  ]);
+  const bookings = bookingHistory.data ?? [];
+  
+  const transactionRows =
+    (transactionHistory.data ?? []) as TransactionHistoryRow[];
 
-  if (hotels.error) throw new Error(hotels.error.message);
-  if (rooms.error) throw new Error(rooms.error.message);
-  const hotelById = new Map(hotels.data?.map((h) => [h.id, h]));
-  const roomById = new Map(rooms.data?.map((r) => [r.id, r]));
-
-  const bookings: Booking[] = rows.map((r) => {
-    const hotel = hotelById.get(r.hotel_id);
-    return {
-      id: r.id,
-      checkIn: r.check_in,
-      checkOut: r.check_out,
-      guests: r.guests ?? null,
-      status: r.status ?? "confirmed",
-      hotelName: hotel?.name ?? "Hotel no longer listed",
-      city: hotel?.city ?? null,
-      photoUrl: hotel?.photo_urls?.find(Boolean) ?? null,
-      roomType: roomById.get(r.room_id)?.room_type ?? null,
-      unlisted: !hotel || !!hotel.liteapi_deleted_at,
-    };
-  });
-
+  const transactions: Transaction[] = transactionRows.map((row) => ({
+    id: row.id,
+    title:
+      row.transaction_type === "charge"
+        ? "Booking payment"
+        : row.transaction_type === "refund"
+          ? "Refund"
+          : row.transaction_type,
+    subtitle: `${money(Number(row.amount))} · ${row.created_at.slice(0, 10)}`,
+    status:
+      row.status === "completed"
+        ? row.transaction_type === "refund"
+          ? "Refunded"
+          : "Paid"
+        : row.status,
+    image: null,
+  }));
   // Create lookup map from STAYS static data for reliable price/image matching
   const staysByName = new Map(
     STAYS.map((stay) => [stay.name.toLowerCase().trim(), stay])
   );
 
-const allHotels = (allHotelsRes.data ?? []).map((h) => {
+  const allHotels = (hotelsResult.data ?? []).map((h) => {
   const matchedStay = staysByName.get(h.name.toLowerCase().trim());
 
 const staticPrices =
@@ -111,7 +121,7 @@ const price =
   };
 });
 
-  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, allHotels };
+  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, transactions, allHotels, pointsBalance: pointsResult.balance };
 }
 // What cancelling each upcoming stay would cost. A quote that fails only leaves that cancel button unavailable.
 async function loadQuotes(bookings: Booking[]) {
@@ -145,21 +155,18 @@ export default async function MyBookingsPage({
         : "reservations";
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
 
-  const { name, email, bookings, allHotels } = showSample
-      ? { ...getSampleBookings(today, sample === "empty"), allHotels: [] }
-      : await loadMyBookings();
+  const { name, email, bookings, transactions, allHotels, pointsBalance } = showSample
+    ? {
+        ...getSampleBookings(today, sample === "empty"),
+        allHotels: [],
+        transactions: [],
+        pointsBalance: 0,
+      }
+    : await loadMyBookings();
 
   const { upcoming, past, cancelled } = groupBookings(bookings, today);
   const quotes = showSample ? new Map(upcoming.map((b) => [b.id, getSampleQuote(b, today)])) : await loadQuotes(upcoming);
   const first = firstName(name);
-
-  const transactions: Transaction[] = bookings.map((b) => ({
-    id: b.id,
-    title: b.hotelName,
-    subtitle: "Transaction date · Booking payment",
-    status: b.status === "cancelled" ? "Refunded" : "Paid",
-    image: b.photoUrl,
-  }));
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
@@ -259,7 +266,7 @@ export default async function MyBookingsPage({
 
             {activeTab === "account" && (
                 <section aria-labelledby="account-heading">
-                  <AccountTabContent name={name} email={email} transactions={transactions} />
+                  <AccountTabContent name={name} email={email} transactions={transactions} pointsBalance={pointsBalance} />
                 </section>
             )}
           </div>
