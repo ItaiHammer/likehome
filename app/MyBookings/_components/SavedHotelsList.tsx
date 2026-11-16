@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Button } from "@/app/_components/ui";
 import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
 import { STAYS } from "@/app/_data/stays";
+import { getSavedIds, getServerSavedIds, subscribeSavedIds } from "@/lib/saved-hotels";
+
+const noSubscribe = () => () => {};
 
 interface Hotel {
     id: string;
@@ -18,21 +21,10 @@ interface Hotel {
 }
 
 export function SavedHotelsList({ allHotels }: { allHotels: Hotel[] }) {
-    const [savedIds, setSavedIds] = useState<string[]>([]);
-    const [isLoaded, setIsLoaded] = useState(false);
+    const savedIds = useSyncExternalStore(subscribeSavedIds, getSavedIds, getServerSavedIds);
+    // false on the server and the first client render, so the server's empty list isn't shown as "no saved hotels"
+    const isLoaded = useSyncExternalStore(noSubscribe, () => true, () => false);
     const [sortBy, setSortBy] = useState<"recent" | "name_asc" | "name_desc">("recent");
-
-    const loadSaved = () => {
-        const saved = JSON.parse(localStorage.getItem("likehome_saved_hotels") || "[]");
-        setSavedIds(saved);
-        setIsLoaded(true);
-    };
-
-    useEffect(() => {
-        loadSaved();
-        window.addEventListener("saved_hotels_updated", loadSaved);
-        return () => window.removeEventListener("saved_hotels_updated", loadSaved);
-    }, []);
 
     if (!isLoaded) {
         return <p className="text-sm text-slate">Loading saved hotels...</p>;

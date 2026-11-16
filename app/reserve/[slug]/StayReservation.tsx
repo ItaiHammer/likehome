@@ -246,7 +246,8 @@ export function StayReservation({
   useEffect(() => {
     async function loadSavedPaymentMethods() {
       try {
-        const response = await fetch("/api/saved-payment-methods");
+        // Same route as My Bookings › Account; the backend serves saved cards at /api/saved-payment
+        const response = await fetch("/api/saved-payment");
         const result = await response.json();
 
         if (!response.ok) {
@@ -481,9 +482,13 @@ export function StayReservation({
       (card) => card.id === selectedCardId
     );
 
+    // Use whichever identical room is free for these dates, whichever way the guest pays:
+    // room.id alone can be a unit that's already booked, and the booking then fails as taken.
+    const roomId = freeUnitId(room, checkIn, checkOut) ?? room.id;
+
     const payload = selectedCard
       ? checkoutRequest({
-          roomId: room.id,
+          roomId,
           checkIn,
           checkOut,
           adults, 
@@ -492,8 +497,7 @@ export function StayReservation({
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         })
       : checkoutRequest({
-          // Use whichever identical room is free for these dates.
-          roomId: freeUnitId(room, checkIn, checkOut) ?? room.id,
+          roomId,
           checkIn,
           checkOut,
           adults, 

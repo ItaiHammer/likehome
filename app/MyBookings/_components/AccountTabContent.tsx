@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cardErrors } from "@/lib/card";
+import { Tag } from "@/app/_components/ui";
 
 export interface PaymentMethod {
     id: string;
@@ -57,6 +58,7 @@ export function AccountTabContent({
     const [expiry, setExpiry] = useState("");
     const [cvc, setCvc] = useState("");
     const [cardError, setCardError] = useState("");
+    const [savingCard, setSavingCard] = useState(false);
 
     // Transaction history modal
     const [showAllTransactions, setShowAllTransactions] = useState(false);
@@ -170,28 +172,39 @@ export function AccountTabContent({
         const [monthStr = "", yearStr = ""] = expiry.split("/");
         const month = Number(monthStr);
 
-        const response = await fetch("/api/saved-payment", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                card_number: rawDigits,
-                exp_month: month,
-                exp_year: 2000 + Number(yearStr),
-                cvc,
-                name_on_card: name ?? "Cardholder",
-            }),
-        });
+        if (savingCard) return;
+        setSavingCard(true);
 
-        const result = await response.json();
+        // A missing route or a server error returns an HTML page, not JSON: show an error instead of throwing
+        let saved: { id: string; last4: string; exp_month: number; exp_year: number } | undefined;
+        try {
+            const response = await fetch("/api/saved-payment", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    card_number: rawDigits,
+                    exp_month: month,
+                    exp_year: 2000 + Number(yearStr),
+                    cvc,
+                    name_on_card: name ?? "Cardholder",
+                }),
+            });
+            const result = (await response.json().catch(() => ({}))) as { error?: string; paymentMethod?: typeof saved };
 
-        if (!response.ok) {
-            setCardError(result.error ?? "Could not save payment method.");
+            if (!response.ok || !result.paymentMethod) {
+                setCardError(result.error ?? "Could not save payment method. Please try again.");
+                return;
+            }
+            saved = result.paymentMethod;
+        } catch {
+            setCardError("Could not reach the server. Please try again.");
             return;
+        } finally {
+            setSavingCard(false);
         }
-
-        const saved = result.paymentMethod;
+        if (!saved) return;
 
         const newCardObj: PaymentMethod = {
             id: saved.id,
@@ -387,8 +400,9 @@ export function AccountTabContent({
 
                 {!isEditingAccount && (
                     <div className="pt-6">
-                        <button type="button" onClick={() => setIsEditingAccount(true)} className="text-xs font-semibold text-blue hover:text-blue-dark transition-colors inline-flex items-center gap-1">
-                            Edit details &rarr;
+                        {/* Saving account details isn't connected yet, so editing would only change this screen */}
+                        <button type="button" disabled title="Coming soon" className="text-xs font-semibold text-slate cursor-not-allowed inline-flex items-center gap-2">
+                            Edit details <Tag>Soon</Tag>
                         </button>
                     </div>
                 )}
@@ -414,9 +428,11 @@ export function AccountTabContent({
                 <div className="pt-6">
                     <button
                         type="button"
-                        className="text-xs font-semibold text-blue hover:text-blue-dark transition-colors inline-flex items-center gap-1"
+                        disabled
+                        title="Coming soon"
+                        className="text-xs font-semibold text-slate cursor-not-allowed inline-flex items-center gap-2"
                     >
-                        View rewards &rarr;
+                        View rewards <Tag>Soon</Tag>
                     </button>
                 </div>
             </div>
@@ -468,9 +484,10 @@ export function AccountTabContent({
                             <div className="flex items-center gap-2 pt-1">
                                 <button
                                     type="submit"
-                                    className="rounded-md bg-blue px-3 py-1 text-xs font-semibold text-white hover:bg-blue-dark"
+                                    disabled={savingCard}
+                                    className="rounded-md bg-blue px-3 py-1 text-xs font-semibold text-white hover:bg-blue-dark disabled:cursor-not-allowed disabled:opacity-60"
                                 >
-                                    Save Card
+                                    {savingCard ? "Saving…" : "Save Card"}
                                 </button>
                                 <button
                                     type="button"

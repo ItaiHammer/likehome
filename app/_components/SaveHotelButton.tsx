@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
+import { getSavedIds, getServerSavedIds, subscribeSavedIds, toggleSavedHotel } from "@/lib/saved-hotels";
 
 interface SaveHotelButtonProps {
     hotelId: string;
@@ -8,30 +9,13 @@ interface SaveHotelButtonProps {
 }
 
 export function SaveHotelButton({ hotelId, className = "" }: SaveHotelButtonProps) {
-    const [isSaved, setIsSaved] = useState(false);
-
-    useEffect(() => {
-        const saved = JSON.parse(localStorage.getItem("likehome_saved_hotels") || "[]");
-        setIsSaved(saved.includes(hotelId));
-    }, [hotelId]);
+    const savedIds = useSyncExternalStore(subscribeSavedIds, getSavedIds, getServerSavedIds);
+    const isSaved = savedIds.includes(String(hotelId));
 
     const toggleSave = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-
-        const saved: string[] = JSON.parse(localStorage.getItem("likehome_saved_hotels") || "[]");
-        let updated: string[];
-
-        if (saved.includes(hotelId)) {
-            updated = saved.filter((id) => id !== hotelId);
-            setIsSaved(false);
-        } else {
-            updated = [...saved, hotelId];
-            setIsSaved(true);
-        }
-
-        localStorage.setItem("likehome_saved_hotels", JSON.stringify(updated));
-        window.dispatchEvent(new Event("saved_hotels_updated"));
+        toggleSavedHotel(String(hotelId));
     };
 
     return (
