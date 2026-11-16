@@ -181,6 +181,7 @@ export function AccountTabContent({
                 exp_year: 2000 + Number(yearStr),
                 cvc,
                 name_on_card: name ?? "Cardholder",
+                time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             }),
         });
 

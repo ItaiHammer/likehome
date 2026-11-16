@@ -4,6 +4,7 @@ import {
   getSavedPaymentMethodsByAccount,
 } from '@/utils/saved-payment-methods'
 import { validatePaymentInput } from '@/utils/payment-logic'
+import { todayInTimeZone } from '@/utils/reservation-logic'
 
 export async function GET() {
   const { userId } = await getUserId()
@@ -52,7 +53,11 @@ export async function POST(request: Request) {
     )
   }
 
-  const payment = validatePaymentInput(body)
+  const timeZone =
+    body && typeof body === 'object'
+      ? (body as Record<string, unknown>).time_zone
+      : undefined
+  const payment = validatePaymentInput(body, undefined, todayInTimeZone(timeZone))
 
   if (!payment.ok) {
     return Response.json(

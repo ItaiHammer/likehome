@@ -543,7 +543,7 @@ export function StayReservation({
           const saveResponse = await fetch("/api/saved-payment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload.payment),
+            body: JSON.stringify({ ...payload.payment, time_zone: payload.time_zone }),
             signal,
           });
 
