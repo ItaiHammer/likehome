@@ -14,7 +14,7 @@ export function cardErrors(cardNumber: string, expiry: string, cvc: string, now:
 
   const exp = /^(0[1-9]|1[0-2])\/(\d{2})$/.exec(expiry)
   if (!exp) errors.expiry = 'Use the format MM/YY.'
-  else if ((2000 + Number(exp[2])) * 12 + Number(exp[1]) - 1 < now.getUTCFullYear() * 12 + now.getUTCMonth()) errors.expiry = 'This card has expired.'
+  else if ((2000 + Number(exp[2])) * 12 + Number(exp[1]) - 1 < now.getFullYear() * 12 + now.getMonth()) errors.expiry = 'This card has expired.'
 
   const cvcLength = brand === 'amex' ? 4 : 3
   if (brand ? !new RegExp(`^\\d{${cvcLength}}$`).test(cvc) : !/^\d{3,4}$/.test(cvc)) {
