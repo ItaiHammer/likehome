@@ -1,5 +1,5 @@
 // No Supabase / Next.js imports here so it can be unit tested with `npm test`.
-import { detectCardBrand, luhnValid } from '../utils/payment-logic.ts'
+import { detectCardBrand, luhnValid, MAX_CARD_YEARS } from '../utils/payment-logic.ts'
 
 export type CardErrors = { cardNumber?: string; expiry?: string; cvc?: string }
 
@@ -15,6 +15,7 @@ export function cardErrors(cardNumber: string, expiry: string, cvc: string, now:
   const exp = /^(0[1-9]|1[0-2])\/(\d{2})$/.exec(expiry)
   if (!exp) errors.expiry = 'Use the format MM/YY.'
   else if ((2000 + Number(exp[2])) * 12 + Number(exp[1]) - 1 < now.getUTCFullYear() * 12 + now.getUTCMonth()) errors.expiry = 'This card has expired.'
+  else if (2000 + Number(exp[2]) > now.getUTCFullYear() + MAX_CARD_YEARS) errors.expiry = 'Check the expiry date.'
 
   const cvcLength = brand === 'amex' ? 4 : 3
   if (brand ? !new RegExp(`^\\d{${cvcLength}}$`).test(cvc) : !/^\d{3,4}$/.test(cvc)) {

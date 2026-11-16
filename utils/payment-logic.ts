@@ -51,6 +51,9 @@ function toInt(value: unknown): number | null {
   return null
 }
 
+/** Cards are issued for at most about 20 years, so an expiry further out is a typo (e.g. 2099) */
+export const MAX_CARD_YEARS = 20
+
 /** Validates the `payment` part of a checkout request. The CVC and name are checked but never returned. */
 export function validatePaymentInput(
   body: unknown,
@@ -77,6 +80,9 @@ export function validatePaymentInput(
   }
   if (expYear < 100) expYear += 2000
   const thisMonth = now.getUTCFullYear() * 12 + now.getUTCMonth()
+  if (expYear > now.getUTCFullYear() + MAX_CARD_YEARS) {
+    return { ok: false, error: 'Enter a valid expiry date.' }
+  }
   if (expYear * 12 + (expMonth - 1) < thisMonth) {
     return { ok: false, error: 'This card has expired.' }
   }
