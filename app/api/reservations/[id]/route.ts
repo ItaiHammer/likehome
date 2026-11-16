@@ -2,6 +2,7 @@
 import { getUserId } from '../../../../utils/user.ts'
 import { updateLiveReservation, updateReservation, getReservation } from '../../../../utils/reservations.ts'
 import {
+  bookingConflictMessage,
   bookingParty,
   calculateTotalPrice,
   checkCapacity,
@@ -13,9 +14,6 @@ import {
 import { partyOf } from '../../../../lib/liteapi/party.ts'
 import { liveRoomPrice } from '../../../../lib/liteapi/rates.ts'
 
-// Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
-const EXCLUSION_VIOLATION = '23P01'
-
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -23,7 +21,7 @@ export async function PATCH(
   // Validate logged in user
   const { supabase, userId } = await getUserId()
   if (!userId) {
-    return Response.json({ error: 'You must be logged in to book.' }, { status: 401 })
+    return Response.json({ error: 'You must be logged in to change a booking.' }, { status: 401 })
   }
 
   // Validate existing reservation
@@ -31,13 +29,13 @@ export async function PATCH(
 
   const { data: curReservation, error: reservationError } = await getReservation(reservationId)
   if ( reservationError || !curReservation ) {
-    return Response.json({ error: 'Reservation not found. '}, { status: 404 })
+    return Response.json({ error: 'Reservation not found.' }, { status: 404 })
   }
 
   // Validate reservation belongs to user
   const curReservationAccount = curReservation?.account_id
   if (!curReservationAccount || curReservationAccount !== userId) {
-    return Response.json({ error: 'Reservation change for another user is forbidden. '}, { status: 403 })
+    return Response.json({ error: 'Reservation change for another user is forbidden.' }, { status: 403 })
   }
 
   // Only confirmed bookings can be changed: editing a cancelled (or completed) one would
@@ -59,7 +57,7 @@ export async function PATCH(
 
   // Validate reservation in the future
   if ( curReservation?.check_in <= today) { 
-    return Response.json({ error: 'Reservation for past dates cannot be changed. '}, { status: 422 })
+    return Response.json({ error: 'Reservation for past dates cannot be changed.' }, { status: 422 })
   }
 
   // Merge current and requested for validation. The saved row has guests and children but no
@@ -97,6 +95,12 @@ export async function PATCH(
 
   if (roomError || !room) {
     return Response.json({ error: 'Room not found.' }, { status: 404 })
+  }
+
+  // A change stays at the booked hotel. room_id comes from the client and the DB takes the hotel
+  // from the room, so without this a booking could be moved to any room at any hotel unpaid.
+  if (room.hotel_id !== curReservation.hotel_id) {
+    return Response.json({ error: 'You can only move to another room at the same hotel.' }, { status: 400 })
   }
 
   // Capacity
@@ -151,8 +155,10 @@ export async function PATCH(
     : await updateReservation(reservationId, update)
 
   if (error) {
-    if (error.code === EXCLUSION_VIOLATION) {
-      return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
+    // The room is taken, or the guest already has another hotel on those nights
+    const conflict = bookingConflictMessage(error)
+    if (conflict) {
+      return Response.json({ error: conflict }, { status: 409 })
     }
     console.error('updateReservation failed:', error)
     return Response.json({ error: 'Could not update reservation.' }, { status: 500 })

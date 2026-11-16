@@ -7,6 +7,7 @@ import { createLiveReservation, createReservation, updateReservation } from '@/u
 import { createPayment } from '@/utils/payments'
 import { recordCheckoutCharge, recordLiveCharge } from '@/utils/transactions'
 import {
+  bookingConflictMessage,
   bookingParty,
   calculateTotalPrice,
   checkCapacity,
@@ -18,9 +19,6 @@ import {
 import { authorizeMockPayment, validatePaymentInput } from '@/utils/payment-logic'
 import { partyOf } from '@/lib/liteapi/party'
 import { liveRoomPrice } from '@/lib/liteapi/rates'
-
-// Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
-const EXCLUSION_VIOLATION = '23P01'
 
 export async function POST(request: Request) {
   const { supabase, userId } = await getUserId()
@@ -117,8 +115,10 @@ export async function POST(request: Request) {
   const reservation = reservations?.[0]
 
   if (reservationError || !reservation) {
-    if (reservationError?.code === EXCLUSION_VIOLATION) {
-      return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
+    // The room is taken, or the guest already has another hotel on those nights
+    const conflict = bookingConflictMessage(reservationError)
+    if (conflict) {
+      return Response.json({ error: conflict }, { status: 409 })
     }
     console.error('createReservation failed:', reservationError)
     return Response.json({ error: 'Could not create reservation.' }, { status: 500 })

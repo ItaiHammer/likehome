@@ -128,7 +128,7 @@ test('returns 401 if user is not logged in', async () => {
   
   assert.equal(res.status, 401)
   const json = await res.json()
-  assert.equal(json.error, 'You must be logged in to book.')
+  assert.equal(json.error, 'You must be logged in to change a booking.')
 })
 
 test('returns 404 if reservation does not exist', async () => {
@@ -138,7 +138,7 @@ test('returns 404 if reservation does not exist', async () => {
   
   assert.equal(res.status, 404)
   const json = await res.json()
-  assert.equal(json.error, 'Reservation not found. ')
+  assert.equal(json.error, 'Reservation not found.')
 })
 
 test('returns 403 if reservation belongs to a different user', async () => {
@@ -148,7 +148,7 @@ test('returns 403 if reservation belongs to a different user', async () => {
   
   assert.equal(res.status, 403)
   const json = await res.json()
-  assert.equal(json.error, 'Reservation change for another user is forbidden. ')
+  assert.equal(json.error, 'Reservation change for another user is forbidden.')
 })
 
 test('returns 422 if reservation is for past dates', async () => {
@@ -158,7 +158,7 @@ test('returns 422 if reservation is for past dates', async () => {
   
   assert.equal(res.status, 422)
   const json = await res.json()
-  assert.equal(json.error, 'Reservation for past dates cannot be changed. ')
+  assert.equal(json.error, 'Reservation for past dates cannot be changed.')
 })
 
 test('returns 400 on invalid JSON body', async () => {
@@ -480,4 +480,29 @@ test('returns 409 and changes nothing for a cancelled reservation', async () => 
   assert.equal(res.status, 409)
   const json = await res.json()
   assert.equal(json.error, 'Only confirmed reservations can be changed.')
+})
+
+// QA 4.8.4: a change can't move the booking to another hotel
+test('E1: moving to a room at another hotel -> 400, nothing saved', async () => {
+  mockRoomResult = { data: { id: 'room-9', hotel_id: 'hotel-2', price_per_night: 900, capacity: 2 }, error: null }
+  const before = updateCalls
+  const res = await PATCH(createMockRequest({ room_id: 'room-9' }), { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 400)
+  assert.equal((await res.json()).error, 'You can only move to another room at the same hotel.')
+  assert.equal(updateCalls, before)
+  assert.equal(liveUpdates.length, 0)
+})
+
+test('E1: another room at the same hotel is still fine', async () => {
+  mockRoomResult = { data: { id: 'room-2', hotel_id: 'hotel-1', price_per_night: 120, capacity: 2 }, error: null }
+  const res = await PATCH(createMockRequest({ room_id: 'room-2' }), { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 200)
+})
+
+// QA 4.8.4: the guest's own booking elsewhere isn't "room not available"
+test('E2: overlapping your own booking at another hotel -> 409 that says so', async () => {
+  mockUpdateError = { code: EXCLUSION_VIOLATION, message: 'conflicting key value violates exclusion constraint "reservations_no_account_overlap"' }
+  const res = await PATCH(createMockRequest({ check_in: getDateFromToday(5), check_out: getDateFromToday(8) }), { params: Promise.resolve({ id: 'res-1' }) })
+  assert.equal(res.status, 409)
+  assert.equal((await res.json()).error, 'You already have a booking at another hotel for overlapping dates.')
 })
