@@ -235,12 +235,13 @@ describe('pricing', () => {
     assert.equal(r.json.reservation.total_price, 300)
   })
 
-  test('402 and nothing written when the room price is zero or missing', async () => {
+  // QA 5.1.5 P3: not a card problem, so not 402 ("Try another card" on the card field)
+  test('500 and nothing written when the room price is zero or missing', async () => {
     for (const price_per_night of [0, null]) {
       roomResult = { data: { ...ROOM, price_per_night }, error: null }
       const r = await post(validBody())
-      assert.equal(r.status, 402)
-      assert.equal(r.json.error, 'Invalid payment amount.')
+      assert.equal(r.status, 500)
+      assert.equal(r.json.error, 'We couldn’t price this stay. Please try again later.')
     }
     assert.equal(writes(), 0)
   })

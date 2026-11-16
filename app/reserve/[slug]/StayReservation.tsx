@@ -8,7 +8,7 @@ import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
 import { freeUnitId, markBookedRooms, mergeBookedNights, soldOutNights } from "@/lib/room-availability";
 import { matchingRoom, roomFits } from "@/lib/stay-filters";
-import { cardErrors } from "@/lib/card";
+import { cardErrors, postalCodeError } from "@/lib/card";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
@@ -454,9 +454,9 @@ export function StayReservation({
         next.cardName = "Enter the name on your card.";
       }
 
-      if (!text("postalCode") || !/^\d{5}$/.test(text("postalCode"))) {
-        next.postalCode = "Enter a valid 5-digit billing postal code.";
-      }
+      // Any country's postal code: guests book hotels worldwide with cards from home
+      const postal = postalCodeError(text("postalCode"));
+      if (postal) next.postalCode = postal;
     }
 
     setErrors(next);
@@ -747,7 +747,7 @@ export function StayReservation({
                           }}
                       />
                       <Field id="cardName" name="cardName" label="Name on card" autoComplete="cc-name" error={errors.cardName} onChange={() => clear("cardName")} />
-                      <Field id="postalCode" name="postalCode" label="Billing postal code" autoComplete="postal-code" maxLength={5} error={errors.postalCode} onChange={() => clear("postalCode")} />
+                      <Field id="postalCode" name="postalCode" label="Billing postal code" autoComplete="postal-code" maxLength={10} error={errors.postalCode} onChange={() => clear("postalCode")} />
 
                       <div className="sm:col-span-2 pt-1">
                         <label className="flex items-center gap-2 cursor-pointer">

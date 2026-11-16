@@ -22,3 +22,11 @@ export function cardErrors(cardNumber: string, expiry: string, cvc: string, now:
   }
   return errors
 }
+
+/**
+ * The billing postal code, or an error. Hotels here are worldwide, so codes from any country pass:
+ * 3 to 10 letters and digits, with spaces or a hyphen inside ("94105", "SW1A 1AA", "K1A 0B6", "1010-123").
+ */
+export function postalCodeError(value: string): string | undefined {
+  return /^[A-Za-z0-9](?:[A-Za-z0-9 -]{1,8})[A-Za-z0-9]$/.test(value.trim()) ? undefined : 'Enter your billing postal code.'
+}
