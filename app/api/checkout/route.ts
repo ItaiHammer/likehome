@@ -91,6 +91,11 @@ export async function POST(request: Request) {
     }
   }
   const total_price = calculateTotalPrice(input.check_in, input.check_out, nightly)
+  // A room with no usable price is our problem, not the guest's card: don't answer 402 "declined"
+  if (!(total_price > 0)) {
+    console.error('checkout: no price for room', room.id)
+    return Response.json({ error: 'We couldn’t price this stay. Please try again later.' }, { status: 500 })
+  }
 
   // 4. Mock charge. A decline writes nothing.
   const auth = authorizeMockPayment(payment.cardNumber, total_price)
