@@ -39,7 +39,6 @@ async function loadMyBookings() {
     getTransactionHistory(),
     getHotels(),
     getPointsBalance(userId),
-    getPointsBalance(userId),
   ]);
 
   if (account.error) {

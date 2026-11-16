@@ -215,9 +215,6 @@ export function StayReservation({
     ...new Set([...stay.blockedNights, ...soldOutOffsets, ...userBookingBlockedOffsets]),
   ];
 
-  const cancelBy = checkIn ? addDays(checkIn, -2) : "";
-  const freeCancel = !checkIn || !today || cancelBy > today;
-
   useEffect(() => {
     async function loadSavedPaymentMethods() {
       try {
@@ -870,14 +867,7 @@ export function StayReservation({
             {checkIn && (
               <Card tone="tint" padding="none" className="mt-5 p-4 text-sm">
                 <p className="font-semibold text-ink">
-                  {freeCancel
-                    ? `Free cancellation until ${formatDate(cancelBy)}`
-                    : "No free cancellation"}
-                </p>
-                <p className="mt-1 text-slate">
-                  {freeCancel
-                    ? "After that, the first night is non-refundable."
-                    : "This booking can’t be cancelled for free. The first night is non-refundable."}
+                  Only bookings with cancellation insurance are eligible for a refund.
                 </p>
               </Card>
             )}
@@ -912,7 +902,7 @@ export function StayReservation({
                 "Confirm and pay"
               )}
             </button>
-            <p className="mt-3 text-center text-sm text-slate">By confirming, you agree to the house rules and cancellation policy.</p>
+            <p className="mt-3 text-center text-sm text-slate">By confirming, you agree to the terms of service and cancellation policy.</p>
           </Card>
         </div>
       </form>
