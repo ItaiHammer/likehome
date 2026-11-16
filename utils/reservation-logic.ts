@@ -25,6 +25,21 @@ export type RoomForBooking = {
   max_children?: number | null
 }
 
+/** Postgres error code for an exclusion-constraint violation (the DB's double booking guards) */
+export const EXCLUSION_VIOLATION = '23P01'
+
+/**
+ * What to tell the guest when a booking or change hits one of the DB's overlap guards, or null for
+ * any other error. reservations_no_account_overlap stops a guest holding two hotels on the same
+ * nights (account_overlap_bookings.sql); the other guard is the room already being taken.
+ */
+export function bookingConflictMessage(error: { code?: string; message?: string } | null | undefined): string | null {
+  if (error?.code !== EXCLUSION_VIOLATION) return null
+  return error.message?.includes('reservations_no_account_overlap')
+    ? 'You already have a booking at another hotel for overlapping dates.'
+    : 'Room is not available for those dates.'
+}
+
 export type ValidationResult =
   | { ok: true; value: ReservationInput }
   | { ok: false; error: string }
