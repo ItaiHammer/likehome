@@ -50,3 +50,25 @@ test('a well-formed request reaches the model', async () => {
   assert.equal(res.status, 200)
   assert.equal(streamText.mock.callCount(), 1)
 })
+
+// QA 3.1.5 S2: a paid model call per request, so huge prompts are refused and old history is dropped
+const textMessage = (text) => ({ id: String(Math.random()), role: 'user', parts: [{ type: 'text', text }] })
+
+test('a prompt over 500 characters -> 400, without calling the model', async () => {
+  const before = streamText.mock.callCount()
+  const res = await post(JSON.stringify({ messages: [textMessage('a'.repeat(501))] }))
+  assert.equal(res.status, 400)
+  assert.equal(streamText.mock.callCount(), before)
+})
+
+test('a 500 character prompt is fine', async () => {
+  assert.equal((await post(JSON.stringify({ messages: [textMessage('a'.repeat(500))] }))).status, 200)
+})
+
+test('only the 10 newest messages reach the model', async () => {
+  const messages = Array.from({ length: 25 }, (_, i) => textMessage(`search ${i}`))
+  await post(JSON.stringify({ messages }))
+  const sentMessages = streamText.mock.calls.at(-1).arguments[0].messages
+  assert.equal(sentMessages.length, 10)
+  assert.equal(sentMessages.at(-1).parts[0].text, 'search 24')
+})
