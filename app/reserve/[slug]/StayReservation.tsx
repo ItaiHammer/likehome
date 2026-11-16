@@ -472,7 +472,7 @@ export function StayReservation({
 
     const payload = selectedCard
       ? checkoutRequest({
-          roomId: room.id,
+          roomId: freeUnitId(room, checkIn, checkOut) ?? room.id,
           checkIn,
           checkOut,
           adults,
