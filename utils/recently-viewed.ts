@@ -25,6 +25,7 @@ export async function getRecentlyViewedHotels(accountId: string) {
   return { data, error }
 }
 
+// Filter results using isValidRow
 export async function getRecentlyViewedLocationAndPrice(accountId: string) {
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)

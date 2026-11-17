@@ -27,12 +27,16 @@ export async function GET(request: Request) {
   const maxPrice = typeof data?.maxPrice === 'number' ? data.maxPrice.toString() : undefined;
 
   // search for recommended results
-  const results = await search({
+  const output = await search({
     where: location,
     minPrice,
     maxPrice,
     tz: timeZone
   });
+  
+  if (output.results.error) {
+    return Response.json({ data: null, error: output.results.error }, { status: 400 });
+  }
 
-  return Response.json({ data: results });
+  return Response.json({ data: output, error: null }, { status: 200 });
 }
