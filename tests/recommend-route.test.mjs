@@ -76,7 +76,39 @@ describe('GET /api/recommend Route Tests', () => {
                     price: { min: 150, max: 300 } 
                 }, 
                 results: mockDbResults 
-            } 
+            },
+            error: null
+        });
+    });
+
+    test('returns a 400 status and null data when search results contain an error', async () => {
+        // Arrange
+        getRecentlyViewedSummary.mock.mockImplementationOnce(async () => ({
+            data: {
+                city: 'San Francisco',
+                region: 'California',
+                country: 'USA',
+                minPrice: 150,
+                maxPrice: 300,
+            },
+            error: null,
+        }));
+
+        // Mock search results to return an error object inside results
+        const errorResult = { error: 'Database query failed' };
+        searchAvailableHotels.mock.mockImplementationOnce(async () => errorResult);
+
+        const request = new Request('http://localhost:3000/api/recommend?time_zone=America/Los_Angeles');
+
+        // Act
+        const response = await GET(request);
+        const json = await response.json();
+
+        // Assert
+        assert.strictEqual(response.status, 400);
+        assert.deepStrictEqual(json, {
+            data: null,
+            error: 'Database query failed',
         });
     });
 
