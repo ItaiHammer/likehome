@@ -125,5 +125,58 @@ reset role;
 set role authenticated;
 set test.uid = '11111111-1111-4111-8111-111111111111';
 
+-- Customers (one row per guest)
+do $$
+declare c record;
+begin
+  assert (select array_agg(guest_name) from public.get_hotel_customer_history(null, '2026-11-05'))
+         = array['Cy Park', 'Ben Ko', 'Ana Ruiz', 'Gus Bell', 'Fay Hart'],
+    'one row per guest, latest check-in first; no row for Dee''s failed checkout or owner B''s guest';
+
+  select * into c from public.get_hotel_customer_history(null, '2026-11-05') where guest_name = 'Ana Ruiz';
+  assert (c.total_bookings, c.cancelled_bookings, c.upcoming_bookings) = (3::bigint, 1::bigint, 1::bigint), 'Ana: counts';
+  assert c.nights_stayed = 3, 'Ana: only the past stay''s nights, not the upcoming or cancelled ones';
+  assert c.total_paid = 920, 'Ana: 300 + 200 (uninsured cancel kept in full) + 420';
+  assert (c.first_stay, c.last_stay, c.next_stay) = ('2026-09-01'::date, '2026-09-01'::date, '2026-12-01'::date),
+    'Ana: first and last stay are the stay that started; next is the upcoming one';
+  assert c.is_repeat, 'Ana: two bookings that weren''t cancelled make a repeat guest';
+
+  select * into c from public.get_hotel_customer_history(null, '2026-11-05') where guest_name = 'Ben Ko';
+  assert c.total_paid = 500, 'Ben: 500 + 240 charged - 240 refunded, no 20 premium';
+  assert c.nights_stayed = 4, 'Ben: an in-stay stay counts its nights';
+  assert (c.first_stay, c.last_stay) = ('2026-11-03'::date, '2026-11-03'::date) and c.next_stay is null, 'Ben: dates';
+  assert not c.is_repeat, 'Ben: a cancelled booking doesn''t make a repeat guest';
+  assert c.hotel_names = array['Cliff Inn', 'Harbor House'], 'Ben: both listings, by name';
+
+  select * into c from public.get_hotel_customer_history(null, '2026-11-05') where guest_name = 'Cy Park';
+  assert c.first_stay is null and c.last_stay is null, 'Cy: no first or last stay before the first one starts';
+  assert c.next_stay = '2027-01-10' and c.upcoming_bookings = 1 and c.nights_stayed = 0, 'Cy: only the upcoming booking';
+
+  select * into c from public.get_hotel_customer_history(null, '2026-11-05') where guest_name = 'Fay Hart';
+  assert c.nights_stayed = 2 and c.last_stay = '2026-11-04', 'Fay: completed counts as stayed';
+
+  select * into c from public.get_hotel_customer_history('aaaaaaaa-0000-4000-8000-000000000001', '2026-11-05')
+  where guest_name = 'Ben Ko';
+  assert c.total_bookings = 1 and c.hotel_names = array['Harbor House'], 'p_hotel_id scopes the totals to that listing';
+
+  select * into c from public.get_hotel_customer_history(null, '2026-11-04') where guest_name = 'Fay Hart';
+  assert c.last_stay = '2026-11-04', 'p_today reaches the booking rules';
+  select * into c from public.get_hotel_customer_history(null, '2026-11-02') where guest_name = 'Ben Ko';
+  assert c.first_stay is null and c.next_stay = '2026-11-03', 'Ben, the day before check-in: not stayed yet';
+end $$;
+do $$ begin
+  perform public.get_hotel_customer_history('bbbbbbbb-0000-4000-8000-000000000001', '2026-11-05');
+  assert false, 'customers at owner B''s listing must be refused';
+exception when insufficient_privilege then null;
+end $$;
+reset role;
+set role anon;
+do $$ begin
+  perform public.get_hotel_customer_history(null, '2026-11-05');
+  assert false, 'anon can''t call the customer RPC';
+exception when insufficient_privilege then null;
+end $$;
+reset role;
+
 do $$ begin raise notice 'all owner history checks passed'; end $$;
 rollback;

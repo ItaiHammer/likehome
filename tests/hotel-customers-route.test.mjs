@@ -41,13 +41,31 @@ const ROW = {
   booked_at: '2026-10-20T18:00:00+00:00',
 }
 
+const CUSTOMER = {
+  guest_id: 'guest-1',
+  guest_name: 'Ana Ruiz',
+  guest_email: 'ana@example.com',
+  total_bookings: 1,
+  cancelled_bookings: 0,
+  upcoming_bookings: 1,
+  nights_stayed: 0,
+  total_paid: '420.00',
+  first_stay: null,
+  last_stay: null,
+  next_stay: '2026-12-01',
+  is_repeat: false,
+  hotel_names: ['Harbor House'],
+}
+
 let userId
 let historyResult
+let customersResult
 const getHotelBookingHistory = mock.fn(async () => historyResult)
+const getHotelCustomerHistory = mock.fn(async () => customersResult)
 mock.method(console, 'error', () => {})
 
 mock.module('@/utils/user', { namedExports: { getUserId: async () => ({ supabase: {}, userId }) } })
-mock.module('@/utils/history', { namedExports: { getHotelBookingHistory } })
+mock.module('@/utils/history', { namedExports: { getHotelBookingHistory, getHotelCustomerHistory } })
 mock.module('@/utils/hotels', {
   namedExports: { getHotelsByOwner: async () => ({ data: [{ id: HOTEL, name: 'Harbor House' }], error: null }) },
 })
@@ -60,7 +78,9 @@ const get = (query = '') => GET(new Request(`http://localhost/api/listings/custo
 beforeEach(() => {
   userId = 'owner-1'
   historyResult = { data: [ROW], error: null }
+  customersResult = { data: [CUSTOMER], error: null }
   getHotelBookingHistory.mock.resetCalls()
+  getHotelCustomerHistory.mock.resetCalls()
 })
 
 async function assertError(res, status) {
@@ -83,6 +103,7 @@ test('a malformed listing id is 400', async () => {
 
 test('someone else’s listing (or one that doesn’t exist) is 403', async () => {
   historyResult = { data: [], error: { code: '42501', message: 'You do not own this listing' } }
+  customersResult = historyResult
   await assertError(await get(`?hotel=${HOTEL}`), 403)
 })
 
@@ -91,12 +112,17 @@ test('a database failure is 500 without the error details', async () => {
   const res = await get()
   await assertError(res.clone(), 500)
   assert.doesNotMatch(await res.text(), /timeout/)
+
+  historyResult = { data: [ROW], error: null }
+  customersResult = { data: [], error: { code: '57014', message: 'canceling statement due to statement timeout' } }
+  await assertError(await get(), 500)
 })
 
 test('?hotel= picks one listing; no query means every listing', async () => {
   await get()
   await get(`?hotel=${HOTEL}`)
   assert.deepEqual(getHotelBookingHistory.mock.calls.map((c) => c.arguments[0]), [undefined, HOTEL])
+  assert.deepEqual(getHotelCustomerHistory.mock.calls.map((c) => c.arguments[0]), [undefined, HOTEL])
 })
 
 test('200 returns listings, summary, customers and bookings, never cached', async () => {
@@ -108,6 +134,7 @@ test('200 returns listings, summary, customers and bookings, never cached', asyn
   assert.deepEqual(body.listings, [{ id: HOTEL, name: 'Harbor House' }])
   assert.deepEqual(body.summary, { customers: 1, repeatCustomers: 0, bookings: 1, upcoming: 1, cancelled: 0, revenue: 420 })
   assert.equal(body.customers[0].email, 'ana@example.com')
+  assert.equal(body.customers[0].nextStay, '2026-12-01')
   assert.equal(body.bookings[0].code, 'LH-3F2A9C1E')
   assert.equal(body.bookings[0].totalPrice, 420)
 })

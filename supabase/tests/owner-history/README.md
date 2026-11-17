@@ -19,5 +19,6 @@ With a local Postgres, run `createdb owner_history` and then the same three file
 `psql -d owner_history -q -v ON_ERROR_STOP=1 -f <file>`.
 
 Each check in `scenarios.sql` is an `assert` with a message saying what should hold. The run stops at the first one
-that fails, and a full pass ends with `NOTICE: all owner history checks passed`. Today is 2026-11-05 in every check.
+that fails, and a full pass ends with `NOTICE: all owner history checks passed`. Today (`p_today`) is 2026-11-05
+unless a check passes another date to test check-in and check-out days.
 `scenarios.sql` rolls back at the end, so it can be run again on the same database.

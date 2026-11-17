@@ -32,11 +32,12 @@ export async function getHotelBookingHistory(hotelId?: string, today?: string) {
   return { data: data ?? [], error };
 }
 
-export async function getHotelCustomerHistory(hotelId?: string) {
+export async function getHotelCustomerHistory(hotelId?: string, today?: string) {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const { data, error } = await supabase.rpc("get_hotel_customer_history", {
     p_hotel_id: hotelId ?? null,
+    p_today: today ?? null,
   });
   return { data: data ?? [], error };
 }

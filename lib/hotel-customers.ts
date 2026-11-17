@@ -13,7 +13,7 @@ export type HotelBookingRow = {
   hotel_name: string
   room_id: string | null
   room_type: string | null
-  guest_id: string | null
+  guest_id: string
   guest_name: string | null
   guest_email: string | null
   check_in: string
@@ -38,7 +38,7 @@ export type HotelBooking = {
   hotelId: string
   hotelName: string
   roomType: string | null
-  guestId: string | null
+  guestId: string
   guestName: string | null
   guestEmail: string | null
   checkIn: string
@@ -89,8 +89,25 @@ export function toHotelBookings(rows: HotelBookingRow[]): HotelBooking[] {
   return rows.map(toHotelBooking)
 }
 
+// One row of get_hotel_customer_history: per-guest totals over the booking rows, newest check-in first
+export type HotelCustomerRow = {
+  guest_id: string
+  guest_name: string | null
+  guest_email: string | null
+  total_bookings: Numeric
+  cancelled_bookings: Numeric
+  upcoming_bookings: Numeric
+  nights_stayed: Numeric
+  total_paid: Numeric
+  first_stay: string | null
+  last_stay: string | null
+  next_stay: string | null
+  is_repeat: boolean
+  hotel_names: string[]
+}
+
 export type HotelCustomer = {
-  id: string | null
+  id: string
   name: string | null
   email: string | null
   bookings: number
@@ -123,69 +140,56 @@ export type HotelCustomerHistory = {
   bookings: HotelBooking[]
 }
 
+function toHotelCustomer(row: HotelCustomerRow): HotelCustomer {
+  return {
+    id: row.guest_id,
+    name: row.guest_name,
+    email: row.guest_email,
+    bookings: Number(row.total_bookings),
+    cancelled: Number(row.cancelled_bookings),
+    upcoming: Number(row.upcoming_bookings),
+    nightsStayed: Number(row.nights_stayed),
+    totalSpent: Number(row.total_paid),
+    firstStay: row.first_stay,
+    lastStay: row.last_stay,
+    nextStay: row.next_stay,
+    isRepeat: row.is_repeat,
+    listings: row.hotel_names,
+  }
+}
+
+// Keeps the RPC's order
+export function toHotelCustomers(rows: HotelCustomerRow[]): HotelCustomer[] {
+  return rows.map(toHotelCustomer)
+}
+
 // Adding prices like 0.1 + 0.2 drifts; round to cents
 const cents = (n: number) => Math.round(n * 100) / 100
-const spent = (bookings: HotelBooking[]) => cents(bookings.reduce((sum, b) => sum + b.amountPaid - b.amountRefunded, 0))
-const stayed = (b: HotelBooking) => b.stage === 'past' || b.stage === 'in-stay'
 
-function earliest(dates: string[]): string | null {
-  return dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null
-}
-
-function latest(dates: string[]): string | null {
-  return dates.length ? dates.reduce((a, b) => (b > a ? b : a)) : null
-}
-
-function toCustomer(bookings: HotelBooking[]): HotelCustomer {
-  const kept = bookings.filter((b) => b.stage !== 'cancelled')
-  return {
-    id: bookings[0].guestId,
-    name: bookings.find((b) => b.guestName)?.guestName ?? null,
-    email: bookings.find((b) => b.guestEmail)?.guestEmail ?? null,
-    bookings: bookings.length,
-    cancelled: bookings.length - kept.length,
-    upcoming: bookings.filter((b) => b.stage === 'upcoming').length,
-    nightsStayed: bookings.filter(stayed).reduce((sum, b) => sum + b.nights, 0),
-    totalSpent: spent(bookings),
-    firstStay: earliest(kept.map((b) => b.checkIn)),
-    lastStay: latest(bookings.filter(stayed).map((b) => b.checkIn)),
-    nextStay: earliest(bookings.filter((b) => b.stage === 'upcoming').map((b) => b.checkIn)),
-    isRepeat: kept.length >= 2,
-    listings: [...new Set(bookings.map((b) => b.hotelName))].sort(),
-  }
-}
-
-// Bookings whose account is gone (guestId null) become one entry; newest check-in first
-export function summarizeCustomers(bookings: HotelBooking[]): HotelCustomer[] {
-  const byGuest = new Map<string | null, HotelBooking[]>()
-  for (const booking of bookings) {
-    byGuest.set(booking.guestId, [...(byGuest.get(booking.guestId) ?? []), booking])
-  }
-  const lastCheckIn = (group: HotelBooking[]) => latest(group.map((b) => b.checkIn)) ?? ''
-  return [...byGuest.values()]
-    .sort((a, b) => lastCheckIn(b).localeCompare(lastCheckIn(a)))
-    .map(toCustomer)
-}
-
-export function summarizeOwner(bookings: HotelBooking[], customers: HotelCustomer[]): OwnerSummary {
+// Adds up the customers, so the totals can't disagree with them
+export function summarizeOwner(customers: HotelCustomer[]): OwnerSummary {
+  const total = (pick: (c: HotelCustomer) => number) => customers.reduce((sum, c) => sum + pick(c), 0)
   return {
     customers: customers.length,
     repeatCustomers: customers.filter((c) => c.isRepeat).length,
-    bookings: bookings.length,
-    upcoming: bookings.filter((b) => b.stage === 'upcoming').length,
-    cancelled: bookings.filter((b) => b.stage === 'cancelled').length,
-    revenue: spent(bookings),
+    bookings: total((c) => c.bookings),
+    upcoming: total((c) => c.upcoming),
+    cancelled: total((c) => c.cancelled),
+    revenue: cents(total((c) => c.totalSpent)),
   }
 }
 
 // The whole response; `listings` feeds the property picker, so it includes listings with no bookings
-export function toHotelCustomerHistory(rows: HotelBookingRow[], listings: OwnerListing[]): HotelCustomerHistory {
-  const bookings = toHotelBookings(rows)
-  const customers = summarizeCustomers(bookings)
+export function toHotelCustomerHistory(
+  bookingRows: HotelBookingRow[],
+  customerRows: HotelCustomerRow[],
+  listings: OwnerListing[],
+): HotelCustomerHistory {
+  const customers = toHotelCustomers(customerRows)
   return {
     listings: listings.map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)),
-    summary: summarizeOwner(bookings, customers),
+    summary: summarizeOwner(customers),
     customers,
-    bookings,
+    bookings: toHotelBookings(bookingRows),
   }
 }

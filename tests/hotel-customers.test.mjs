@@ -1,11 +1,7 @@
+// Mapping and owner totals only; the rules themselves live in SQL (checked by supabase/tests/owner-history)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  summarizeCustomers,
-  summarizeOwner,
-  toHotelBookings,
-  toHotelCustomerHistory,
-} from '../lib/hotel-customers.ts'
+import { summarizeOwner, toHotelBookings, toHotelCustomers, toHotelCustomerHistory } from '../lib/hotel-customers.ts'
 
 const row = (more = {}) => ({
   reservation_id: '3f2a9c1e-0b7d-4e5f-8a6b-1c2d3e4f5a6b',
@@ -30,6 +26,23 @@ const row = (more = {}) => ({
   amount_paid: 420,
   amount_refunded: 0,
   booked_at: '2026-10-20T18:00:00+00:00',
+  ...more,
+})
+
+const customerRow = (more = {}) => ({
+  guest_id: 'guest-1',
+  guest_name: 'Ana Ruiz',
+  guest_email: 'ana@example.com',
+  total_bookings: 3,
+  cancelled_bookings: 1,
+  upcoming_bookings: 1,
+  nights_stayed: 3,
+  total_paid: 920,
+  first_stay: '2026-09-01',
+  last_stay: '2026-09-01',
+  next_stay: '2026-12-01',
+  is_repeat: true,
+  hotel_names: ['Harbor House'],
   ...more,
 })
 
@@ -67,24 +80,8 @@ test('a row becomes a camelCase booking with numbers and the guest-facing code',
   })
 })
 
-// Stages as the RPC gives them on 2026-11-05. Ana: past, upcoming, cancelled without insurance. Ben: in-stay now,
-// insured cancel at another listing. Plus one booking whose account is gone.
-const ROWS = [
-  row({ reservation_id: 'ben-cancel', guest_id: 'guest-2', guest_name: 'Ben Ko', guest_email: 'ben@example.com', hotel_name: 'Cliff Inn', check_in: '2026-12-20', check_out: '2026-12-22', nights: 2, status: 'cancelled', stage: 'cancelled', has_insurance: true, amount_paid: 260, amount_refunded: 240, cancellation_fee: 0 }),
-  row({ reservation_id: 'ana-next', check_in: '2026-12-01', check_out: '2026-12-04', nights: 3, amount_paid: 420 }),
-  row({ reservation_id: 'ben-now', guest_id: 'guest-2', guest_name: 'Ben Ko', guest_email: 'ben@example.com', check_in: '2026-11-03', check_out: '2026-11-07', nights: 4, stage: 'in-stay', amount_paid: 500 }),
-  row({ reservation_id: 'ana-cancel', check_in: '2026-10-10', check_out: '2026-10-12', nights: 2, status: 'cancelled', stage: 'cancelled', amount_paid: 200, cancellation_fee: 200 }),
-  row({ reservation_id: 'ana-past', check_in: '2026-09-01', check_out: '2026-09-04', nights: 3, stage: 'past', amount_paid: 300 }),
-  row({ reservation_id: 'gone', guest_id: null, guest_name: null, guest_email: null, check_in: '2026-06-01', check_out: '2026-06-02', nights: 1, stage: 'past', amount_paid: 100 }),
-]
-const BOOKINGS = toHotelBookings(ROWS)
-
-test('bookings are grouped per guest, newest check-in first', () => {
-  assert.deepEqual(summarizeCustomers(BOOKINGS).map((c) => c.id), ['guest-2', 'guest-1', null])
-})
-
-test('a customer counts bookings, cancellations, upcoming stays and nights actually stayed', () => {
-  const [ben, ana] = summarizeCustomers(BOOKINGS)
+test('a customer row becomes a camelCase customer with numbers', () => {
+  const [ana] = toHotelCustomers([customerRow({ total_bookings: '3', nights_stayed: '3', total_paid: '920.50' })])
   assert.deepEqual(ana, {
     id: 'guest-1',
     name: 'Ana Ruiz',
@@ -93,53 +90,50 @@ test('a customer counts bookings, cancellations, upcoming stays and nights actua
     cancelled: 1,
     upcoming: 1,
     nightsStayed: 3,
-    totalSpent: 920,
+    totalSpent: 920.5,
     firstStay: '2026-09-01',
     lastStay: '2026-09-01',
     nextStay: '2026-12-01',
     isRepeat: true,
     listings: ['Harbor House'],
   })
-  assert.equal(ben.nightsStayed, 4)
-  assert.equal(ben.lastStay, '2026-11-03')
-  assert.equal(ben.nextStay, null)
 })
 
-test('refunds come off what a customer spent, and a cancelled stay does not make them a repeat guest', () => {
-  const [ben] = summarizeCustomers(BOOKINGS)
-  assert.equal(ben.totalSpent, 520)
-  assert.equal(ben.bookings, 2)
-  assert.equal(ben.isRepeat, false)
-  assert.deepEqual(ben.listings, ['Cliff Inn', 'Harbor House'])
+test('a guest who hasn’t stayed yet keeps null first and last stays', () => {
+  const [cy] = toHotelCustomers([customerRow({ first_stay: null, last_stay: null, next_stay: '2027-01-10', nights_stayed: 0 })])
+  assert.equal(cy.firstStay, null)
+  assert.equal(cy.lastStay, null)
+  assert.equal(cy.nextStay, '2027-01-10')
 })
 
-test('bookings without an account become one nameless customer', () => {
-  const extra = toHotelBookings([row({ reservation_id: 'gone-2', guest_id: null, guest_name: null, guest_email: null })])
-  const gone = summarizeCustomers([...BOOKINGS, ...extra]).filter((c) => c.id === null)
-  assert.equal(gone.length, 1)
-  assert.equal(gone[0].bookings, 2)
-  assert.equal(gone[0].name, null)
+test('customers keep the RPC’s order', () => {
+  const customers = toHotelCustomers([customerRow({ guest_id: 'guest-2' }), customerRow()])
+  assert.deepEqual(customers.map((c) => c.id), ['guest-2', 'guest-1'])
 })
 
-test('totals are rounded to cents', () => {
-  const bookings = toHotelBookings([row({ amount_paid: 0.1 }), row({ amount_paid: 0.2 })])
-  assert.equal(summarizeCustomers(bookings)[0].totalSpent, 0.3)
-  assert.equal(summarizeOwner(bookings, summarizeCustomers(bookings)).revenue, 0.3)
-})
+const CUSTOMERS = toHotelCustomers([
+  customerRow(),
+  customerRow({ guest_id: 'guest-2', total_bookings: 2, cancelled_bookings: 1, upcoming_bookings: 0, total_paid: 500, is_repeat: false }),
+])
 
-test('the owner summary adds up every customer and booking', () => {
-  assert.deepEqual(summarizeOwner(BOOKINGS, summarizeCustomers(BOOKINGS)), {
-    customers: 3,
+test('the owner summary adds up the customers', () => {
+  assert.deepEqual(summarizeOwner(CUSTOMERS), {
+    customers: 2,
     repeatCustomers: 1,
-    bookings: 6,
+    bookings: 5,
     upcoming: 1,
     cancelled: 2,
-    revenue: 1540,
+    revenue: 1420,
   })
 })
 
+test('revenue is rounded to cents', () => {
+  const customers = toHotelCustomers([customerRow({ total_paid: 0.1 }), customerRow({ total_paid: 0.2 })])
+  assert.equal(summarizeOwner(customers).revenue, 0.3)
+})
+
 test('the response lists every owned listing by name, even with no bookings', () => {
-  const history = toHotelCustomerHistory([], [
+  const history = toHotelCustomerHistory([], [], [
     { id: 'h2', name: 'Harbor House', owner_id: 'owner-1', city: 'Monterey' },
     { id: 'h1', name: 'Cliff Inn', owner_id: 'owner-1', city: 'Carmel' },
   ])
@@ -151,9 +145,10 @@ test('the response lists every owned listing by name, even with no bookings', ()
   })
 })
 
-test('the response carries the shaped bookings and their customers', () => {
-  const history = toHotelCustomerHistory(ROWS, [])
-  assert.equal(history.bookings.length, 6)
-  assert.equal(history.customers.length, 3)
-  assert.deepEqual(history.bookings.filter((b) => b.guestId === 'guest-1').map((b) => b.stage), ['upcoming', 'cancelled', 'past'])
+test('the response carries the bookings, the customers and their totals', () => {
+  const history = toHotelCustomerHistory([row(), row({ reservation_id: 'b' })], [customerRow()], [])
+  assert.deepEqual(Object.keys(history), ['listings', 'summary', 'customers', 'bookings'])
+  assert.equal(history.bookings.length, 2)
+  assert.equal(history.customers[0].name, 'Ana Ruiz')
+  assert.equal(history.summary.revenue, 920)
 })

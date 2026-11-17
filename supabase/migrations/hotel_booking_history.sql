@@ -7,7 +7,8 @@ begin;
 create index if not exists reservations_hotel_check_in_idx
   on public.reservations (hotel_id, check_in desc);
 
--- earlier version without p_today; a new signature can't replace it
+-- earlier versions without p_today; a new signature can't replace them
+drop function if exists public.get_hotel_customer_history(uuid);
 drop function if exists public.get_hotel_booking_history(uuid);
 
 -- p_today = the viewer's date (their time zone); null = today in UTC
@@ -92,36 +93,46 @@ begin
 end;
 $$;
 
--- One row per guest. Reuses the function above, so the owner check lives in one place.
-create or replace function public.get_hotel_customer_history(p_hotel_id uuid default null)
+-- One row per guest. Reuses the function above, so the owner check and the booking rules live in one place.
+create or replace function public.get_hotel_customer_history(p_hotel_id uuid default null, p_today date default null)
 returns table (
   guest_id uuid,
   guest_name text,
   guest_email text,
   total_bookings bigint,
   cancelled_bookings bigint,
-  total_nights bigint,
+  upcoming_bookings bigint,
+  nights_stayed bigint,
   total_paid numeric,
-  first_check_in date,
-  last_check_in date
+  first_stay date,
+  last_stay date,
+  next_stay date,
+  is_repeat boolean,
+  hotel_names text[]
 )
 language sql stable security invoker
 set search_path to '' as $$
   select b.guest_id, max(b.guest_name), max(b.guest_email),
          count(*),
-         count(*) filter (where b.status = 'cancelled'),
-         coalesce(sum(b.nights) filter (where b.status = 'confirmed'), 0),
+         count(*) filter (where b.stage = 'cancelled'),
+         count(*) filter (where b.stage = 'upcoming'),
+         -- nights and first/last stay only count stays that have started
+         coalesce(sum(b.nights) filter (where b.stage in ('past', 'in-stay')), 0),
          coalesce(sum(b.amount_paid - b.amount_refunded), 0),
-         min(b.check_in), max(b.check_in)
-  from public.get_hotel_booking_history(p_hotel_id) b
+         min(b.check_in) filter (where b.stage in ('past', 'in-stay')),
+         max(b.check_in) filter (where b.stage in ('past', 'in-stay')),
+         min(b.check_in) filter (where b.stage = 'upcoming'),
+         count(*) filter (where b.stage <> 'cancelled') >= 2,
+         array_agg(distinct b.hotel_name order by b.hotel_name)
+  from public.get_hotel_booking_history(p_hotel_id, p_today) b
   group by b.guest_id
-  order by max(b.check_in) desc;
+  order by max(b.check_in) desc, b.guest_id;
 $$;
 
-revoke execute on function public.get_hotel_booking_history(uuid, date) from public, anon;
-revoke execute on function public.get_hotel_customer_history(uuid)      from public, anon;
-grant  execute on function public.get_hotel_booking_history(uuid, date) to authenticated;
-grant  execute on function public.get_hotel_customer_history(uuid)      to authenticated;
+revoke execute on function public.get_hotel_booking_history(uuid, date)  from public, anon;
+revoke execute on function public.get_hotel_customer_history(uuid, date) from public, anon;
+grant  execute on function public.get_hotel_booking_history(uuid, date)  to authenticated;
+grant  execute on function public.get_hotel_customer_history(uuid, date) to authenticated;
 
 commit;
 notify pgrst, 'reload schema';

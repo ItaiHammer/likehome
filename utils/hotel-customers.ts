@@ -1,16 +1,17 @@
 import { getUserId } from '@/utils/user'
-import { getHotelBookingHistory } from '@/utils/history'
+import { getHotelBookingHistory, getHotelCustomerHistory } from '@/utils/history'
 import { getHotelsByOwner } from '@/utils/hotels'
 import { guestToday } from '@/utils/guest-today'
 import {
   toHotelCustomerHistory,
   type HotelBookingRow,
   type HotelCustomerHistory,
+  type HotelCustomerRow,
   type OwnerListing,
 } from '@/lib/hotel-customers'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-// get_hotel_booking_history raises this for a listing the caller doesn't own (or that doesn't exist)
+// Both history RPCs raise this for a listing the caller doesn't own (or that doesn't exist)
 const NOT_OWNER = '42501'
 
 export type HotelCustomersError = 'signed-out' | 'invalid-listing' | 'not-owner' | 'failed'
@@ -26,16 +27,24 @@ export async function getHotelCustomers(hotelId?: string): Promise<HotelCustomer
   if (hotelId !== undefined && !UUID.test(hotelId)) return { ok: false, reason: 'invalid-listing' }
 
   const today = await guestToday()
-  const [history, hotels] = await Promise.all([getHotelBookingHistory(hotelId, today), getHotelsByOwner(userId)])
-  if (history.error?.code === NOT_OWNER) return { ok: false, reason: 'not-owner' }
+  const [bookings, customers, hotels] = await Promise.all([
+    getHotelBookingHistory(hotelId, today),
+    getHotelCustomerHistory(hotelId, today),
+    getHotelsByOwner(userId),
+  ])
+  if (bookings.error?.code === NOT_OWNER || customers.error?.code === NOT_OWNER) {
+    return { ok: false, reason: 'not-owner' }
+  }
 
-  const error = history.error ?? hotels.error
+  const error = bookings.error ?? customers.error ?? hotels.error
   if (error) {
     console.error('getHotelCustomers failed:', error)
     return { ok: false, reason: 'failed' }
   }
 
-  const rows = history.data as HotelBookingRow[]
   const listings = (hotels.data ?? []) as OwnerListing[]
-  return { ok: true, data: toHotelCustomerHistory(rows, listings) }
+  return {
+    ok: true,
+    data: toHotelCustomerHistory(bookings.data as HotelBookingRow[], customers.data as HotelCustomerRow[], listings),
+  }
 }
