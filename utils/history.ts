@@ -26,14 +26,8 @@ export type BookingHistoryRow = {
   points_refunded: number;
 };
 
-export type TransactionHistoryRow = {
-  id: string;
-  payment_id: string;
-  amount: number | string;
-  transaction_type: string;
-  status: string;
-  created_at: string;
-};
+// The columns get_transaction_history returns (booking_history.sql): the id is transaction_id
+export type { TransactionRow as TransactionHistoryRow } from "@/lib/bookings";
 
 export function toBooking(row: BookingHistoryRow): Booking {
   return {
@@ -46,6 +40,8 @@ export function toBooking(row: BookingHistoryRow): Booking {
     city: row.city,
     photoUrl: row.photo_url,
     roomType: row.room_type,
+    // The hotel is gone, so there's nothing to rebook
+    unlisted: !row.hotel_id || !row.hotel_name,
   };
 }
 
