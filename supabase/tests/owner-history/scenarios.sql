@@ -22,6 +22,10 @@ begin
   where amount > 0;
 end $$;
 
+create function pg_temp.stage(p_guest text, p_check_in date, p_today date) returns text language sql as $$
+  select stage from public.get_hotel_booking_history(null, p_today) where guest_name = p_guest and check_in = p_check_in
+$$;
+
 -- Owner A (1111…) has Harbor House (aaaa…01) and Cliff Inn (aaaa…02); owner B (2222…) has Other Place (bbbb…01)
 insert into public.accounts (id, full_name, email) values
   ('11111111-1111-4111-8111-111111111111', 'Owner A', 'owner-a@example.com'),
@@ -71,6 +75,55 @@ do $$ begin
           where guest_name = 'Ana Ruiz' and status = 'cancelled') = (200::numeric, 0::numeric),
     'uninsured cancel: paid in full, nothing refunded';
 end $$;
+
+-- Stages and hidden failed checkouts
+do $$ begin
+  assert pg_temp.stage('Ana Ruiz', '2026-09-01', '2026-11-05') = 'past', 'a stay that ended is past';
+  assert pg_temp.stage('Ana Ruiz', '2026-12-01', '2026-11-05') = 'upcoming', 'a future stay is upcoming';
+  assert pg_temp.stage('Ben Ko', '2026-11-03', '2026-11-05') = 'in-stay', 'a stay around today is in-stay';
+  assert pg_temp.stage('Ben Ko', '2026-11-03', '2026-11-03') = 'in-stay', 'check-in day is in-stay';
+  assert pg_temp.stage('Ben Ko', '2026-11-03', '2026-11-07') = 'past', 'check-out day is past';
+  assert pg_temp.stage('Ben Ko', '2026-11-03', '2026-11-02') = 'upcoming', 'the day before check-in is upcoming';
+  assert pg_temp.stage('Fay Hart', '2026-11-04', '2026-11-05') = 'past', 'completed is past whatever the dates';
+  assert pg_temp.stage('Ana Ruiz', '2026-10-10', '2026-10-01') = 'cancelled', 'cancelled wins over the dates';
+  assert pg_temp.stage('Ben Ko', '2026-11-03', null) is not null, 'no p_today still works (UTC today)';
+
+  assert not exists (select 1 from public.get_hotel_booking_history(null, '2026-11-05') where guest_name = 'Dee Moss'),
+    'a failed checkout (cancelled, no fee, nothing paid) is hidden';
+  assert exists (select 1 from public.get_hotel_booking_history(null, '2026-11-05') where guest_name = 'Ben Ko' and stage = 'cancelled'),
+    'an insured cancel with a 0 fee is kept';
+  assert exists (select 1 from public.get_hotel_booking_history(null, '2026-11-05') where guest_name = 'Gus Bell'),
+    'a confirmed booking with nothing paid is kept';
+end $$;
+
+-- Who sees what
+do $$ begin
+  assert (select count(*) from public.get_hotel_booking_history(null, '2026-11-05')) = 8,
+    'owner A sees the 8 bookings at their two hotels (not Dee''s failed checkout, not owner B''s)';
+  assert (select array_agg(distinct hotel_name) from public.get_hotel_booking_history('aaaaaaaa-0000-4000-8000-000000000002', '2026-11-05'))
+         = array['Cliff Inn'], 'p_hotel_id scopes to that listing';
+end $$;
+do $$ begin
+  perform public.get_hotel_booking_history('bbbbbbbb-0000-4000-8000-000000000001', '2026-11-05');
+  assert false, 'owner B''s listing must be refused';
+exception when insufficient_privilege then null;
+end $$;
+set test.uid = '';
+do $$ begin
+  perform public.get_hotel_booking_history(null, '2026-11-05');
+  assert false, 'signed out must be refused';
+exception when insufficient_privilege then null;
+end $$;
+reset role;
+set role anon;
+do $$ begin
+  perform public.get_hotel_booking_history(null, '2026-11-05');
+  assert false, 'anon can''t call it';
+exception when insufficient_privilege then null;
+end $$;
+reset role;
+set role authenticated;
+set test.uid = '11111111-1111-4111-8111-111111111111';
 
 do $$ begin raise notice 'all owner history checks passed'; end $$;
 rollback;

@@ -31,6 +31,7 @@ const ROW = {
   guests: 2,
   children: 0,
   status: 'confirmed',
+  stage: 'upcoming',
   total_price: '420.00',
   has_insurance: false,
   cancelled_at: null,

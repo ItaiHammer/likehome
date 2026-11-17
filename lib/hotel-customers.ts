@@ -3,7 +3,10 @@ import { bookingCode } from './bookings.ts'
 
 type Numeric = number | string
 
-// One row of get_hotel_booking_history (supabase/migrations/hotel_booking_history.sql)
+export type BookingStage = 'upcoming' | 'in-stay' | 'past' | 'cancelled'
+
+// One row of get_hotel_booking_history (supabase/migrations/hotel_booking_history.sql), which decides the stage,
+// hides failed checkouts and leaves insurance out of amount_paid
 export type HotelBookingRow = {
   reservation_id: string
   hotel_id: string
@@ -19,6 +22,7 @@ export type HotelBookingRow = {
   guests: number | null
   children: number
   status: string | null
+  stage: BookingStage
   total_price: Numeric | null
   has_insurance: boolean | null
   cancelled_at: string | null
@@ -27,8 +31,6 @@ export type HotelBookingRow = {
   amount_refunded: Numeric
   booked_at: string
 }
-
-export type BookingStage = 'upcoming' | 'in-stay' | 'past' | 'cancelled'
 
 export type HotelBooking = {
   id: string
@@ -56,25 +58,7 @@ export type HotelBooking = {
 
 const toNumber = (n: Numeric | null) => (n === null ? 0 : Number(n))
 
-// Same rules as groupBookings in lib/bookings.ts; check-out day is past, check-in day is in-stay
-export function bookingStage(
-  row: Pick<HotelBookingRow, 'status' | 'check_in' | 'check_out'>,
-  today: string,
-): BookingStage {
-  if (row.status === 'cancelled') return 'cancelled'
-  if (row.status === 'completed' || row.check_out <= today) return 'past'
-  if (row.check_in <= today) return 'in-stay'
-  return 'upcoming'
-}
-
-// Checkout's undo cancels an unpaid booking without a fee; a real cancellation always sets one
-export function isUnpaidCheckoutFailure(
-  row: Pick<HotelBookingRow, 'status' | 'cancellation_fee' | 'amount_paid'>,
-): boolean {
-  return row.status === 'cancelled' && row.cancellation_fee === null && toNumber(row.amount_paid) === 0
-}
-
-function toHotelBooking(row: HotelBookingRow, today: string): HotelBooking {
+function toHotelBooking(row: HotelBookingRow): HotelBooking {
   return {
     id: row.reservation_id,
     code: bookingCode(row.reservation_id),
@@ -89,7 +73,7 @@ function toHotelBooking(row: HotelBookingRow, today: string): HotelBooking {
     nights: row.nights,
     guests: row.guests,
     children: row.children,
-    stage: bookingStage(row, today),
+    stage: row.stage,
     totalPrice: toNumber(row.total_price),
     amountPaid: toNumber(row.amount_paid),
     amountRefunded: toNumber(row.amount_refunded),
@@ -101,8 +85,8 @@ function toHotelBooking(row: HotelBookingRow, today: string): HotelBooking {
 }
 
 // Keeps the RPC's order (check-in, newest first)
-export function toHotelBookings(rows: HotelBookingRow[], today: string): HotelBooking[] {
-  return rows.filter((row) => !isUnpaidCheckoutFailure(row)).map((row) => toHotelBooking(row, today))
+export function toHotelBookings(rows: HotelBookingRow[]): HotelBooking[] {
+  return rows.map(toHotelBooking)
 }
 
 export type HotelCustomer = {
@@ -195,8 +179,8 @@ export function summarizeOwner(bookings: HotelBooking[], customers: HotelCustome
 }
 
 // The whole response; `listings` feeds the property picker, so it includes listings with no bookings
-export function toHotelCustomerHistory(rows: HotelBookingRow[], listings: OwnerListing[], today: string): HotelCustomerHistory {
-  const bookings = toHotelBookings(rows, today)
+export function toHotelCustomerHistory(rows: HotelBookingRow[], listings: OwnerListing[]): HotelCustomerHistory {
+  const bookings = toHotelBookings(rows)
   const customers = summarizeCustomers(bookings)
   return {
     listings: listings.map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)),

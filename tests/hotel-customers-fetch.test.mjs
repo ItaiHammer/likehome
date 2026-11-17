@@ -31,6 +31,7 @@ const row = (more = {}) => ({
   guests: 2,
   children: 0,
   status: 'confirmed',
+  stage: 'upcoming',
   total_price: 420,
   has_insurance: false,
   cancelled_at: null,
@@ -81,7 +82,7 @@ test('a listing id that is not a UUID is refused before the database', async () 
 test('no id asks for every listing; an id asks for that one', async () => {
   await getHotelCustomers()
   await getHotelCustomers(HOTEL)
-  assert.deepEqual(getHotelBookingHistory.mock.calls.map((c) => c.arguments[0]), [undefined, HOTEL])
+  assert.deepEqual(getHotelBookingHistory.mock.calls.map((c) => c.arguments), [[undefined, '2026-11-05'], [HOTEL, '2026-11-05']])
   assert.deepEqual(getHotelsByOwner.mock.calls[0].arguments, ['owner-1'])
 })
 
@@ -100,15 +101,17 @@ test('any other database error is failed and logged', async () => {
   assert.equal(consoleError.mock.callCount(), 2)
 })
 
-test('the history is built with the viewer’s today', async () => {
-  const before = await getHotelCustomers()
-  assert.equal(before.ok, true)
-  assert.equal(before.data.bookings[0].stage, 'upcoming')
-  assert.deepEqual(before.data.listings, [{ id: HOTEL, name: 'Harbor House' }])
-  assert.equal(before.data.customers[0].name, 'Ana Ruiz')
-  assert.equal(before.data.summary.revenue, 420)
-
+test('the database gets the viewer’s today, so it can decide each stage', async () => {
   today = '2026-12-02'
-  const during = await getHotelCustomers()
-  assert.equal(during.data.bookings[0].stage, 'in-stay')
+  await getHotelCustomers()
+  assert.equal(getHotelBookingHistory.mock.calls[0].arguments[1], '2026-12-02')
+})
+
+test('the history is built from the rows and listings', async () => {
+  const result = await getHotelCustomers()
+  assert.equal(result.ok, true)
+  assert.equal(result.data.bookings[0].stage, 'upcoming')
+  assert.deepEqual(result.data.listings, [{ id: HOTEL, name: 'Harbor House' }])
+  assert.equal(result.data.customers[0].name, 'Ana Ruiz')
+  assert.equal(result.data.summary.revenue, 420)
 })

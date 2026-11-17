@@ -7,7 +7,11 @@ begin;
 create index if not exists reservations_hotel_check_in_idx
   on public.reservations (hotel_id, check_in desc);
 
-create or replace function public.get_hotel_booking_history(p_hotel_id uuid default null)
+-- earlier version without p_today; a new signature can't replace it
+drop function if exists public.get_hotel_booking_history(uuid);
+
+-- p_today = the viewer's date (their time zone); null = today in UTC
+create or replace function public.get_hotel_booking_history(p_hotel_id uuid default null, p_today date default null)
 returns table (
   reservation_id uuid,
   hotel_id uuid,
@@ -23,6 +27,7 @@ returns table (
   guests integer,
   children integer,
   status text,
+  stage text,
   total_price numeric,
   has_insurance boolean,
   cancelled_at timestamptz,
@@ -34,6 +39,8 @@ returns table (
 language plpgsql stable security definer
 set search_path to '' as $$
 #variable_conflict use_column
+declare
+  v_today date := coalesce(p_today, (now() at time zone 'UTC')::date);
 begin
   if auth.uid() is null then
     raise exception 'Sign in to view booking history' using errcode = '42501';
@@ -51,7 +58,15 @@ begin
          (r.check_in  at time zone 'UTC')::date,
          (r.check_out at time zone 'UTC')::date,
          (r.check_out at time zone 'UTC')::date - (r.check_in at time zone 'UTC')::date,
-         r.guests, r.children, r.status, r.total_price, r.has_insurance,
+         r.guests, r.children, r.status,
+         -- same rules as groupBookings in lib/bookings.ts: check-in day is in-stay, check-out day is past
+         case
+           when r.status = 'cancelled' then 'cancelled'
+           when r.status = 'completed' or (r.check_out at time zone 'UTC')::date <= v_today then 'past'
+           when (r.check_in at time zone 'UTC')::date <= v_today then 'in-stay'
+           else 'upcoming'
+         end,
+         r.total_price, r.has_insurance,
          r.cancelled_at, r.cancellation_fee,
          -- room charges only: the insurance premium is never refunded and isn't the hotel's money
          coalesce(m.charged, 0), coalesce(m.refunded, 0), r.created_at
@@ -61,14 +76,18 @@ begin
   left join public.accounts a on a.id = r.account_id
   -- only completed transactions count (same rule as get_booking_history)
   left join lateral (
-    select sum(t.amount) filter (where t.transaction_type = 'charge') as charged,
-           sum(t.amount) filter (where t.transaction_type = 'credit') as refunded
+    select sum(t.amount) filter (where t.transaction_type = 'charge')    as charged,
+           sum(t.amount) filter (where t.transaction_type = 'insurance') as insurance,
+           sum(t.amount) filter (where t.transaction_type = 'credit')    as refunded
     from public.payments pay
     join public.transactions t on t.payment_id = pay.id
     where pay.reservation_id = r.id and t.status = 'completed'
   ) m on true
   where h.owner_id = auth.uid()
     and (p_hotel_id is null or h.id = p_hotel_id)
+    -- checkout's undo cancels an unpaid booking without a fee (a real cancel always sets one): not a booking
+    and not (r.status = 'cancelled' and r.cancellation_fee is null
+             and coalesce(m.charged, 0) + coalesce(m.insurance, 0) = 0)
   order by r.check_in desc, r.id;
 end;
 $$;
@@ -99,10 +118,10 @@ set search_path to '' as $$
   order by max(b.check_in) desc;
 $$;
 
-revoke execute on function public.get_hotel_booking_history(uuid)  from public, anon;
-revoke execute on function public.get_hotel_customer_history(uuid) from public, anon;
-grant  execute on function public.get_hotel_booking_history(uuid)  to authenticated;
-grant  execute on function public.get_hotel_customer_history(uuid) to authenticated;
+revoke execute on function public.get_hotel_booking_history(uuid, date) from public, anon;
+revoke execute on function public.get_hotel_customer_history(uuid)      from public, anon;
+grant  execute on function public.get_hotel_booking_history(uuid, date) to authenticated;
+grant  execute on function public.get_hotel_customer_history(uuid)      to authenticated;
 
 commit;
 notify pgrst, 'reload schema';

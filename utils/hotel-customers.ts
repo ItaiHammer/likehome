@@ -25,11 +25,8 @@ export async function getHotelCustomers(hotelId?: string): Promise<HotelCustomer
   if (!userId) return { ok: false, reason: 'signed-out' }
   if (hotelId !== undefined && !UUID.test(hotelId)) return { ok: false, reason: 'invalid-listing' }
 
-  const [history, hotels, today] = await Promise.all([
-    getHotelBookingHistory(hotelId),
-    getHotelsByOwner(userId),
-    guestToday(),
-  ])
+  const today = await guestToday()
+  const [history, hotels] = await Promise.all([getHotelBookingHistory(hotelId, today), getHotelsByOwner(userId)])
   if (history.error?.code === NOT_OWNER) return { ok: false, reason: 'not-owner' }
 
   const error = history.error ?? hotels.error
@@ -40,5 +37,5 @@ export async function getHotelCustomers(hotelId?: string): Promise<HotelCustomer
 
   const rows = history.data as HotelBookingRow[]
   const listings = (hotels.data ?? []) as OwnerListing[]
-  return { ok: true, data: toHotelCustomerHistory(rows, listings, today) }
+  return { ok: true, data: toHotelCustomerHistory(rows, listings) }
 }
