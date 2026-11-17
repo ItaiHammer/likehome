@@ -53,15 +53,16 @@ begin
          (r.check_out at time zone 'UTC')::date - (r.check_in at time zone 'UTC')::date,
          r.guests, r.children, r.status, r.total_price, r.has_insurance,
          r.cancelled_at, r.cancellation_fee,
-         coalesce(m.paid, 0), coalesce(m.refunded, 0), r.created_at
+         -- room charges only: the insurance premium is never refunded and isn't the hotel's money
+         coalesce(m.charged, 0), coalesce(m.refunded, 0), r.created_at
   from public.reservations r
   join public.hotels h on h.id = r.hotel_id
   left join public.rooms rm on rm.id = r.room_id
   left join public.accounts a on a.id = r.account_id
   -- only completed transactions count (same rule as get_booking_history)
   left join lateral (
-    select sum(t.amount) filter (where t.transaction_type in ('charge', 'insurance')) as paid,
-           sum(t.amount) filter (where t.transaction_type = 'credit')                as refunded
+    select sum(t.amount) filter (where t.transaction_type = 'charge') as charged,
+           sum(t.amount) filter (where t.transaction_type = 'credit') as refunded
     from public.payments pay
     join public.transactions t on t.payment_id = pay.id
     where pay.reservation_id = r.id and t.status = 'completed'
