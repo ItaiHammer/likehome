@@ -3,6 +3,7 @@ import { google } from '@ai-sdk/google';
 import { z } from 'zod';
 import { bedSizes, sorts, tags } from '../../../search/types';
 import { todayInTimeZone } from '@/utils/reservation-logic';
+import { MAX_PROMPT_CHARS } from '@/app/_components/aiSearch';
 
 export async function POST(req: Request) {
     // Malformed input is the caller's mistake: answer 400, not an unhandled 500
@@ -16,10 +17,16 @@ export async function POST(req: Request) {
     if (!Array.isArray(messages) || messages.length === 0) {
         return Response.json({ error: 'messages must be a non-empty array.' }, { status: 400 });
     }
+    // Every call is a paid model request, so a huge prompt or a long chat history isn't sent on.
+    // The search bar caps its input at MAX_PROMPT_CHARS too.
+    if (messages.some((message) => promptChars(message) > MAX_PROMPT_CHARS)) {
+        return Response.json({ error: `Keep your search under ${MAX_PROMPT_CHARS} characters.` }, { status: 400 });
+    }
+    const recent = messages.slice(-MAX_MESSAGES);
 
     let modelMessages;
     try {
-        modelMessages = await convertToModelMessages(messages as UIMessage[]);
+        modelMessages = await convertToModelMessages(recent as UIMessage[]);
     } catch {
         return Response.json({ error: 'messages are not in the expected chat format.' }, { status: 400 });
     }
@@ -38,7 +45,17 @@ export async function POST(req: Request) {
     });
 }
 
-const helpMessage = 'Provide a description of your planned trip, and I will find the best accommodations for it.'
+// The chat keeps every earlier search; the newest ones are enough context
+const MAX_MESSAGES = 10;
+
+/** Characters of text in one chat message (its text parts), 0 for anything else */
+function promptChars(message: unknown): number {
+    const parts = (message as { parts?: unknown } | null)?.parts;
+    if (!Array.isArray(parts)) return 0;
+    return parts.reduce((sum: number, part) => sum + (typeof part?.text === 'string' ? part.text.length : 0), 0);
+}
+
+const helpMessage ='Provide a description of your planned trip, and I will find the best accommodations for it.'
 const outOfScopeMessage = `Please let me know if you require any assistance for travel accommodations. ${helpMessage}`;
 
 // A function, not a const: a module-level const is built once when the server starts,
@@ -117,7 +134,8 @@ const aiOutputFormat = Output.object({
         checkOut: getOptionalIsoDateToString(),
         numBeds: getOptionalNumberToString(0, undefined),
         bedSize: getOptionalEnum(bedSizes),
-        adults: getOptionalNumberToString(0, undefined),
+        // Every booking needs at least 1 adult
+        adults: getOptionalNumberToString(1, undefined),
         children: getOptionalNumberToString(0, undefined),
         minPrice:getOptionalNumberToString(0, undefined, 2),
         maxPrice: getOptionalNumberToString(0, undefined, 2),

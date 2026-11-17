@@ -15,7 +15,8 @@ import { SortSelect } from "./components/SortSelect";
 import { FilterSheetButton, FilterSidebar, type FilterValues } from "./components/FilterSidebar";
 import { catalogEnabled, facilityNames, findPlace, hotelsInPlace } from "@/lib/liteapi/catalog";
 import { savedLiteapiIds } from "@/utils/liteapi-hotels";
-import {parseDate, todayInTimeZone} from "@/utils/reservation-logic";
+import {countNights, MAX_NIGHTS, parseDate, todayInTimeZone} from "@/utils/reservation-logic";
+import { tags as filterTags } from "./types";
 
 type RawParams = Record<string, string | string[] | undefined>;
 type SortValue = "recommended" | "price-low" | "price-high";
@@ -363,7 +364,8 @@ function getActiveFilterCount(params: SearchParams) {
         Number(hasPositiveNumber(params.minRating)) +
         Number(hasPositiveNumber(params.numBeds)) +
         Number(Boolean(params.bedSize?.trim())) +
-        params.tags.length
+        // Only tags the search knows: an unknown one (?tags=foo) filters nothing
+        params.tags.filter((tag) => (filterTags as readonly string[]).includes(tag)).length
     );
 }
 
@@ -387,23 +389,6 @@ function hasStructuredSearchCriteria(params: SearchParams) {
         params.numBeds ||
         params.bedSize ||
         params.tags.length,
-    );
-}
-
-// A standard search counts once something differs from the bar's defaults (2 adults, no children)
-function hasSearchCriteria(params: SearchParams) {
-    return Boolean(
-        params.where ||
-        params.checkIn ||
-        params.checkOut ||
-        params.minPrice ||
-        params.maxPrice ||
-        params.minRating ||
-        params.numBeds ||
-        params.bedSize ||
-        params.tags.length ||
-        (params.adults && params.adults !== "2") ||
-        (params.children && params.children !== "0"),
     );
 }
 
@@ -447,6 +432,11 @@ function getFrontendValidationError(params: SearchParams) {
 
         if (params.checkIn >= params.checkOut) {
             return "Check-out must be after check-in.";
+        }
+
+        // Same limit as the stay page and checkout, so the search doesn't list stays that can't be booked
+        if (countNights(params.checkIn, params.checkOut) > MAX_NIGHTS) {
+            return `Stays can be up to ${MAX_NIGHTS} nights.`;
         }
     }
 
