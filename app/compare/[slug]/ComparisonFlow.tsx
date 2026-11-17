@@ -963,7 +963,7 @@ export function ComparisonFlow({
                         onClick={
                             startComparison
                         }
-                        className="min-h-11 rounded-lg bg-blue px-6 py-3 text-sm font-semibold text-on-blue transition-colors hover:bg-blue-dark disabled:cursor-not-allowed disabled:bg-[#E6EBF3] disabled:text-[#536383]"
+                        className="min-h-11 rounded-lg bg-blue px-6 py-3 text-sm font-semibold text-on-blue transition-colors hover:bg-blue-dark disabled:cursor-not-allowed disabled:bg-disabled disabled:text-slate"
                     >
                         {selectedIds.length ===
                         0
