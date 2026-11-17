@@ -34,8 +34,10 @@ export async function GET(request: Request) {
     tz: timeZone
   });
   
-  if (output.results.error) {
-    return Response.json({ data: null, error: output.results.error }, { status: 400 });
+  const error = output?.results?.error;
+  
+  if (error) {
+    return Response.json({ data: null, error: error }, { status: 400 });
   }
 
   return Response.json({ data: output, error: null }, { status: 200 });
