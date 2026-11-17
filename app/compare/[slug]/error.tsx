@@ -1,12 +1,12 @@
 "use client";
 
 export default function CompareError({
-                                         reset,
+                                         retry,
                                      }: {
     error: Error & {
         digest?: string;
     };
-    reset: () => void;
+    retry: () => void;
 }) {
     return (
         <div className="flex flex-1 flex-col">
@@ -23,7 +23,7 @@ export default function CompareError({
 
                     <button
                         type="button"
-                        onClick={reset}
+                        onClick={() => retry()}
                         className="mt-6 min-h-11 rounded-lg bg-blue px-6 py-3 text-sm font-semibold text-on-blue transition-colors hover:bg-blue-dark"
                     >
                         Try again
