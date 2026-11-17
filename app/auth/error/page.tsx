@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { Button, Card } from "@/app/_components/ui";
-import { PAGE_ROUTES } from "@/constants/routes";
+import { loginPath } from "@/lib/auth-redirect";
 
 export const metadata: Metadata = { title: "Sign-in error — LikeHome" };
 
 export default async function AuthError(props: PageProps<"/auth/error">) {
   // Keep where the guest was headed (e.g. a stay they were reserving) when they try again
   const { next } = await props.searchParams;
-  const retry = typeof next === "string" && next.startsWith("/") ? `${PAGE_ROUTES.LOGIN}?next=${encodeURIComponent(next)}` : PAGE_ROUTES.LOGIN;
+  const retry = loginPath(typeof next === "string" ? next : null);
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
