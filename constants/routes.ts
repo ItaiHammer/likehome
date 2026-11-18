@@ -8,6 +8,9 @@ export const API_ROUTES = {
 }
 
 export const PAGE_ROUTES = {
+    LISTINGS: '/listings',
+    LISTINGS_NEW: '/listings/new',
+    SEARCH: '/search',
     AUTH_ERROR: '/auth/error',
     AUTHORIZATION_ERROR: '/auth/z/error',
     LOGIN: '/auth/login',

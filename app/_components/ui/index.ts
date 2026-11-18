@@ -6,9 +6,11 @@ export { Field, TextArea, Select, FormError } from "./Field";
 export { Card, Tag, SectionHeading, Stars } from "./Display";
 export { Tabs, Stepper, Popover } from "./Interactive";
 export {
+  authLinkClass,
   buttonClass,
   buttonPrimary,
   buttonSecondary,
+  headerAuthLinkClass,
   iconButton,
   iconButtonClass,
   inputClass,
