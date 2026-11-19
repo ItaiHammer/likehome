@@ -64,6 +64,39 @@ export const money = (n: number) => {
   return `$${cents.toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(cents) ? 0 : 2, maximumFractionDigits: 2 })}`
 }
 
+/** One row of get_transaction_history (booking_history.sql). Numerics can arrive as strings. */
+export type TransactionRow = {
+  transaction_id: string
+  created_at: string
+  transaction_type: string
+  amount: number | string
+  status: string
+  reservation_id?: string | null
+  hotel_name?: string | null
+  card_last4?: string | null
+}
+
+// The types the transactions table allows (cancellation_insurance.sql): a credit is a refund
+const TRANSACTION_TITLES: Record<string, string> = {
+  charge: 'Booking payment',
+  insurance: 'Cancellation insurance',
+  credit: 'Refund',
+}
+
+/** How a transaction reads in My Bookings › Account › Transaction history */
+export function transactionDisplay(row: TransactionRow) {
+  const refund = row.transaction_type === 'credit'
+  const status =
+    row.status === 'completed' ? (refund ? 'Refunded' : 'Paid') : row.status === 'pending' ? 'Pending' : row.status === 'failed' ? 'Failed' : row.status
+  return {
+    id: row.transaction_id,
+    title: TRANSACTION_TITLES[row.transaction_type] ?? row.transaction_type,
+    subtitle: [row.hotel_name, money(amount(row.amount)), row.created_at.slice(0, 10)].filter(Boolean).join(' · '),
+    status,
+    image: null,
+  }
+}
+
 /** What cancelling would cost right now (get_cancellation_quote). Insured: what was paid comes back as points. */
 export type CancellationQuote = {
   hasInsurance: boolean

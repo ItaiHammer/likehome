@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Button } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { firstName, groupBookings, toCancellationQuote, money, type Booking, type CancellationQuote } from "@/lib/bookings";
+import { firstName, groupBookings, toCancellationQuote, transactionDisplay, type Booking, type CancellationQuote } from "@/lib/bookings";
 import { getAccount } from "@/utils/accounts";
 import { getHotels } from "@/utils/hotels";
 import { guestToday } from "@/utils/guest-today";
@@ -23,7 +23,8 @@ import { getPointsBalance } from "@/utils/points";
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
 const sectionHeading = "font-serif text-[32px] leading-10 text-ink";
 
-async function loadMyBookings() {
+// withHotels: only the Saved hotels tab needs the hotel list, which is every hotel in the database
+async function loadMyBookings(withHotels: boolean) {
   const { userId } = await getUserId();
   if (!userId) redirect(PAGE_ROUTES.LOGIN);
 
@@ -37,7 +38,7 @@ async function loadMyBookings() {
     getAccount(userId),
     getMyBookings(),
     getTransactionHistory(),
-    getHotels(),
+    withHotels ? getHotels() : Promise.resolve({ data: [], error: null }),
     getPointsBalance(userId),
   ]);
 
@@ -61,23 +62,7 @@ async function loadMyBookings() {
   const transactionRows =
     (transactionHistory.data ?? []) as TransactionHistoryRow[];
 
-  const transactions: Transaction[] = transactionRows.map((row) => ({
-    id: row.id,
-    title:
-      row.transaction_type === "charge"
-        ? "Booking payment"
-        : row.transaction_type === "refund"
-          ? "Refund"
-          : row.transaction_type,
-    subtitle: `${money(Number(row.amount))} · ${row.created_at.slice(0, 10)}`,
-    status:
-      row.status === "completed"
-        ? row.transaction_type === "refund"
-          ? "Refunded"
-          : "Paid"
-        : row.status,
-    image: null,
-  }));
+  const transactions: Transaction[] = transactionRows.map(transactionDisplay);
   // Create lookup map from STAYS static data for reliable price/image matching
   const staysByName = new Map(
     STAYS.map((stay) => [stay.name.toLowerCase().trim(), stay])
@@ -162,7 +147,7 @@ export default async function MyBookingsPage({
         transactions: [],
         pointsBalance: 0,
       }
-    : await loadMyBookings();
+    : await loadMyBookings(activeTab === "saved");
 
   const { upcoming, past, cancelled } = groupBookings(bookings, today);
   const quotes = showSample ? new Map(upcoming.map((b) => [b.id, getSampleQuote(b, today)])) : await loadQuotes(upcoming);
@@ -239,14 +224,10 @@ export default async function MyBookingsPage({
                   {/* Cancelled Reservations Section */}
                   {cancelled.length > 0 && (
                       <section aria-labelledby="cancelled-heading">
-                        <div className="flex items-center justify-between mb-4">
-                          <h2 id="cancelled-heading" className={sectionHeading}>
-                            Cancelled reservations
-                          </h2>
-                          <button type="button" className="text-xs font-semibold text-blue hover:text-blue-dark transition-colors">
-                            View all &rarr;
-                          </button>
-                        </div>
+                        {/* Every cancelled booking is listed here already, so there's no "View all" */}
+                        <h2 id="cancelled-heading" className={`${sectionHeading} mb-4`}>
+                          Cancelled reservations
+                        </h2>
 
                         <ul className="space-y-3">
                           {cancelled.map((booking) => (
@@ -259,13 +240,13 @@ export default async function MyBookingsPage({
             )}
 
             {activeTab === "saved" && (
-                <section aria-labelledby="saved-heading">
+                <section aria-label="Saved hotels">
                   <SavedHotelsList allHotels={allHotels} />
                 </section>
             )}
 
             {activeTab === "account" && (
-                <section aria-labelledby="account-heading">
+                <section aria-label="Account details">
                   <AccountTabContent name={name} email={email} transactions={transactions} pointsBalance={pointsBalance} />
                 </section>
             )}

@@ -30,12 +30,14 @@ export function UpcomingBooking({
         <CancelBookingButton booking={booking} quote={cancellation} className="grow basis-52 whitespace-nowrap xl:flex-none" />
         {/* "View stay" look from the search cards; px-1.5 insets it by the buttons' corner radius so it lines up with their edge */}
         <div className="flex w-full justify-end">
+          {/* Not connected yet: disabled and tagged, so it doesn't look like a link that does nothing */}
           <button
             type="button"
+            disabled
             title="Coming soon"
-            className="rounded-control px-1.5 text-xs font-semibold text-blue transition-colors hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
+            className="inline-flex cursor-not-allowed items-center gap-2 rounded-control px-1.5 text-xs font-semibold text-slate"
           >
-            Contact hotel
+            Contact hotel <Tag>Soon</Tag>
           </button>
         </div>
       </div>
