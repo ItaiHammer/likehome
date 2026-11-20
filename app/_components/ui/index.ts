@@ -2,13 +2,15 @@
 // See them all, with every state, at /components.
 
 export { Button, IconButton } from "./Button";
-export { Field, TextArea, Select } from "./Field";
-export { Card, Tag, SectionHeading, Stars } from "./Display";
+export { Field, TextArea, Select, FormError } from "./Field";
+export { ArrowIcon, Card, Tag, SectionHeading, Stars } from "./Display";
 export { Tabs, Stepper, Popover } from "./Interactive";
 export {
+  authLinkClass,
   buttonClass,
   buttonPrimary,
   buttonSecondary,
+  headerAuthLinkClass,
   iconButton,
   iconButtonClass,
   inputClass,

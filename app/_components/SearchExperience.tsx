@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useRef, useState } from "react";
-import { readAiAnswer } from "./aiSearch";
+import { MAX_PROMPT_CHARS, readAiAnswer } from "./aiSearch";
 import { browserTimeZone } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
 import { DatesField } from "./DatesField";
@@ -237,6 +237,7 @@ export function SearchExperience({
                     setAiPointerFocus(false);
                   }}
                   defaultValue={initialValues.aiPrompt ?? ""}
+                  maxLength={MAX_PROMPT_CHARS}
                   autoComplete="off"
                   autoFocus={!!switchedBy}
                   readOnly={aiBusy}

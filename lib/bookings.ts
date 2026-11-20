@@ -1,4 +1,5 @@
 // No Supabase / Next.js imports here so it can be unit tested with `npm test`.
+import { countNights, MAX_NIGHTS } from '../utils/reservation-logic.ts'
 
 export type Booking = {
   id: string
@@ -10,6 +11,8 @@ export type Booking = {
   city: string | null
   photoUrl: string | null
   roomType: string | null
+  /** The hotel is gone or hidden from search, so the stay can't be booked again */
+  unlisted?: boolean
 }
 
 // A stay that's under way (checked in, check-out still ahead) counts as upcoming
@@ -61,6 +64,35 @@ export const money = (n: number) => {
   return `$${cents.toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(cents) ? 0 : 2, maximumFractionDigits: 2 })}`
 }
 
+/** What cancelling would cost right now (get_cancellation_quote). Insured: what was paid comes back as points. */
+export type CancellationQuote = {
+  hasInsurance: boolean
+  canCancel: boolean
+  bookingPaid: number
+  insurancePaid: number
+  refund: number
+  refundPoints: number
+}
+
+const amount = (value: unknown) => {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+// Postgres numerics can arrive as strings, so every amount goes through Number()
+export function toCancellationQuote(row: unknown): CancellationQuote | null {
+  if (!row || typeof row !== 'object') return null
+  const r = row as Record<string, unknown>
+  return {
+    hasInsurance: r.has_insurance === true,
+    canCancel: r.can_cancel === true,
+    bookingPaid: amount(r.booking_paid),
+    insurancePaid: amount(r.insurance_paid),
+    refund: amount(r.refund),
+    refundPoints: amount(r.refund_points),
+  }
+}
+
 /** One of the guest's confirmed bookings at another hotel. The database refuses a stay that overlaps one. */
 export type OtherStay = { checkIn: string; checkOut: string; hotelName: string }
 
@@ -71,6 +103,16 @@ export function findOverlap(stays: OtherStay[], checkIn: string, checkOut: strin
 
 export function overlapMessage(stay: OtherStay): string {
   return `You already have a booking at ${stay.hotelName} for ${formatStayDates(stay.checkIn, stay.checkOut)}. Pick dates that don’t overlap it.`
+}
+
+// The date rules the reservation APIs check (validateReservationInput), in the guest's words so they
+// show before saving. `today` should come from todayInTimeZone(browserTimeZone()).
+export function datesProblem(checkIn: string, checkOut: string, today: string): string | null {
+  const nights = countNights(checkIn, checkOut)
+  if (nights <= 0) return 'Pick your new check-in and check-out dates.'
+  if (nights > MAX_NIGHTS) return `Stays can be up to ${MAX_NIGHTS} nights.`
+  if (checkIn < today) return 'That check-in date is too soon. Pick a later date.'
+  return null
 }
 
 export const TOO_CLOSE_TO_CHANGE = 'It’s too close to check-in to change this booking online.'

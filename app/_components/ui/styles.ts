@@ -47,4 +47,11 @@ export const inputClass = (error?: boolean) =>
     error ? "border-danger focus:border-danger focus:ring-danger" : "border-edge focus:border-blue focus:ring-blue"
   }`;
 
+// The header's Sign in / Sign out text links
+export const authLinkClass =
+  "rounded-control py-2 text-base font-semibold text-blue hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue";
+
+// Tighter on phones so "Sign out" stays on one line beside the Menu button at 360px
+export const headerAuthLinkClass = `${authLinkClass} whitespace-nowrap px-2 sm:px-3`;
+
 export const labelClass = "mb-2 block text-base font-semibold leading-5 text-ink";

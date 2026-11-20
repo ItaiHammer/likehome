@@ -61,14 +61,21 @@ function toStoredLocation(location?: LocationParams): Partial<LocationParams> {
     if (!location) {
         return {};
     }
-    // "Paris, Texas": a US state where the country goes
-    const state = location.region === undefined ? stateNamed(location.country) : null;
+    // "Paris, Texas" or "Austin, TX": a US state, by name or code, where the country goes.
+    // Codes are how people usually write US places, so "CA" means California here, not Canada.
+    const state = location.region === undefined ? stateNamed(location.country) ?? stateCode(location.country) : null;
     const country = state ? 'USA' : toStoredCountry(location.country);
     return {
         city: toStoredCity(location.city),
         region: state ?? toStoredRegion(location.region, country),
         country,
     };
+}
+
+// A two-letter state code ("TX", "ny", "N.Y."); longer names are left to stateNamed
+function stateCode(value?: string): string | null {
+    const letters = (value ?? '').replaceAll('.', '').trim();
+    return /^[a-z]{2}$/i.test(letters) ? stateName(letters) : null;
 }
 
 // The import stores these under the destination picker's spelling (TARGETS in scripts/import-liteapi.mts)
@@ -262,7 +269,8 @@ function getBedsParams(num?: string, size?: string): BedParams | undefined {
 }
 
 function getGuestsParams(adults?: string, children?: string): GuestParams | undefined {
-    const adultGuests = getPositiveNumberOrUndefined(adults);
+    // Every booking needs at least 1 adult, so 0 adults (from a link or the AI) counts as not given
+    const adultGuests = getPositiveNumberOrUndefined(adults) || undefined;
     const childGuests = getPositiveNumberOrUndefined(children);
     let total = 0;
 

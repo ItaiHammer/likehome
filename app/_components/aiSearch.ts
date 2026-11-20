@@ -3,6 +3,9 @@
 // The endpoint answers with one JSON object shaped like her SearchRequest plus
 // `text`, the assistant's summary (or, for off-topic prompts, only `text`).
 
+/** Longest AI search prompt: the search bar stops typing here and the endpoint turns longer ones away */
+export const MAX_PROMPT_CHARS = 500;
+
 const FIELDS = [
   "where",
   "checkIn",
