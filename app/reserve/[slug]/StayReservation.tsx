@@ -193,7 +193,9 @@ export function StayReservation({
     chosenReward && pointsBalance !== null && rewardPoints > 0 && rewardPoints <= pointsBalance
       ? { ...chosenReward, points: rewardPoints, dollars: pointsToDollars(rewardPoints) }
       : null;
-  const amountDue = total - (reward?.dollars ?? 0);
+  // In cents, so a free stay comes to exactly $0
+  const amountDue = Math.max(0, Math.round((total - (reward?.dollars ?? 0)) * 100) / 100);
+  const pointsCoverStay = reward !== null && amountDue === 0;
   // Not part of the total: the guest pays these to the hotel
   const dueAtProperty = nights ? (room.dueAtProperty ?? 0) : 0;
   // Today is "" while rendering on the server, so the server and the browser agree on first render
@@ -670,6 +672,12 @@ export function StayReservation({
                       <span className="text-xs font-bold text-blue-dark">{detectedBrand}</span>
                   )}
                 </div>
+                {/* checkout_reservation checks the card even when points pay for everything */}
+                {pointsCoverStay && (
+                    <p role="status" className="mt-2 text-sm text-slate">
+                      Your points cover this stay, so your card won’t be charged. We still need a card on file.
+                    </p>
+                )}
 
                 {/* Saved Cards Selection List */}
                 {savedCards.length > 0 && (
@@ -901,6 +909,8 @@ export function StayReservation({
                       </svg>
                       Confirming…
                     </>
+                ) : pointsCoverStay ? (
+                    "Confirm and book"
                 ) : nights > 0 ? (
                     `Confirm and pay ${money(amountDue)}`
                 ) : (
