@@ -6,6 +6,7 @@ import {
     previewRecipientsByHotel,
     previewSentMessages,
 } from "./mockOwnerMessages";
+import Link from "next/link";
 import {PropertyPicker} from "../_components/PropertyPicker";
 
 export interface Message {
@@ -765,14 +766,20 @@ export function OwnerMessagesDashboard({
             )}
 
             {properties.length === 0 ? (
-                <section className={`${card} p-6`}>
-                    <h2 className="font-serif text-[30px] text-ink">
+                <section className="border-l-2 border-blue px-4 py-2">
+                    <h2 className="text-base font-semibold text-ink">
                         No properties yet
                     </h2>
 
                     <p className="mt-2 text-sm text-slate">
                         Add a property before sending messages.
                     </p>
+                    <Link
+                        href="/listings/new"
+                        className="mt-5 inline-flex h-[46px] items-center justify-center rounded-control bg-blue px-5 font-sans text-sm font-semibold text-on-blue transition-colors hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-blue"
+                    >
+                        Add property
+                    </Link>
                 </section>
             ) : (
                 <>
@@ -832,7 +839,7 @@ export function OwnerMessagesDashboard({
                     {error && (
                         <div
                             role="alert"
-                            className={`${card} px-4 py-3 text-sm text-ink`}
+                            className="border-l-2 border-danger px-4 py-2 font-sans text-sm text-danger"
                         >
                             {error}{" "}
 

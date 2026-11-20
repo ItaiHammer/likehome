@@ -25,6 +25,7 @@ export function RoomForm({ editor, onChange, onInvalid, onApply, onCancel, onRem
     id: inputId(field),
     value: form[field],
     error: errors[field],
+    onBlur: () => onInvalid({ ...errors, [field]: checkRoomForm(form).errors[field] }),
     onChange: (e: { target: { value: string } }) => onChange(field, e.target.value),
   });
 
@@ -69,6 +70,7 @@ export function RoomForm({ editor, onChange, onInvalid, onApply, onCancel, onRem
                     id={inputId("nightlyRate")}
                     value={form.nightlyRate}
                     onChange={(e) => onChange("nightlyRate", e.target.value)}
+                    onBlur={() => onInvalid({ ...errors, nightlyRate: checkRoomForm(form).errors.nightlyRate })}
                     inputMode="decimal"
                     aria-invalid={!!errors.nightlyRate}
                     aria-describedby={errors.nightlyRate ? `${inputId("nightlyRate")}-error` : undefined}

@@ -9,11 +9,12 @@ export function ListingPreview({ draft, backLink }: { draft: ListingDraft; backL
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-blue/20 bg-blue/10 px-5 py-4">
+      {/* A visible return link, consistent with message details. */}
+      <div className="mb-6">{backLink}</div>
+      <div className="rounded-lg border border-blue/20 bg-blue/10 px-5 py-4">
         <p className="text-ink">
           <span className="font-semibold">Preview.</span> This is how guests will see your listing, unsaved changes included.
         </p>
-        {backLink}
       </div>
 
       <h1 className="mt-10 font-serif text-[40px] leading-[48px] text-ink sm:text-[56px] sm:leading-[64px]">{draft.name || "Untitled property"}</h1>

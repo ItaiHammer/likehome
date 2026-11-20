@@ -203,6 +203,8 @@ export function CustomersDashboard() {
 
     const customers = useMemo(() => {
         const search = query.trim().toLowerCase();
+        // A lone period or punctuation is not a meaningful customer search.
+        if (search && !/[\p{L}\p{N}]/u.test(search)) return [];
         return (data?.customers ?? []).filter((person) => !search || [
             person.name, person.email, ...person.listings,
             ...(data?.bookings.filter((booking) => booking.guestId === person.id)
@@ -320,7 +322,7 @@ export function CustomersDashboard() {
                                 ] as const).map(([label, value]) => (
                                     <div key={label}>
                                         <dt className="text-sm text-ink">{label}</dt>
-                                        <dd className="mt-1 text-xl text-ink">{value}</dd>
+                                        <dd className="mt-1 text-xl text-ink">{data.listings.length === 0 ? "\u2014" : value}</dd>
                                     </div>
                                 ))}
                             </dl>
@@ -331,35 +333,38 @@ export function CustomersDashboard() {
                         <div className="flex flex-wrap items-baseline justify-between gap-2">
                             <h2 className="font-serif text-[30px] text-ink">Your customers</h2>
                             <span
-                                className="text-sm text-slate">{customers.length} {customers.length === 1 ? "customer" : "customers"}</span>
+                                className="text-sm text-slate">{data.listings.length === 0 ? "\u2014" : `${customers.length} ${customers.length === 1 ? "customer" : "customers"}`}</span>
                         </div>
                         <p className="mt-2 text-sm text-slate">Select a customer to view their details and reservation
                             history.</p>
                         {customers.length ? (
-                            <div className="mt-5 overflow-x-auto">
-                                <div className="min-w-[540px]">
-                                    <div
-                                        className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] gap-4 border-b border-edge pb-3 text-sm text-ink">
-                                        <span>Customer</span><span>Reservations</span><span>Net payments</span>
-                                    </div>
-                                    {visibleCustomers.map((person) => (
-                                        <button key={person.id} type="button" aria-pressed={selectedId === person.id}
-                                                aria-label={`View details for ${person.name || person.email || "guest"}`}
-                                                onClick={() => chooseCustomer(person.id)}
-                                                className={`grid w-full grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] items-center gap-4 border-b border-edge px-2 py-3.5 text-left font-sans transition-[background-color,box-shadow] hover:bg-blue/5 hover:shadow-sm focus-visible:bg-blue/10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue ${selectedId === person.id ? "bg-blue/10" : ""}`}>
-                      <span className="min-w-0">
-                        <span className="block truncate text-base text-ink">{person.name || "Guest"}</span>
-                        <span className="block truncate text-xs text-slate">{person.email || "Email unavailable"}</span>
-                      </span>
-                                            <span className="text-sm text-ink">{person.bookings}</span>
-                                            <span className="text-sm text-ink">{money(person.totalSpent)}</span>
-                                        </button>
-                                    ))}
+                            <div className="mt-5 min-w-0">
+                                <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] gap-4 border-b border-edge pb-3 text-sm text-ink sm:grid">
+                                    <span>Customer</span><span>Reservations</span><span>Net payments</span>
                                 </div>
+                                {visibleCustomers.map((person) => (
+                                    <button key={person.id} type="button" aria-pressed={selectedId === person.id}
+                                            aria-label={`View details for ${person.name || person.email || "guest"}`}
+                                            onClick={() => chooseCustomer(person.id)}
+                                            className={`grid w-full min-w-0 grid-cols-2 gap-x-3 gap-y-2 border-b border-edge px-2 py-3.5 text-left font-sans transition-[background-color,box-shadow] hover:bg-blue/5 hover:shadow-sm focus-visible:bg-blue/10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue sm:grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] sm:items-center sm:gap-4 ${selectedId === person.id ? "bg-blue/10" : ""}`}>
+                                        <span className="col-span-2 min-w-0 sm:col-span-1">
+                                            <span className="block truncate text-base text-ink">{person.name || "Guest"}</span>
+                                            <span className="block truncate text-xs text-slate">{person.email || "Email unavailable"}</span>
+                                        </span>
+                                        <span className="min-w-0 text-sm text-ink">
+                                            <span className="mb-1 block text-xs text-slate sm:hidden">Reservations</span>
+                                            {person.bookings}
+                                        </span>
+                                        <span className="min-w-0 text-sm text-ink">
+                                            <span className="mb-1 block text-xs text-slate sm:hidden">Net payments</span>
+                                            {money(person.totalSpent)}
+                                        </span>
+                                    </button>
+                                ))}
                             </div>
                         ) : (
                             <p className="mt-5 rounded-control bg-paper p-6 text-center text-sm text-slate">
-                                {query ? "No customers match your search." : "No customer bookings yet."}
+                                {query ? "No customers match your search." : data.listings.length === 0 ? "Add a property to start seeing customer history." : "No customer bookings yet."}
                             </p>
                         )}
                         <p className="mt-4 text-xs text-slate">Only guests who have booked your properties are
@@ -426,9 +431,9 @@ export function CustomersDashboard() {
                         <section className={card} aria-label="Customer booking history">
                             <h2 className="font-serif text-[30px] text-ink">Booking history</h2>
                             {selectedBookings.length ? (
-                                <div className="mt-4 overflow-x-auto">
-                                    <table className="w-full min-w-[620px] text-left text-sm">
-                                        <thead>
+                                <div className="mt-4 min-w-0">
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="hidden md:table-header-group">
                                         <tr className="border-b border-edge text-ink">
                                             <th className="pb-3 font-normal">Reservation / dates</th>
                                             <th className="pb-3 font-normal">Room / property</th>
@@ -436,20 +441,26 @@ export function CustomersDashboard() {
                                             <th className="pb-3 font-normal">Payments</th>
                                         </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-edge">
+                                        <tbody className="block space-y-3 md:table-row-group md:space-y-0 md:divide-y md:divide-edge">
                                         {selectedBookings.map((booking) => (
-                                            <tr key={booking.id}>
-                                                <td className="py-3 pr-3 text-ink">
+                                            <tr key={booking.id} className="block rounded-control border border-edge p-3 md:table-row md:rounded-none md:border-0 md:p-0">
+                                                <td className="block py-2 pr-3 text-ink md:table-cell md:py-3">
+                                                    <span className="mb-1 block text-xs text-slate md:hidden">Reservation / dates</span>
                                                     {booking.code}
                                                     <div
                                                         className="text-xs text-slate">{date(booking.checkIn)} – {date(booking.checkOut)}</div>
                                                 </td>
-                                                <td className="py-3 pr-3 text-ink">
+                                                <td className="block py-2 pr-3 text-ink md:table-cell md:py-3">
+                                                    <span className="mb-1 block text-xs text-slate md:hidden">Room / property</span>
                                                     {booking.roomType || "Room"}
                                                     <div className="text-xs text-slate">{booking.hotelName}</div>
                                                 </td>
-                                                <td className="py-3 pr-3 capitalize text-ink">{booking.stage.replace("-", " ")}</td>
-                                                <td className="py-3 text-ink">
+                                                <td className="block py-2 pr-3 capitalize text-ink md:table-cell md:py-3">
+                                                    <span className="mb-1 block text-xs text-slate md:hidden">Status</span>
+                                                    {booking.stage.replace("-", " ")}
+                                                </td>
+                                                <td className="block py-2 text-ink md:table-cell md:py-3">
+                                                    <span className="mb-1 block text-xs text-slate md:hidden">Payments</span>
                                                     Charged: {money(booking.amountPaid)}
                                                     {booking.amountRefunded > 0 && (
                                                         <div

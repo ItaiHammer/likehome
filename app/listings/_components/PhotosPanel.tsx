@@ -13,6 +13,7 @@ type View = { kind: "gallery" } | { kind: "choose" } | { kind: "uploads" } | { k
 
 type Props = {
   photos: ListingPhoto[];
+  instantPhotos?: boolean;
   uploads: Upload[];
   onStartUploads: (items: { source: File | string; caption: string }[]) => void;
   onRetryUpload: (upload: Upload) => void;
@@ -29,7 +30,7 @@ function captionFromFileName(name: string) {
 }
 
 // The Photos tab: the gallery, the sample-photo picker, the "Cover photo updated" confirmation, or uploads in progress.
-export function PhotosPanel({ photos, uploads, onStartUploads, onRetryUpload, onRemoveUpload, onMakeCover, onMove, onRemove }: Props) {
+export function PhotosPanel({ photos, instantPhotos = false, uploads, onStartUploads, onRetryUpload, onRemoveUpload, onMakeCover, onMove, onRemove }: Props) {
   // Coming back to this tab mid-upload shows the uploads again
   const [view, setView] = useState<View>({ kind: uploads.length > 0 ? "uploads" : "gallery" });
   const [picked, setPicked] = useState<string[]>([]); // sample photo URLs chosen in the picker
@@ -43,7 +44,7 @@ export function PhotosPanel({ photos, uploads, onStartUploads, onRetryUpload, on
     if (added.length === 0) return;
     onStartUploads(added);
     setPicked([]);
-    setView({ kind: "uploads" });
+    setView({ kind: instantPhotos ? "gallery" : "uploads" });
   }
 
   function addFiles(files: FileList | null) {
@@ -88,7 +89,7 @@ export function PhotosPanel({ photos, uploads, onStartUploads, onRetryUpload, on
     return (
       <>
         {picker}
-        <PanelHeading title="Add photos" subtitle="Pick sample photos for now. Real uploads come once photo storage is set up." />
+        <PanelHeading title="Add photos" subtitle="Choose sample photos or upload pictures from your computer." />
         <ul className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {SAMPLE_PHOTOS.map((sample) => {
             const selected = picked.includes(sample.url);
