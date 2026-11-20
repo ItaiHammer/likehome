@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { PAGE_ROUTES } from "@/constants/routes";
 import { cardErrors } from "@/lib/card";
 
 export interface PaymentMethod {
@@ -412,12 +414,12 @@ export function AccountTabContent({
                 </div>
 
                 <div className="pt-6">
-                    <button
-                        type="button"
+                    <Link
+                        href={`${PAGE_ROUTES.MY_BOOKINGS}/rewards`}
                         className="text-xs font-semibold text-blue hover:text-blue-dark transition-colors inline-flex items-center gap-1"
                     >
                         View rewards &rarr;
-                    </button>
+                    </Link>
                 </div>
             </div>
 
