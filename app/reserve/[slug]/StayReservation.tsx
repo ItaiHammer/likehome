@@ -18,6 +18,7 @@ import { TAX_RATE, type Room, type Stay } from "../../_data/stays";
 import { checkoutRequest } from "./checkoutRequest";
 import { DateRangePicker } from "./DateRangePicker";
 import { GuestsField, guestLabel } from "./GuestsField";
+import { SaveHotelButton } from "../../_components/SaveHotelButton";
 import { PhotoGallery } from "./PhotoGallery";
 import { RoomOptions } from "./RoomOptions";
 import { StayOffers } from "./StayOffers";
@@ -883,7 +884,11 @@ export function StayReservation({
         </Link>
 
         <div className="mt-4">
-          <h1 className="break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[56px] sm:leading-[64px]">{stay.name}</h1>
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="min-w-0 break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[56px] sm:leading-[64px]">{stay.name}</h1>
+            {/* Database hotels only: the saved list in My Bookings looks hotels up by id */}
+            {stay.bookable && <SaveHotelButton hotelId={stay.slug} className="mt-2 shrink-0 sm:mt-4" />}
+          </div>
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-slate">
             <span>{stay.location}</span>
             {stay.rating !== null && (
