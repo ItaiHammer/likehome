@@ -4,7 +4,7 @@ import { DesktopNav, MobileNav } from "./SiteNav";
 import { ThemeToggle } from "./ThemeToggle";
 import { AuthButton } from "@/components/auth-button";
 import { SignOutButton } from "@/components/sign-out-button";
-import { accountMenuLinkFor, navItemsFor } from "@/lib/account/nav";
+import { accountMenuItemsFor, accountMenuLinkFor, navItemsFor } from "@/lib/account/nav";
 import { accountLabel } from "@/lib/account/role";
 import { getViewer } from "@/utils/viewer";
 import { AccountMenu } from "./AccountMenu";
@@ -34,7 +34,12 @@ export async function SiteHeader() {
           <ThemeToggle />
           <AuthButton signedIn={viewer.role !== "signed-out"}>
             {menuLink ? (
-              <AccountMenu name={viewer.name} email={viewer.email} accountLabel={label} link={menuLink} />
+              <AccountMenu
+                name={viewer.name}
+                email={viewer.email}
+                accountLabel={label}
+                items={accountMenuItemsFor(viewer.role)}
+              />
             ) : (
               <SignOutButton inHeader />
             )}

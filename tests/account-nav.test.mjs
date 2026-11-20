@@ -12,7 +12,7 @@ register(
     }`)
 )
 
-const { navItemsFor, accountMenuLinkFor } = await import('../lib/account/nav.ts')
+const { navItemsFor, accountMenuLinkFor, accountMenuItemsFor } = await import('../lib/account/nav.ts')
 const { choiceRedirect, choicePathFor, afterChoicePath } = await import('../lib/account/choice.ts')
 
 const STAYS = { label: 'Stays', href: '/search' }
@@ -33,6 +33,21 @@ test('avatar menu link per role', () => {
   assert.equal(accountMenuLinkFor('unchosen'), null)
   assert.equal(accountMenuLinkFor('unknown'), null)
   assert.equal(accountMenuLinkFor('signed-out'), null)
+})
+
+test('personal avatar menu follows the rewards Figma: account details, rewards, payment methods (no settings page yet)', () => {
+  assert.deepEqual(accountMenuItemsFor('personal'), [
+    { label: 'Account details', href: '/MyBookings?tab=account' },
+    { label: 'Rewards', href: '/MyBookings/rewards' },
+    { label: 'Payment methods', href: '/MyBookings?tab=account#payment-methods' },
+  ])
+})
+
+test('other roles keep their single avatar menu link', () => {
+  assert.deepEqual(accountMenuItemsFor('business'), [MY_LISTINGS])
+  assert.deepEqual(accountMenuItemsFor('unchosen'), [])
+  assert.deepEqual(accountMenuItemsFor('unknown'), [])
+  assert.deepEqual(accountMenuItemsFor('signed-out'), [])
 })
 
 test('every unchosen header link leads to the choice screen with that page as next', () => {

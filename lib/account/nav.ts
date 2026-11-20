@@ -20,3 +20,18 @@ export function accountMenuLinkFor(role: ViewerRole): NavLink | null {
   if (role === 'business') return MY_LISTINGS
   return null
 }
+
+const ACCOUNT_TAB = `${PAGE_ROUTES.MY_BOOKINGS}?tab=account`
+
+// The Rewards Flow Figma's dropdown (My Bookings is already in the top nav), minus Settings until it has a page
+const PERSONAL_MENU: NavLink[] = [
+  { label: 'Account details', href: ACCOUNT_TAB },
+  { label: 'Rewards', href: `${PAGE_ROUTES.MY_BOOKINGS}/rewards` },
+  { label: 'Payment methods', href: `${ACCOUNT_TAB}#payment-methods` },
+]
+
+export function accountMenuItemsFor(role: ViewerRole): NavLink[] {
+  if (role === 'personal') return PERSONAL_MENU
+  const own = accountMenuLinkFor(role)
+  return own ? [own] : []
+}

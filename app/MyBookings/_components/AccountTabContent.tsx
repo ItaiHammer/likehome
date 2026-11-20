@@ -424,7 +424,7 @@ export function AccountTabContent({
             </div>
 
             {/* 3. Payment Methods Card */}
-            <div className="flex flex-col justify-between rounded-2xl border border-edge bg-surface p-6 shadow-sm">
+            <div id="payment-methods" className="flex scroll-mt-6 flex-col justify-between rounded-2xl border border-edge bg-surface p-6 shadow-sm">
                 <div className="space-y-5">
                     <h2 className="font-serif text-[32px] leading-9 font-bold text-ink">Payment methods</h2>
 
