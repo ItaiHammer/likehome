@@ -14,14 +14,15 @@ export async function recordHotelView(accountId: string, hotelId: string) {
   return { data, error }
 }
 
-export async function getRecentlyViewedHotels(accountId: string) {
+export async function getRecentlyViewedHotels(accountId: string, limit?: number) {
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)
-  const { data, error } = await supabase
+  const query = supabase
     .from('recently_viewed_hotels')
     .select('viewed_at, hotels(*)')
     .eq('account_id', accountId)
     .order('viewed_at', { ascending: false })
+  const { data, error } = await (limit ? query.limit(limit) : query)
   return { data, error }
 }
 

@@ -15,6 +15,8 @@ export {
   iconButtonClass,
   inputClass,
   labelClass,
+  swipeItemClass,
+  swipeRowClass,
   type ButtonVariant,
   type ControlSize,
 } from "./styles";

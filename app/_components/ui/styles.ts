@@ -55,3 +55,18 @@ export const authLinkClass =
 export const headerAuthLinkClass = `${authLinkClass} whitespace-nowrap px-2 sm:px-3`;
 
 export const labelClass = "mb-2 block text-base font-semibold leading-5 text-ink";
+
+// Phones (below sm): a list of cards as one sideways row running to the screen edge (cancelling the page's
+// 16px padding, as Popular destinations does), the first card on the gutter, 12px apart. It swipes natively,
+// snaps to each card's start and hides its scrollbar. From sm up the list's own grid classes take over.
+// `scroll = false` clips it instead, for a loading row: a scroll box with nothing focusable inside becomes a
+// tab stop itself.
+export const swipeRowClass = (scroll = true) =>
+  `max-sm:-mx-4 max-sm:flex max-sm:gap-3 max-sm:px-4 ${
+    scroll
+      ? "max-sm:snap-x max-sm:snap-mandatory max-sm:overflow-x-auto max-sm:scroll-px-4 max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden"
+      : "max-sm:overflow-hidden"
+  }`;
+
+// A card in that row; the list adds the card's width (e.g. max-sm:w-[280px])
+export const swipeItemClass = "max-sm:shrink-0 max-sm:snap-start";

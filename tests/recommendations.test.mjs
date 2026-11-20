@@ -53,6 +53,13 @@ test('cards: the first 6 rows, in the order the search ranked them', () => {
   assert.deepEqual(toRecommendedCards(rows, false).map((r) => r.id), ['h0', 'h1', 'h2', 'h3', 'h4', 'h5'])
 })
 
+test('cards: a smaller limit (the signed-in home page) keeps the first rows only', () => {
+  const rows = Array.from({ length: 6 }, (_, i) => row(`h${i}`))
+  for (const liveRates of [true, false]) {
+    assert.deepEqual(toRecommendedCards(rows, liveRates, 3).map((r) => r.id), ['h0', 'h1', 'h2'])
+  }
+})
+
 test('cards: with live rates on, LiteAPI hotels ask for dates instead of showing a stored price, like /search', () => {
   const [owner, liteapi] = toRecommendedCards([row('a'), row('b', { liteapi_id: 'lp123' })], true)
   assert.equal(owner.min_price, 180)

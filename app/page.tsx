@@ -1,8 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Suspense } from "react";
+import { Fragment, Suspense } from "react";
 import BlurText from "./_components/BlurText";
 import { PopularDestinations } from "./_components/PopularDestinations";
+import { RecentlyViewed } from "./_components/RecentlyViewed";
 import { RecommendedStays, RecommendedStaysSkeleton } from "./_components/RecommendedStays";
 import { SearchExperience } from "./_components/SearchExperience";
 import { ShinyLabel } from "./_components/ShinyLabel";
@@ -11,7 +12,7 @@ import { ArrowIcon, Button } from "./_components/ui";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
 import { redirect } from "next/navigation";
 import { choicePathFor } from "@/lib/account/choice";
-import { homeContentFor } from "@/lib/account/home";
+import { homeContentFor, type HomeSection } from "@/lib/account/home";
 import { getViewer } from "@/utils/viewer";
 import { PAGE_ROUTES } from "@/constants/routes";
 import coastalRoom from "./_assets/coastal-room.webp";
@@ -46,7 +47,23 @@ const perks = ["Member prices on every stay", "Rewards on every night you book",
 export default async function Home() {
   const viewer = await getViewer();
   if (viewer.role === "unchosen") redirect(choicePathFor(null));
-  const { hero, welcome, signedOutSections } = homeContentFor(viewer.role);
+  const { hero, welcome, signedOutSections, recommendedCards, sections } = homeContentFor(viewer.role);
+
+  // Each optional section streams in on its own, so the hero and banner never wait for its read
+  const sectionContent: Record<HomeSection, React.ReactNode> = {
+    "recently-viewed": viewer.userId ? (
+      <Suspense fallback={null}>
+        <RecentlyViewed accountId={viewer.userId} />
+      </Suspense>
+    ) : null,
+    // Recommended stays (US 3.3), for every role
+    recommended: (
+      <Suspense fallback={<RecommendedStaysSkeleton count={recommendedCards} />}>
+        <RecommendedStays count={recommendedCards} />
+      </Suspense>
+    ),
+    destinations: <PopularDestinations />,
+  };
 
   return (
     <main className="flex flex-1 flex-col">
@@ -164,12 +181,9 @@ export default async function Home() {
         </div>
         )}
 
-        <PopularDestinations />
-
-        {/* Recommended stays (US 3.3), for every role: streamed in, so the hero and banner don't wait for the search */}
-        <Suspense fallback={<RecommendedStaysSkeleton />}>
-          <RecommendedStays />
-        </Suspense>
+        {sections.map((id) => (
+          <Fragment key={id}>{sectionContent[id]}</Fragment>
+        ))}
       </div>
     </main>
   );

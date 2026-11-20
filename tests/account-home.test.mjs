@@ -13,12 +13,15 @@ register(
 )
 
 const { homeContentFor } = await import('../lib/account/home.ts')
+const { RECOMMENDED_CARDS } = await import('../lib/recommendations.ts')
 
 test("signed out keeps today's hero and has no welcome banner", () => {
   assert.deepEqual(homeContentFor('signed-out'), {
     hero: { title: 'Feel at home, anywhere.', line: 'A new favorite stay starts with a hello.' },
     welcome: null,
     signedOutSections: true,
+    recommendedCards: RECOMMENDED_CARDS,
+    sections: ['destinations', 'recommended'],
   })
 })
 
@@ -34,6 +37,8 @@ test('personal', () => {
       ],
     },
     signedOutSections: false,
+    recommendedCards: 3,
+    sections: ['recently-viewed', 'recommended', 'destinations'],
   })
 })
 
@@ -52,6 +57,8 @@ test('business', () => {
       ],
     },
     signedOutSections: false,
+    recommendedCards: 3,
+    sections: ['destinations', 'recommended'],
   })
 })
 
@@ -60,6 +67,8 @@ test('unknown (the account read failed): signed in, a neutral hero, no welcome b
     hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: null,
     signedOutSections: false,
+    recommendedCards: 3,
+    sections: ['destinations', 'recommended'],
   })
 })
 

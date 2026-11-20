@@ -1,4 +1,5 @@
 import { PAGE_ROUTES } from '@/constants/routes'
+import { RECOMMENDED_CARDS } from '@/lib/recommendations'
 import type { ViewerRole } from './role'
 
 export type HomeAction = {
@@ -10,25 +11,37 @@ export type HomeAction = {
   variant: 'primary' | 'secondary'
 }
 
+export type HomeSection = 'recently-viewed' | 'recommended' | 'destinations'
+
 export type HomeContent = {
   hero: { title: string; line: string }
   welcome: { title: string; body: string; actions: HomeAction[] } | null
   // The member promo and feature cards
   signedOutSections: boolean
+  recommendedCards: number
+  // What follows the banner (or the promo), in order
+  sections: HomeSection[]
 }
 
 export type HomeRole = Exclude<ViewerRole, 'unchosen'>
+
+const SIGNED_IN_CARDS = 3
+const DEFAULT_SECTIONS: HomeSection[] = ['destinations', 'recommended']
 
 const CONTENT: Record<HomeRole, HomeContent> = {
   'signed-out': {
     hero: { title: 'Feel at home, anywhere.', line: 'A new favorite stay starts with a hello.' },
     welcome: null,
     signedOutSections: true,
+    recommendedCards: RECOMMENDED_CARDS,
+    sections: DEFAULT_SECTIONS,
   },
   unknown: {
     hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: null,
     signedOutSections: false,
+    recommendedCards: SIGNED_IN_CARDS,
+    sections: DEFAULT_SECTIONS,
   },
   personal: {
     hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
@@ -41,6 +54,9 @@ const CONTENT: Record<HomeRole, HomeContent> = {
       ],
     },
     signedOutSections: false,
+    recommendedCards: SIGNED_IN_CARDS,
+    // Their own history first; the row hides itself when there is none
+    sections: ['recently-viewed', 'recommended', 'destinations'],
   },
   business: {
     hero: {
@@ -56,6 +72,8 @@ const CONTENT: Record<HomeRole, HomeContent> = {
       ],
     },
     signedOutSections: false,
+    recommendedCards: SIGNED_IN_CARDS,
+    sections: DEFAULT_SECTIONS,
   },
 }
 

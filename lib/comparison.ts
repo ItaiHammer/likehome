@@ -41,6 +41,15 @@ export const MAX_COMPARED = 3
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// "City, Region, Country", blank parts left out
+export function hotelLocation(hotel: Pick<ComparisonHotelRow, 'city' | 'region' | 'country'>): string {
+  return [hotel.city, hotel.region, hotel.country].filter(Boolean).join(', ')
+}
+
+export function hotelPhoto(hotel: Pick<ComparisonHotelRow, 'photo_urls'>): string | null {
+  return hotel.photo_urls?.find(Boolean) ?? null
+}
+
 // Null when it can't be compared: missing, delisted (search hides it), or no rooms
 export function toComparisonListing(hotel: ComparisonHotelRow | null, viewedAt: string | null = null): ComparisonListing | null {
   const rooms = hotel?.rooms ?? []
@@ -57,8 +66,8 @@ export function toComparisonListing(hotel: ComparisonHotelRow | null, viewedAt: 
   return {
     id: hotel.id,
     name: hotel.name,
-    location: [hotel.city, hotel.region, hotel.country].filter(Boolean).join(', '),
-    photo: hotel.photo_urls?.find(Boolean) ?? null,
+    location: hotelLocation(hotel),
+    photo: hotelPhoto(hotel),
     rating: Number.isFinite(rating) ? rating : null,
     priceFrom: Math.min(...rooms.map((r) => Number(r.price_per_night))),
     sleepsUpTo: Math.max(...rooms.map((r) => r.capacity ?? 2)),

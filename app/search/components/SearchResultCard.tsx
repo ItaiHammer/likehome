@@ -68,17 +68,20 @@ function asNumber(value: HotelSearchResult["min_price"]) {
 }
 
 // `search` is the current search's query string: the stay page opens on a room that matches it, and its
-// Back to stays link returns here. `headingLevel` h3 fits the card under a section's h2 (the home page)
+// Back to stays link returns here. `headingLevel` h3 fits the card under a section's h2 (the home page).
+// `compactOnPhones` drops the description and the guest and room chips below sm, for a sideways row of cards
 export function SearchResultCard({
   stay,
   eager = false,
   search = "",
   headingLevel: Heading = "h2",
+  compactOnPhones = false,
 }: {
   stay: HotelSearchResult;
   eager?: boolean;
   search?: string;
   headingLevel?: "h2" | "h3";
+  compactOnPhones?: boolean;
 }) {
   const photo = stay.photo_urls?.find(Boolean);
   const price = asNumber(stay.min_price);
@@ -88,6 +91,7 @@ export function SearchResultCard({
   // A LiteAPI hotel that isn't saved yet opens by its LiteAPI id
   const slug = stay.id ?? stay.liteapi_id;
   const href = slug ? `/reserve/${slug}${search ? `?${search}` : ""}` : null;
+  const phoneHidden = compactOnPhones ? " max-sm:hidden" : "";
 
   const media = photo ? (
     // A plain <img> so photos below the fold can lazy-load: next.config doesn't list image hosts yet.
@@ -142,7 +146,7 @@ export function SearchResultCard({
               </span>
             )}
           </div>
-        {stay.description && <p className="mt-4 line-clamp-2 text-sm leading-6 text-slate">{stay.description}</p>}
+        {stay.description && <p className={`mt-4 line-clamp-2 text-sm leading-6 text-slate${phoneHidden}`}>{stay.description}</p>}
         {stay.tags && stay.tags.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-1.5">
             {stay.tags.slice(0, 3).map((tag) => (
@@ -153,7 +157,7 @@ export function SearchResultCard({
           </div>
         )}
 
-        <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-slate">
+        <div className={`mt-4 flex flex-wrap gap-2 text-xs font-medium text-slate${phoneHidden}`}>
           {capacity !== null && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-paper/40 px-2.5 py-1.5">
               <UsersIcon /> Up to {capacity} guests
