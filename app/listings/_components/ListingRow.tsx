@@ -4,8 +4,13 @@ import { formatLocation, formatPrice, lowestRate, needsAttention, plural } from 
 import type { Listing } from "@/types/listing";
 import { ListingCover } from "./ListingCover";
 
-// One property on My listings, styled like the home page's stay cards. `index` staggers the entrance.
-export function ListingRow({ listing, index }: { listing: Listing; index: number }) {
+// The SAME card renders both actual and development-only sample listings.
+// Sample mode changes only actions so test data cannot reach the real editor.
+export function ListingRow({ listing, index, isSample = false }: {
+  listing: Listing;
+  index: number;
+  isSample?: boolean;
+}) {
   const editHref = `/listings/${listing.id}/edit`;
   const rate = lowestRate(listing.rooms);
 
@@ -28,34 +33,48 @@ export function ListingRow({ listing, index }: { listing: Listing; index: number
           </div>
 
           <ul className="mt-4 flex flex-wrap gap-1.5" aria-label="Listing details">
-            <li>
-              <Tag size="md">{plural(listing.rooms.length, "room type")}</Tag>
-            </li>
+            <li><Tag size="md">{plural(listing.rooms.length, "room type")}</Tag></li>
             {needsAttention(listing).map((todo) => (
               <li key={todo.tab}>
-                <Link
-                  href={`${editHref}?tab=${todo.tab}`}
-                  className="inline-flex items-center gap-1.5 rounded-control border border-danger/50 px-2.5 py-1 text-sm text-danger transition-colors hover:bg-danger/10"
-                >
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                    <path d="M12 7v6M12 16.5h.01" />
-                    <circle cx="12" cy="12" r="9" />
-                  </svg>
-                  {todo.label}
-                  <span className="sr-only"> to {listing.name}</span>
-                </Link>
+                {isSample ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-control border border-danger/50 px-2.5 py-1 text-sm text-danger">
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                      <path d="M12 7v6M12 16.5h.01" />
+                      <circle cx="12" cy="12" r="9" />
+                    </svg>
+                    {todo.label}
+                  </span>
+                ) : (
+                  <Link href={`${editHref}?tab=${todo.tab}`} className="inline-flex items-center gap-1.5 rounded-control border border-danger/50 px-2.5 py-1 text-sm text-danger transition-colors hover:bg-danger/10">
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                      <path d="M12 7v6M12 16.5h.01" />
+                      <circle cx="12" cy="12" r="9" />
+                    </svg>
+                    {todo.label}
+                    <span className="sr-only"> to {listing.name}</span>
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
 
           <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-edge pt-4 sm:mt-auto">
-            <Link href={editHref} className="group/edit inline-flex items-center gap-1.5 font-semibold text-blue hover:text-blue-dark">
-              Edit property<span className="sr-only">: {listing.name}</span>
-              <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform duration-200 group-hover/edit:translate-x-1" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M5 12h14M13 6l6 6-6 6" />
-              </svg>
-            </Link>
-            <Button variant="secondary" size="sm" href={`${editHref}?preview=1`}>
+            {isSample ? (
+              <span className="inline-flex items-center gap-1.5 font-semibold text-slate opacity-60" aria-disabled="true">
+                Edit property (sample only)
+              </span>
+            ) : (
+              <Link href={editHref} className="group/edit inline-flex items-center gap-1.5 font-semibold text-blue hover:text-blue-dark">
+                Edit property<span className="sr-only">: {listing.name}</span>
+                <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform duration-200 group-hover/edit:translate-x-1" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </Link>
+            )}
+            <Button variant="secondary" size="sm" href={isSample
+              ? `/listings?sample=preview&id=${encodeURIComponent(listing.id)}`
+              : `${editHref}?preview=1`
+            }>
               Preview<span className="sr-only">: {listing.name}</span>
             </Button>
           </div>
