@@ -1,3 +1,5 @@
+import type { HotelSearchResult } from '@/app/search/components/SearchResultCard'
+
 // Where hotel recommendations are searched (US 3.3.2): the city of the guest's latest viewed hotel, else their time zone's
 export type RecommendationBasis = 'history' | 'time-zone' | 'default'
 
@@ -36,4 +38,21 @@ export function recommendationPlace(summary: ViewingSummary, timeZone?: string):
     .join(', ')
 
   return { basis, ...loc, where }
+}
+
+export const RECOMMENDED_CARDS = 6
+
+// With live rates on, a LiteAPI row's stored price isn't its real one, so it asks for dates like /search does.
+// Without them, stored prices hold for any dates (as on the hotel page).
+export function toRecommendedCards(rows: unknown, liveRates: boolean, limit = RECOMMENDED_CARDS): HotelSearchResult[] {
+  if (!Array.isArray(rows)) return []
+  const cards = (rows as HotelSearchResult[]).slice(0, limit)
+  if (!liveRates) return cards
+  return cards.map((row): HotelSearchResult => (row.liteapi_id ? { ...row, min_price: null, price_status: 'needs-dates' } : row))
+}
+
+export function recommendationSubtitle(place: Pick<RecommendationPlace, 'basis' | 'city'>): string {
+  return place.basis === 'history'
+    ? `Picked from the stays you’ve viewed in ${place.city}.`
+    : `A few places to stay in ${place.city} to get you started.`
 }
