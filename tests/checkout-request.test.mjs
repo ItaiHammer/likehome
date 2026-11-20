@@ -66,3 +66,16 @@ test('adults and children are sent together as guests, and the children apart fo
   assert.equal(body.children, 1)
   assert.equal(checkoutRequest(form({ adults: 1, children: 0 })).children, 0)
 })
+
+test('reward points are sent as a whole number, and left out when none are used', () => {
+  assert.equal(checkoutRequest(form({ points: 26850 })).points, 26850)
+  assert.equal(checkoutRequest(form({ points: 100.4 })).points, 100)
+  assert.equal('points' in checkoutRequest(form()), false)
+  assert.equal('points' in checkoutRequest(form({ points: 0 })), false)
+})
+
+test('points go with a saved card too', () => {
+  const body = checkoutRequest({ ...form(), cardNumber: undefined, expiry: undefined, cvc: undefined, cardName: undefined, savedPaymentMethodId: 'pm-1', points: 2800 })
+  assert.equal(body.points, 2800)
+  assert.deepEqual(body.payment, { saved_payment_method_id: 'pm-1' })
+})

@@ -6,6 +6,8 @@ type CheckoutStay = {
   adults: number;
   children: number;
   timeZone?: string;
+  /** Rewards points to spend; /api/checkout caps them at the balance and the total */
+  points?: number;
 };
 
 export type CheckoutForm = CheckoutStay & (
@@ -35,6 +37,7 @@ export function checkoutRequest(form: CheckoutForm) {
     adults: form.adults,
     children: form.children,
     time_zone: form.timeZone,
+    ...(form.points && form.points > 0 ? { points: Math.round(form.points) } : {}),
   };
 
   if (form.savedPaymentMethodId) {
