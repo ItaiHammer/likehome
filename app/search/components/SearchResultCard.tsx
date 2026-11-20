@@ -68,8 +68,18 @@ function asNumber(value: HotelSearchResult["min_price"]) {
 }
 
 // `search` is the current search's query string: the stay page opens on a room that matches it, and its
-// Back to stays link returns here
-export function SearchResultCard({ stay, eager = false, search = "" }: { stay: HotelSearchResult; eager?: boolean; search?: string }) {
+// Back to stays link returns here. `headingLevel` h3 fits the card under a section's h2 (the home page)
+export function SearchResultCard({
+  stay,
+  eager = false,
+  search = "",
+  headingLevel: Heading = "h2",
+}: {
+  stay: HotelSearchResult;
+  eager?: boolean;
+  search?: string;
+  headingLevel?: "h2" | "h3";
+}) {
   const photo = stay.photo_urls?.find(Boolean);
   const price = asNumber(stay.min_price);
   const capacity = asNumber(stay.max_capacity);
@@ -118,9 +128,9 @@ export function SearchResultCard({ stay, eager = false, search = "" }: { stay: H
         <div className="flex flex-1 flex-col p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="truncate text-lg font-semibold text-ink">
+              <Heading className="truncate text-lg font-semibold text-ink">
                 {stay.name || "LikeHome stay"}
-              </h2>
+              </Heading>
               <p className="mt-1 flex items-start gap-1.5 text-sm leading-5 text-slate">
                 <PinIcon />
                 <span>{formatLocation(stay)}</span>
