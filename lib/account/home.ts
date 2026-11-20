@@ -13,7 +13,7 @@ export type HomeAction = {
 export type HomeContent = {
   hero: { title: string; line: string }
   welcome: { title: string; body: string; actions: HomeAction[] } | null
-  // The member promo and featured stays
+  // The member promo and feature cards
   signedOutSections: boolean
 }
 
