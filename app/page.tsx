@@ -63,12 +63,9 @@ export default async function Home() {
       <section className="relative isolate z-20 px-4 pb-24 pt-14 sm:px-6 sm:pb-32 sm:pt-20">
         {/* The sky fades out toward the bottom, into the page background (either theme) */}
         <div className="absolute inset-0 -z-10 overflow-hidden [mask-image:linear-gradient(to_bottom,black_45%,transparent)]">
-          <SkyBackground />
+          <SkyBackground clouds />
         </div>
         <div className="mx-auto max-w-5xl">
-          {hero.eyebrow && (
-            <p className="mb-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-ink/80">{hero.eyebrow}</p>
-          )}
           <BlurText
             as="h1"
             text={hero.title}
@@ -91,13 +88,7 @@ export default async function Home() {
 
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-12 sm:px-6">
         {welcome && (
-          <WelcomeBanner title={welcome.title} body={welcome.body}>
-            {welcome.actions.map((a) => (
-              <Button key={a.href} href={a.href} variant={a.variant}>
-                {a.label}
-              </Button>
-            ))}
-          </WelcomeBanner>
+          <WelcomeBanner title={welcome.title} body={welcome.body} actions={welcome.actions} />
         )}
         {signedOutSections && (
         /* Promo and feature cards sit close together, as one block */

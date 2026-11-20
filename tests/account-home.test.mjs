@@ -16,7 +16,7 @@ const { homeContentFor } = await import('../lib/account/home.ts')
 
 test("signed out keeps today's hero and has no welcome banner", () => {
   assert.deepEqual(homeContentFor('signed-out'), {
-    hero: { eyebrow: null, title: 'Feel at home, anywhere.', line: 'A new favorite stay starts with a hello.' },
+    hero: { title: 'Feel at home, anywhere.', line: 'A new favorite stay starts with a hello.' },
     welcome: null,
     signedOutSections: true,
   })
@@ -24,13 +24,13 @@ test("signed out keeps today's hero and has no welcome banner", () => {
 
 test('personal', () => {
   assert.deepEqual(homeContentFor('personal'), {
-    hero: { eyebrow: 'Your next chapter', title: 'Where to next?', line: 'Find a place that feels like yours.' },
+    hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: {
       title: 'Plans, in one place.',
       body: 'Your bookings and favorites are always close by.',
       actions: [
-        { label: 'My Bookings', href: '/MyBookings', variant: 'primary' },
-        { label: 'Browse stays', href: '/search', variant: 'secondary' },
+        { label: 'My Bookings', hint: 'Change or cancel a stay', icon: 'bookings', href: '/MyBookings', variant: 'primary' },
+        { label: 'Browse stays', hint: 'Find somewhere new', icon: 'search', href: '/search', variant: 'secondary' },
       ],
     },
     signedOutSections: false,
@@ -40,7 +40,6 @@ test('personal', () => {
 test('business', () => {
   assert.deepEqual(homeContentFor('business'), {
     hero: {
-      eyebrow: 'Your places',
       title: 'Where to next?',
       line: 'Find a stay anywhere. Your listings are just below.',
     },
@@ -48,8 +47,8 @@ test('business', () => {
       title: 'Listings, in one place.',
       body: 'Your properties and their details are always close by.',
       actions: [
-        { label: 'My Listings', href: '/listings', variant: 'primary' },
-        { label: 'Add property', href: '/listings/new', variant: 'secondary' },
+        { label: 'My Listings', hint: 'Edit rooms and photos', icon: 'listings', href: '/listings', variant: 'primary' },
+        { label: 'Add property', hint: 'List a new place', icon: 'add', href: '/listings/new', variant: 'secondary' },
       ],
     },
     signedOutSections: false,
@@ -58,7 +57,7 @@ test('business', () => {
 
 test('unknown (the account read failed): signed in, a neutral hero, no welcome banner and no sign-up promo', () => {
   assert.deepEqual(homeContentFor('unknown'), {
-    hero: { eyebrow: null, title: 'Where to next?', line: 'Find a place that feels like yours.' },
+    hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: null,
     signedOutSections: false,
   })
