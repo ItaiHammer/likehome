@@ -45,3 +45,15 @@ export async function getRewardsHistory(accountId: string, { filter = "all", pag
   if (error?.code === PAGE_OUT_OF_RANGE) return { data: [], total: 0, error: null };
   return { data: ((data ?? []) as unknown as ActivityRow[]).map(toActivity), total: count ?? 0, error };
 }
+
+/** Points spent on one booking (checkout_reservation's 'redeem' rows), as a positive number */
+export async function getPointsUsedOnBooking(reservationId: string) {
+  const supabase = createClient(await cookies());
+  const { data, error } = await supabase
+    .from("points_transactions")
+    .select("points")
+    .eq("reservation_id", reservationId)
+    .eq("type", "redeem");
+  const used = (data ?? []).reduce((sum, row) => sum - Number(row.points), 0);
+  return { data: used, error };
+}

@@ -43,7 +43,7 @@ mock.module('@/utils/supabase/server', {
   },
 })
 
-const { getRewardsHistory } = await import('../utils/rewards.ts')
+const { getPointsUsedOnBooking, getRewardsHistory } = await import('../utils/rewards.ts')
 
 beforeEach(() => {
   calls = []
@@ -99,4 +99,18 @@ test('other read errors are passed back to the page', async () => {
   const { data, error } = await getRewardsHistory('acct-1')
   assert.deepEqual(data, [])
   assert.equal(error, failure)
+})
+
+test('points used on a booking add up its redeem rows as a positive number', async () => {
+  result = { data: [{ points: -26850 }, { points: -2800 }], error: null }
+  const { data } = await getPointsUsedOnBooking('res-1')
+  assert.equal(data, 29650)
+  assert.deepEqual(calls.filter((c) => c[0] === 'eq'), [
+    ['eq', 'reservation_id', 'res-1'],
+    ['eq', 'type', 'redeem'],
+  ])
+})
+
+test('a booking paid without points used 0', async () => {
+  assert.equal((await getPointsUsedOnBooking('res-2')).data, 0)
 })
