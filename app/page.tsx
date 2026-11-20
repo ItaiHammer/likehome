@@ -7,7 +7,7 @@ import { RecommendedStays, RecommendedStaysSkeleton } from "./_components/Recomm
 import { SearchExperience } from "./_components/SearchExperience";
 import { ShinyLabel } from "./_components/ShinyLabel";
 import { SkyBackground } from "./_components/SkyBackground";
-import { Button } from "./_components/ui";
+import { ArrowIcon, Button } from "./_components/ui";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
 import { redirect } from "next/navigation";
 import { choicePathFor } from "@/lib/account/choice";
@@ -38,14 +38,6 @@ function Icon({ children, className = "h-5 w-5" }: { children: React.ReactNode; 
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
       {children}
     </svg>
-  );
-}
-
-function Arrow({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-    </Icon>
   );
 }
 
@@ -173,7 +165,7 @@ export default async function Home() {
                 <p className="mt-2 flex-1 text-base leading-6 text-slate">{f.body}</p>
                 <span className="mt-6 inline-flex items-center gap-1.5 text-base font-semibold text-blue-dark">
                   {f.link}
-                  <Arrow className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                 </span>
               </Link>
             ))}

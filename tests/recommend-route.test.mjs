@@ -17,6 +17,7 @@ mock.module('../utils/search.ts', {
 const { getRecentlyViewedSummary } = await import('../utils/recommend.ts');
 const { searchAvailableHotels } = await import('../utils/search.ts');
 const { GET } = await import('../app/api/recommend/route.ts');
+const { getRecommendedStays } = await import('../utils/recommended-stays.ts');
 
 describe('GET /api/recommend Route Tests', () => {
     beforeEach(() => {
@@ -210,5 +211,24 @@ describe('GET /api/recommend Route Tests', () => {
         assert.strictEqual(dbCallArgs.city, 'Paris');
         assert.strictEqual(dbCallArgs.region, undefined);
         assert.strictEqual(dbCallArgs.country, 'France');
+    });
+});
+
+describe('getRecommendedStays page size', () => {
+    beforeEach(() => {
+        getRecentlyViewedSummary.mock.resetCalls();
+        searchAvailableHotels.mock.resetCalls();
+        getRecentlyViewedSummary.mock.mockImplementation(async () => ({ data: null, error: null }));
+        searchAvailableHotels.mock.mockImplementation(async () => []);
+    });
+
+    test('reads only as many stays as it is asked for', async () => {
+        await getRecommendedStays('America/Los_Angeles', 6);
+        assert.strictEqual(searchAvailableHotels.mock.calls[0].arguments[0].page_size, 6);
+    });
+
+    test('leaves the page size to search() when none is given, as GET /api/recommend does', async () => {
+        await getRecommendedStays('America/Los_Angeles');
+        assert.strictEqual('page_size' in searchAvailableHotels.mock.calls[0].arguments[0], false);
     });
 });

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { Button, SectionHeading } from "@/app/_components/ui";
+import { ArrowIcon, Button, SectionHeading } from "@/app/_components/ui";
 import { WindowScene } from "@/app/_components/WindowScene";
 import { SearchResultCard } from "@/app/search/components/SearchResultCard";
 import { liveRatesEnabled } from "@/lib/liteapi/rates";
@@ -17,7 +17,7 @@ export async function RecommendedStays() {
 
   let result: Awaited<ReturnType<typeof getRecommendedStays>>;
   try {
-    result = await getRecommendedStays(timeZone);
+    result = await getRecommendedStays(timeZone, RECOMMENDED_CARDS);
   } catch (error) {
     console.error("Recommended stays failed", error);
     return null;
@@ -40,11 +40,9 @@ export async function RecommendedStays() {
         subtitle={recommendationSubtitle(place)}
         action={
           cards.length > 0 && (
-            <Link href={moreHref} className="group inline-flex shrink-0 items-center gap-1 text-base font-semibold text-blue hover:text-blue-dark">
+            <Link href={moreHref} className="group inline-flex shrink-0 items-center gap-1.5 text-base font-semibold text-blue hover:text-blue-dark">
               More stays in {place.city}
-              <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-1">
-                →
-              </span>
+              <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
             </Link>
           )
         }
@@ -85,7 +83,7 @@ function NoRecommendations({ city }: { city: string }) {
 export function RecommendedStaysSkeleton() {
   const block = "rounded-lg bg-disabled";
   return (
-    <section aria-busy="true" aria-labelledby={TITLE_ID}>
+    <section id="stays" aria-busy="true" aria-labelledby={TITLE_ID} className="scroll-mt-6">
       <SectionHeading id={TITLE_ID} title={TITLE} />
       <p role="status" className="sr-only">
         Loading stays…
