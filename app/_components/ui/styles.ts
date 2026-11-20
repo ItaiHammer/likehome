@@ -43,7 +43,7 @@ export const iconButtonClass = (size: ControlSize = "md") =>
 export const iconButton = iconButtonClass("md");
 
 export const inputClass = (error?: boolean) =>
-  `h-[46px] w-full rounded-control border bg-surface px-4 text-base text-ink placeholder:text-slate transition focus:outline-hidden focus:ring-1 disabled:cursor-not-allowed disabled:bg-disabled disabled:text-slate ${
+  `h-[46px] w-full rounded-control border bg-surface px-4 font-sans text-base text-ink placeholder:text-slate transition focus:outline-hidden focus:ring-1 disabled:cursor-not-allowed disabled:bg-disabled disabled:text-slate ${
     error ? "border-danger focus:border-danger focus:ring-danger" : "border-edge focus:border-blue focus:ring-blue"
   }`;
 
