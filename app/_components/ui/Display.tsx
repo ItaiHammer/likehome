@@ -60,6 +60,15 @@ export function Tag({ tone = "neutral", size = "sm", children }: { tone?: "neutr
   return <span className={`inline-flex items-center rounded-control border ${tones[tone]} ${sizes[size]}`}>{children}</span>;
 }
 
+/** The arrow at the end of a "go there" link. Slide it on hover with `group-hover:translate-x-1` */
+export function ArrowIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /**
  * Section title in the serif, with an optional line under it and an optional
  * action (a link or button) on the right.

@@ -1,18 +1,18 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import BlurText from "./_components/BlurText";
 import { PopularDestinations } from "./_components/PopularDestinations";
+import { RecommendedStays, RecommendedStaysSkeleton } from "./_components/RecommendedStays";
 import { SearchExperience } from "./_components/SearchExperience";
 import { ShinyLabel } from "./_components/ShinyLabel";
 import { SkyBackground } from "./_components/SkyBackground";
-import { Button, SectionHeading, Stars, Tag } from "./_components/ui";
+import { ArrowIcon, Button } from "./_components/ui";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
-import { WindowScene } from "./_components/WindowScene";
 import { redirect } from "next/navigation";
 import { choicePathFor } from "@/lib/account/choice";
 import { homeContentFor } from "@/lib/account/home";
 import { getViewer } from "@/utils/viewer";
-import { STAYS } from "./_data/stays";
 import { PAGE_ROUTES } from "@/constants/routes";
 import coastalRoom from "./_assets/coastal-room.webp";
 
@@ -38,14 +38,6 @@ function Icon({ children, className = "h-5 w-5" }: { children: React.ReactNode; 
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
       {children}
     </svg>
-  );
-}
-
-function Arrow({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-    </Icon>
   );
 }
 
@@ -173,7 +165,7 @@ export default async function Home() {
                 <p className="mt-2 flex-1 text-base leading-6 text-slate">{f.body}</p>
                 <span className="mt-6 inline-flex items-center gap-1.5 text-base font-semibold text-blue-dark">
                   {f.link}
-                  <Arrow className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                 </span>
               </Link>
             ))}
@@ -183,52 +175,10 @@ export default async function Home() {
 
         <PopularDestinations />
 
-        {/* Featured stays: picture, name and rating, amenity tags, then type and price.
-            One row of four from lg up. The row breaks out of the page column to use
-            more of a wide screen (up to 1400px, keeping 3rem clear at each edge);
-            max(100%, …) keeps it from ever getting narrower than the column. */}
-        {signedOutSections && (
-        <section id="stays" className="scroll-mt-6">
-          <SectionHeading title="Stays that feel like yours" subtitle="Handpicked places our guests keep coming back to." />
-          <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:mx-[calc((100%_-_max(100%,_min(100vw_-_6rem,_1400px)))_/_2)] lg:grid-cols-4">
-            {STAYS.map((s) => (
-              <li key={s.slug}>
-                <Link
-                  href={`/reserve/${s.slug}`}
-                  className="group flex h-full flex-col overflow-hidden rounded-lg border border-edge bg-surface focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue"
-                >
-                  <div className="aspect-[4/3] overflow-hidden border-b border-edge">
-                    <div className="h-full w-full transition-transform duration-500 ease-out group-hover:scale-[1.03]">
-                      <WindowScene variant={s.variant} id={`scene-${s.slug}`} />
-                    </div>
-                  </div>
-                  <div className="flex flex-1 flex-col p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-serif text-xl leading-7 text-ink">{s.name}</h3>
-                      <Stars rating={s.rating} />
-                    </div>
-                    <p className="text-sm text-slate">{s.location}</p>
-                    <ul className="mt-3 flex flex-1 flex-wrap content-start gap-1.5">
-                      {s.tags.map((t) => (
-                        <li key={t}>
-                          <Tag>{t}</Tag>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-4 flex items-center justify-between border-t border-edge pt-3 text-sm">
-                      <span className="text-slate">{s.type}</span>
-                      <span className="text-ink">
-                        <span className="font-semibold">From ${s.rooms[0].nightly}</span>
-                        <span className="text-slate"> / night</span>
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-        )}
+        {/* Recommended stays (US 3.3), for every role: streamed in, so the hero and banner don't wait for the search */}
+        <Suspense fallback={<RecommendedStaysSkeleton />}>
+          <RecommendedStays />
+        </Suspense>
       </div>
     </main>
   );
