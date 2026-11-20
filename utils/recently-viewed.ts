@@ -31,7 +31,7 @@ export async function getRecentlyViewedLocationAndPrice(accountId: string) {
   const supabase = createClient(cookieStore)
   const { data, error } = await supabase
     .from('recently_viewed_hotels')
-    .select(`viewed_at, hotels(city, region, country, rooms(price_per_night))`)
+    .select(`viewed_at, hotels(city, region, country, liteapi_deleted_at, rooms(price_per_night))`)
     .eq('account_id', accountId)
     .order('viewed_at', { ascending: false })
   return { data, error }
