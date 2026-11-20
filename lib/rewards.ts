@@ -36,6 +36,16 @@ export function rewardPrice(discount: StayDiscount, total: number): { points: nu
 
 export const pointsNeeded = (balance: number, cost: number) => Math.max(0, cost - balance)
 
+/** The points checkout showed, passed to the confirmation as ?points= */
+export function shownPointsParam(param: string | string[] | undefined): number | null {
+  return typeof param === 'string' && /^\d{1,9}$/.test(param) && Number(param) > 0 ? Number(param) : null
+}
+
+/** Points checkout showed but the server didn't spend (it caps at the current balance and its own price) */
+export function pointsShortfall(shown: number | null, used: number): number {
+  return shown !== null && used < shown ? shown - used : 0
+}
+
 export type PointsTransactionType = 'earn' | 'redeem' | 'refund' | 'adjust'
 
 export type PointsActivity = {

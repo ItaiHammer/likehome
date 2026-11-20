@@ -14,6 +14,8 @@ import {
   pageList,
   pointsNeeded,
   pointsNumber,
+  pointsShortfall,
+  shownPointsParam,
   pointsToDollars,
   rewardPrice,
   signedPoints,
@@ -119,4 +121,19 @@ test('page links show the ends and the neighbours, with … for longer gaps', ()
   assert.deepEqual(pageList(20, 20), [1, null, 19, 20])
   assert.deepEqual(pageList(4, 7), [1, 2, 3, 4, 5, 6, 7])
   assert.deepEqual(pageList(4, 8), [1, 2, 3, 4, 5, null, 8])
+})
+
+test('the points checkout showed come back from the URL only as a positive whole number', () => {
+  assert.equal(shownPointsParam('26850'), 26850)
+  assert.equal(shownPointsParam('0'), null)
+  assert.equal(shownPointsParam('-5'), null)
+  assert.equal(shownPointsParam('12.5'), null)
+  assert.equal(shownPointsParam(['26850']), null)
+  assert.equal(shownPointsParam(undefined), null)
+})
+
+test('a shortfall is only reported when fewer points were spent than shown', () => {
+  assert.equal(pointsShortfall(26850, 20000), 6850)
+  assert.equal(pointsShortfall(26850, 26850), 0)
+  assert.equal(pointsShortfall(null, 0), 0)
 })
