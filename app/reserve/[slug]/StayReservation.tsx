@@ -9,6 +9,7 @@ import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookin
 import { freeUnitId, markBookedRooms, mergeBookedNights, soldOutNights } from "@/lib/room-availability";
 import { matchingRoom, roomFits } from "@/lib/stay-filters";
 import { cardErrors } from "@/lib/card";
+import { discountPoints, findDiscount, formatPoints, pointsToDollars } from "@/lib/rewards";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
@@ -19,6 +20,7 @@ import { checkoutRequest } from "./checkoutRequest";
 import { DateRangePicker } from "./DateRangePicker";
 import { GuestsField, guestLabel } from "./GuestsField";
 import { PhotoGallery } from "./PhotoGallery";
+import { RewardsSection, RewardsUnavailable } from "./RewardsSection";
 import { RoomOptions } from "./RoomOptions";
 import { StayOffers } from "./StayOffers";
 import { useBookedNightsLookup } from "./useBookedNightsLookup";
@@ -100,9 +102,12 @@ export function StayReservation({
                                   otherStays = [],
                                   initial = {},
                                   search = "",
+                                  pointsBalance = null,
                                 }: {
   stay: Stay;
   account: { email: string } | null;
+  /** null: couldn't be read */
+  pointsBalance?: number | null;
   otherStays?: OtherStay[];
   initial?: StayChoices;
   search?: string;
@@ -125,6 +130,7 @@ export function StayReservation({
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [rewardId, setRewardId] = useState<string | null>(null);
   const [contact, setContact] = useState<Contact>({ firstName: "", lastName: "", email: "", phone: "" });
 
   // Saved Payment Methods State
@@ -178,6 +184,16 @@ export function StayReservation({
   const cleaning = nights ? stay.cleaningFee : 0;
   const taxes = Math.round((subtotal + cleaning) * (stay.taxRate ?? TAX_RATE));
   const total = subtotal + cleaning + taxes;
+  // Rewards need a saved booking (signed in, real hotel), where the total is exactly what /api/checkout charges.
+  // A discount is a percent of that total; one whose points no longer fit the balance is dropped.
+  const showRewards = Boolean(account) && stay.bookable;
+  const chosenReward = showRewards ? findDiscount(rewardId) : null;
+  const rewardPoints = chosenReward ? discountPoints(chosenReward.percent, total) : 0;
+  const reward =
+    chosenReward && pointsBalance !== null && rewardPoints > 0 && rewardPoints <= pointsBalance
+      ? { ...chosenReward, points: rewardPoints, dollars: pointsToDollars(rewardPoints) }
+      : null;
+  const amountDue = total - (reward?.dollars ?? 0);
   // Not part of the total: the guest pays these to the hotel
   const dueAtProperty = nights ? (room.dueAtProperty ?? 0) : 0;
   // Today is "" while rendering on the server, so the server and the browser agree on first render
@@ -474,7 +490,7 @@ export function StayReservation({
     }
 
     saveContact();
-    const snapshot = { email: text("email"), roomName: room.name, checkIn, checkOut, adults, children, total };
+    const snapshot = { email: text("email"), roomName: room.name, checkIn, checkOut, adults, children, total: amountDue };
     setSubmitting(true);
 
     const selectedCard = savedCards.find(
@@ -490,6 +506,7 @@ export function StayReservation({
           children,
           savedPaymentMethodId: selectedCard.id,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          points: reward?.points,
         })
       : checkoutRequest({
           // Use whichever identical room is free for these dates.
@@ -503,6 +520,7 @@ export function StayReservation({
           cvc: text("cvc"),
           cardName: text("cardName"),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          points: reward?.points,
         });
 
     saveRequest.current?.abort();
@@ -556,7 +574,8 @@ export function StayReservation({
       const { id, total_price } = body.reservation;
       router.refresh();
       if (id) {
-        router.push(`${PAGE_ROUTES.MY_BOOKINGS}/${id}/confirmed`);
+        // The points shown here, so the confirmation can say if the server spent fewer
+        router.push(`${PAGE_ROUTES.MY_BOOKINGS}/${id}/confirmed${payload.points ? `?points=${payload.points}` : ""}`);
         return;
       }
 
@@ -631,9 +650,22 @@ export function StayReservation({
                 </div>
               </Card>
 
+              {showRewards && pointsBalance === null && <RewardsUnavailable step={2} />}
+              {showRewards && pointsBalance !== null && (
+                <RewardsSection
+                  step={2}
+                  hotelName={stay.name}
+                  balance={pointsBalance}
+                  total={total}
+                  appliedId={reward?.id ?? null}
+                  onApply={setRewardId}
+                  onRemove={() => setRewardId(null)}
+                />
+              )}
+
               <Card as="section">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-[32px] font-bold leading-10 text-ink">2. Payment details</h2>
+                  <h2 className="text-[32px] font-bold leading-10 text-ink">{showRewards ? 3 : 2}. Payment details</h2>
                   {selectedCardId === "new" && (
                       <span className="text-xs font-bold text-blue-dark">{detectedBrand}</span>
                   )}
@@ -822,14 +854,20 @@ export function StayReservation({
                     <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
                     {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
                     {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
+                    {reward && <Line label={`${reward.category} reward`} value={`−${money(reward.dollars)}`} />}
                     <div className="flex justify-between border-t border-edge pt-3 text-lg font-bold text-ink">
                       <dt>Total</dt>
-                      <dd>{money(total)}</dd>
+                      <dd>{money(amountDue)}</dd>
                     </div>
                   </dl>
               ) : (
                   <p className="mt-5 border-t border-edge pt-5 text-sm text-slate">Add your dates to see the total for your stay.</p>
               )}
+            {reward && nights > 0 && (
+              <p className="mt-2 text-sm text-slate">
+                You saved {money(reward.dollars)} with {formatPoints(reward.points)}
+              </p>
+            )}
             {dueAtProperty > 0 && <p className="mt-2 text-sm text-slate">{dueAtPropertyText(dueAtProperty)}</p>}
 
             {checkIn && (
@@ -864,7 +902,7 @@ export function StayReservation({
                       Confirming…
                     </>
                 ) : nights > 0 ? (
-                    `Confirm and pay ${money(total)}`
+                    `Confirm and pay ${money(amountDue)}`
                 ) : (
                     "Confirm and pay"
                 )}
