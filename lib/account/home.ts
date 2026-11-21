@@ -6,7 +6,7 @@ export type HomeAction = { label: string; href: string; variant: 'primary' | 'se
 export type HomeContent = {
   hero: { eyebrow: string | null; title: string; line: string }
   welcome: { title: string; body: string; actions: HomeAction[] } | null
-  // The member promo and featured stays
+  // The member promo and feature cards
   signedOutSections: boolean
 }
 

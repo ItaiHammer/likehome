@@ -30,3 +30,13 @@ test('tags load back as editor amenities, including raw ids from older saves', (
 test('saving amenities keeps tags the editor does not manage', () => {
   assert.deepEqual(mergeAmenityTags(['EV Charging', 'wifi', 'Pool'], ['parking']), ['EV Charging', 'Parking'])
 })
+
+
+test('free-text countries are normalized to the names used by search', () => {
+  assert.equal(countryToStored('United States'), 'USA');
+  assert.equal(countryToStored('United States of America'), 'USA');
+  assert.equal(countryToStored('Germany'), 'Germany');
+  assert.equal(countryToStored('DE'), 'Germany');
+  assert.equal(countryToStored('BR'), 'Brazil');
+  assert.equal(countryToStored('UK'), 'United Kingdom');
+});

@@ -1,16 +1,34 @@
-import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { PAGE_ROUTES } from "@/constants/routes";
-import { getCurrentUser } from "@/utils/current-user";
-import { toEditorTab } from "../_components/editor-state";
-import { PropertyEditor } from "../_components/PropertyEditor";
+import type {Metadata} from "next";
+import {redirect} from "next/navigation";
+import {PAGE_ROUTES} from "@/constants/routes";
+import {getCurrentUser} from "@/utils/current-user";
+import {toEditorTab} from "../_components/editor-state";
+import {PropertyEditor} from "../_components/PropertyEditor";
 
-export const metadata: Metadata = { title: "New property — LikeHome" };
+export const metadata: Metadata = {
+    title: "New property — LikeHome",
+};
 
-export default async function NewListingPage(props: PageProps<"/listings/new">) {
-  const { tab } = await props.searchParams;
-  const user = await getCurrentUser();
-  if (!user) redirect(PAGE_ROUTES.LOGIN);
+export default async function NewListingPage(
+    props: PageProps<"/listings/new">
+) {
+    const {tab, sample, preview} = await props.searchParams;
 
-  return <PropertyEditor initialTab={toEditorTab(tab)} />;
+    const user = await getCurrentUser();
+
+    if (!user) {
+        redirect(PAGE_ROUTES.LOGIN);
+    }
+
+    const sampleMode =
+        process.env.NODE_ENV === "development" &&
+        sample === "1";
+
+    return (
+        <PropertyEditor
+            initialTab={toEditorTab(tab)}
+            initialPreview={preview === "1"}
+            sampleMode={sampleMode}
+        />
+    );
 }

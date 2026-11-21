@@ -1,11 +1,13 @@
 import { Field, Select, TextArea } from "@/app/_components/ui";
-import { COUNTRIES, PROPERTY_TYPE_LABELS } from "@/lib/listing-display";
+import { PROPERTY_TYPE_LABELS } from "@/lib/listing-display";
 import { MAX_LENGTH, type HotelInfoErrors } from "@/lib/validation/listing";
 import { PROPERTY_TYPES, type HotelInfo } from "@/types/listing";
 import { FormSection } from "./FormSection";
 
-const PROPERTY_TYPE_OPTIONS = PROPERTY_TYPES.map((type) => ({ value: type, label: PROPERTY_TYPE_LABELS[type] }));
-const COUNTRY_OPTIONS = [{ value: "", label: "Choose a country" }, ...COUNTRIES];
+const PROPERTY_TYPE_OPTIONS = [
+  { value: "", label: "Choose a property type" },
+  ...PROPERTY_TYPES.map((type) => ({ value: type, label: PROPERTY_TYPE_LABELS[type] })),
+];
 
 export const fieldId = (field: keyof HotelInfo) => `listing-${field}`;
 
@@ -16,12 +18,11 @@ type Props = {
 };
 
 export function HotelInfoForm({ info, errors, onChange }: Props) {
-  // The props every control shares: id, current value, error, and reporting changes up to the editor
   const control = (field: keyof HotelInfo) => ({
     id: fieldId(field),
     value: info[field],
     error: errors[field],
-    onChange: (e: { target: { value: string } }) => onChange(field, e.target.value),
+    onChange: (event: { target: { value: string } }) => onChange(field, event.target.value),
   });
 
   return (
@@ -42,7 +43,14 @@ export function HotelInfoForm({ info, errors, onChange }: Props) {
             <Field label="Postal code" maxLength={MAX_LENGTH.postalCode} {...control("postalCode")} />
           </div>
           <div className="grid gap-6 sm:grid-cols-2">
-            <Select label="Country" options={COUNTRY_OPTIONS} {...control("country")} />
+            <Field
+              label="Country"
+              placeholder="Enter a country"
+              autoComplete="off"
+              maxLength={MAX_LENGTH.country}
+              {...control("country")}
+              value={info.country}
+            />
           </div>
         </div>
       </FormSection>
@@ -50,7 +58,7 @@ export function HotelInfoForm({ info, errors, onChange }: Props) {
       <FormSection title="Description" description="Tell guests what makes your stay special.">
         <TextArea
           label="Property description"
-          hint={`Guests will see this on your listing · ${info.description.length} / ${MAX_LENGTH.description}`}
+          hint={`Guests will see this on your listing - ${info.description.length} / ${MAX_LENGTH.description}`}
           rows={3}
           maxLength={MAX_LENGTH.description}
           {...control("description")}
