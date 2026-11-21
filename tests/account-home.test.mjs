@@ -26,7 +26,7 @@ test("signed out keeps today's hero and opens with the sign-up card", () => {
   })
 })
 
-test('personal: next trip, points and shortcuts first, then their own history', () => {
+test('personal: next trip, points and shortcuts first, then their own history and saved hotels', () => {
   assert.deepEqual(homeContentFor('personal'), {
     hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: {
@@ -39,7 +39,7 @@ test('personal: next trip, points and shortcuts first, then their own history', 
       ],
     },
     recommendedCards: 3,
-    sections: ['traveler-summary', 'recently-viewed', 'recommended', 'destinations'],
+    sections: ['traveler-summary', 'recently-viewed', 'saved-hotels', 'recommended', 'destinations'],
   })
 })
 

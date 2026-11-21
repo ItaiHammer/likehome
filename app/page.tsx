@@ -4,6 +4,7 @@ import { JoinCard } from "./_components/home/JoinCard";
 import { OwnerProperties, OwnerPropertiesSkeleton } from "./_components/home/OwnerProperties";
 import { OwnerStats } from "./_components/home/OwnerStats";
 import { OwnerToday } from "./_components/home/OwnerToday";
+import { SavedHotels } from "./_components/home/SavedHotels";
 import { TravelerSummary } from "./_components/home/TravelerSummary";
 import { PopularDestinations } from "./_components/PopularDestinations";
 import { RecentlyViewed } from "./_components/RecentlyViewed";
@@ -42,6 +43,11 @@ export default async function Home() {
     "recently-viewed": viewer.userId ? (
       <Suspense fallback={null}>
         <RecentlyViewed accountId={viewer.userId} />
+      </Suspense>
+    ) : null,
+    "saved-hotels": viewer.userId ? (
+      <Suspense fallback={null}>
+        <SavedHotels accountId={viewer.userId} />
       </Suspense>
     ) : null,
     // Recommended stays (US 3.3), for every role

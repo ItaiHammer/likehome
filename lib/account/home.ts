@@ -22,6 +22,7 @@ export type HomeSection =
   | 'owner-properties'
   | 'owner-stats'
   | 'recently-viewed'
+  | 'saved-hotels'
   | 'recommended'
   | 'destinations'
 
@@ -64,8 +65,8 @@ const CONTENT: Record<HomeRole, HomeContent> = {
       ],
     },
     recommendedCards: SIGNED_IN_CARDS,
-    // Their own history first; the row hides itself when there is none
-    sections: ['traveler-summary', 'recently-viewed', 'recommended', 'destinations'],
+    // Their own history and saved hotels first; each row hides itself when it has nothing
+    sections: ['traveler-summary', 'recently-viewed', 'saved-hotels', 'recommended', 'destinations'],
   },
   business: {
     hero: {

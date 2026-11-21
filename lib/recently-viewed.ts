@@ -3,7 +3,7 @@ import { hotelLocation, hotelPhoto, type ComparisonHotelRow } from './comparison
 
 export const RECENTLY_VIEWED_CARDS = 4
 
-export type RecentlyViewedCard = {
+export type HotelCard = {
   id: string
   name: string
   location: string
@@ -13,12 +13,12 @@ export type RecentlyViewedCard = {
 
 type ViewedHotel = Pick<ComparisonHotelRow, 'id' | 'name' | 'city' | 'region' | 'country' | 'photo_urls' | 'liteapi_deleted_at'>
 
-// The history newest first, as getRecentlyViewedHotels reads it: one card per hotel, leaving out
-// hotels that are gone or delisted (search hides those too)
-export function toRecentlyViewedCards(rows: unknown, limit = RECENTLY_VIEWED_CARDS): RecentlyViewedCard[] {
+// Rows that each carry a hotel (the history or the favorites, newest first): one card per hotel, leaving
+// out hotels that are gone or delisted (search hides those too)
+export function toHotelCards(rows: unknown, limit: number): HotelCard[] {
   if (!Array.isArray(rows)) return []
   const seen = new Set<string>()
-  const cards: RecentlyViewedCard[] = []
+  const cards: HotelCard[] = []
   for (const row of rows as ({ hotels?: ViewedHotel | null } | null)[]) {
     if (cards.length >= limit) break
     const hotel = row?.hotels
@@ -34,3 +34,6 @@ export function toRecentlyViewedCards(rows: unknown, limit = RECENTLY_VIEWED_CAR
   }
   return cards
 }
+
+// The history as getRecentlyViewedHotels reads it
+export const toRecentlyViewedCards = (rows: unknown, limit = RECENTLY_VIEWED_CARDS) => toHotelCards(rows, limit)
