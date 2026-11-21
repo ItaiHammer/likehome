@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { ArrowIcon, Button, SectionHeading, swipeItemClass, swipeRowClass } from "@/app/_components/ui";
+import { ArrowIcon, arrowSlideClass, Button, SectionHeading, sectionLinkClass, swipeItemClass, swipeRowClass } from "@/app/_components/ui";
 import { WindowScene } from "@/app/_components/WindowScene";
 import { SearchResultCard } from "@/app/search/components/SearchResultCard";
 import { liveRatesEnabled } from "@/lib/liteapi/rates";
@@ -44,9 +44,9 @@ export async function RecommendedStays({ count = RECOMMENDED_CARDS }: { count?: 
         subtitle={recommendationSubtitle(place)}
         action={
           cards.length > 0 && (
-            <Link href={moreHref} className="group inline-flex shrink-0 items-center gap-1.5 text-base font-semibold text-blue hover:text-blue-dark">
+            <Link href={moreHref} className={sectionLinkClass}>
               More stays in {place.city}
-              <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+              <ArrowIcon className={arrowSlideClass} />
             </Link>
           )
         }

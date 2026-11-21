@@ -162,7 +162,9 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
     opacity 0.25s ease,
     transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.dropdown[data-open="true"] .cascade {
+/* The :not() skips rows of a closed dropdown nested in an open one (the search bar's fields inside its
+   phone panel), so they stay hidden until their own dropdown opens and still drop in then */
+.dropdown[data-open="true"] .cascade:not(:where(.dropdown[data-open="true"] .dropdown:not([data-open="true"]) .cascade)) {
   opacity: 1;
   transform: none;
   transition-delay: calc(60ms + var(--i, 0) * 40ms);

@@ -1,9 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import { POPULAR_DESTINATIONS, POPULAR_TABS, type DestinationScene, type DestinationTab, type PopularDestination } from "../_data/destinations";
+import { PAGE_ROUTES } from "@/constants/routes";
+import { POPULAR_DESTINATIONS, POPULAR_TABS, type DestinationScene, type DestinationTab } from "../_data/destinations";
+import { browserTimeZone } from "./dates";
 import { isMotionReduced, useReducedMotion } from "./motion";
-import { buttonPrimary, buttonSecondary, iconButton } from "./ui";
+import { buttonPrimary, buttonSecondary, iconButton, SectionHeading } from "./ui";
 
 const STEP_MS = 3500; // how long the carousel rests on each position before moving on
 const RING_R = 12.75; // radius of the countdown ring on the (28px) pause button
@@ -23,8 +26,14 @@ function slideStep(track: HTMLElement) {
   return slides.length > 1 ? slides[1].offsetLeft - slides[0].offsetLeft : track.clientWidth;
 }
 
+function searchHref(where: string, tz: string) {
+  const params = new URLSearchParams({ where });
+  if (tz) params.set("tz", tz);
+  return `${PAGE_ROUTES.SEARCH}?${params}`;
+}
+
 /*
- * "Popular destinations": tabs for near / national / international, each a
+ * "Find your next escape": tabs for near / national / international, each a
  * swipeable carousel of ranked, illustrated tiles.
  *
  * Autoplay: every STEP_MS it moves one tile along; once it reaches the end it
@@ -32,8 +41,7 @@ function slideStep(track: HTMLElement) {
  * good when someone uses the keyboard inside it or presses pause, and doesn't
  * start at all when motion is reduced.
  *
- * Choosing a tile fills the search bar's destination (DestinationInput listens
- * for the event) and scrolls back up to it.
+ * Choosing a tile opens the search results for that place.
  */
 export function PopularDestinations() {
   const [tab, setTab] = useState<DestinationTab>("near");
@@ -56,6 +64,8 @@ export function PopularDestinations() {
   const suppressClick = useRef(false);
   const reduced = useReducedMotion();
   const pageVisible = useSyncExternalStore(subscribeVisibility, () => document.visibilityState === "visible", () => false);
+  // The search bar's tz, read the same way (empty in the server render); re-read when the tab comes back
+  const timeZone = useSyncExternalStore(subscribeVisibility, browserTimeZone, () => "");
   const baseId = useId();
   const sectionRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLUListElement>(null);
@@ -209,14 +219,9 @@ export function PopularDestinations() {
     el.scrollTo({ left: slides[i].offsetLeft - slides[0].offsetLeft, behavior: scrollBehavior() });
   }
 
-  function pick(d: PopularDestination) {
-    window.dispatchEvent(new CustomEvent("likehome:destination", { detail: `${d.name}, ${d.region}` }));
-    window.scrollTo({ top: 0, behavior: scrollBehavior() });
-  }
-
   // Card tilt: the side under the cursor presses away, up to ~7° each way.
   // Mouse and pen only; off when motion is reduced.
-  function tilt(e: React.PointerEvent<HTMLButtonElement>) {
+  function tilt(e: React.PointerEvent<HTMLAnchorElement>) {
     if (e.pointerType === "touch" || isMotionReduced()) return;
     if (drag.current?.moved) return untilt(e);
     const el = e.currentTarget;
@@ -227,7 +232,7 @@ export function PopularDestinations() {
     el.style.setProperty("--rx", `${((0.5 - py) * 12).toFixed(2)}deg`);
   }
 
-  function untilt(e: React.PointerEvent<HTMLButtonElement>) {
+  function untilt(e: React.PointerEvent<HTMLAnchorElement>) {
     e.currentTarget.style.setProperty("--rx", "0deg");
     e.currentTarget.style.setProperty("--ry", "0deg");
   }
@@ -328,10 +333,11 @@ export function PopularDestinations() {
         if (!e.currentTarget.contains(from) && (e.target as HTMLElement).matches(":focus-visible")) setAutoplayChoice(false);
       }}
     >
-      <h2 id={`${baseId}-title`} className="font-serif text-[40px] leading-[48px] text-ink">
-        Popular destinations
-      </h2>
-      <p className="mt-1 text-base text-slate">The places guests are booking most, close by, across the country and around the world.</p>
+      <SectionHeading
+        id={`${baseId}-title`}
+        title="Find your next escape"
+        subtitle="The places guests are booking most, close by, across the country and around the world."
+      />
 
       {/* relative z-[1]: stays clickable above the track's top bleed padding */}
       <div className="relative z-[1] mt-5 flex flex-wrap items-center justify-between gap-3">
@@ -414,9 +420,13 @@ export function PopularDestinations() {
                 className="tile-in h-full"
                 style={{ "--i": i } as React.CSSProperties}
               >
-                <button
-                  type="button"
-                  onClick={() => pick(d)}
+                {/* draggable={false}: the browser's own link dragging would cancel the
+                    mouse drag-to-scroll. No prefetch: autoplay brings every tile into
+                    view, and each one is a dynamic search page. */}
+                <Link
+                  href={searchHref(`${d.name}, ${d.region}`, timeZone)}
+                  prefetch={false}
+                  draggable={false}
                   onPointerMove={tilt}
                   onPointerLeave={untilt}
                   aria-label={`Search stays in ${d.name}, ${d.region}`}
@@ -447,7 +457,7 @@ export function PopularDestinations() {
                     <p className="relative font-serif text-[32px] leading-[38px] text-white">{d.name}</p>
                     <p className="relative truncate text-sm text-white">{d.region}</p>
                   </div>
-                </button>
+                </Link>
               </div>
             </li>
           ))}

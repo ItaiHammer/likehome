@@ -16,9 +16,12 @@ export const PAGE_ROUTES = {
     AUTHORIZATION_ERROR: '/auth/z/error',
     LOGIN: '/auth/login',
     MY_BOOKINGS: '/MyBookings',
+    MY_BOOKINGS_SAVED: '/MyBookings?tab=saved',
+    MY_BOOKINGS_ACCOUNT: '/MyBookings?tab=account',
     ACCOUNT_TYPE: '/account-type',
     MESSAGES: '/messages',
     OWNER_MESSAGES: '/property-dashboard/messages',
+    OWNER_CUSTOMERS: '/property-dashboard/customers',
 } as const;
 
 export const ROUTE_ACCESS = {

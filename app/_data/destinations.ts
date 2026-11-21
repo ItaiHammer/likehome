@@ -291,7 +291,7 @@ export const DESTINATIONS: readonly (readonly [string, string])[] = [
   ["Tahiti", "French Polynesia"],
 ];
 
-// Homepage "Popular destinations": five ranked places per tab, each with the
+// Homepage "Popular destinations": eight ranked places per tab, each with the
 // little scene its tile draws and a pastel gradient. "Near you" is a fixed
 // California list until the site knows where the guest is.
 export type DestinationScene = "coast" | "lake" | "beach" | "mountain" | "city";

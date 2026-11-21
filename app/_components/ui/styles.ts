@@ -54,6 +54,21 @@ export const authLinkClass =
 // Tighter on phones so "Sign out" stays on one line beside the Menu button at 360px
 export const headerAuthLinkClass = `${authLinkClass} whitespace-nowrap px-2 sm:px-3`;
 
+// A section heading's "see more" link (pair it with an ArrowIcon in arrowSlideClass); 44px tall on phones
+export const sectionLinkClass =
+  "group inline-flex shrink-0 items-center gap-1.5 rounded-control text-base font-semibold text-blue hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue max-sm:min-h-11";
+
+// An ArrowIcon that slides right while its `group` link is hovered
+export const arrowSlideClass = "h-4 w-4 transition-transform duration-200 group-hover:translate-x-1";
+
+// The soft blue box. Light mode mixes the tint into white: over the warm paper, a plain bg-blue/10
+// read as the grey disabled fill.
+export const tintBox =
+  "rounded-lg border border-blue/20 bg-[color-mix(in_srgb,var(--blue)_8%,var(--surface))] dark:bg-blue/10";
+
+// The same box as a link. The hover stops at 14% blue, so blue-dark text keeps 4.5:1 on it.
+export const tintLink = `group ${tintBox} transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--blue)_12%,var(--surface))] focus-visible:border-blue focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-blue dark:hover:bg-blue/14`;
+
 export const labelClass = "mb-2 block text-base font-semibold leading-5 text-ink";
 
 // Phones (below sm): a list of cards as one sideways row running to the screen edge (cancelling the page's

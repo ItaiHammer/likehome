@@ -7,7 +7,7 @@ import {
   roomAmenities,
   travelerTypes,
 } from "../search/types";
-import { iconButtonClass } from "./ui";
+import { Chip, iconButtonClass } from "./ui";
 
 export type SearchFilterValues = {
   minPrice?: string;
@@ -54,31 +54,6 @@ function ChevronIcon() {
     <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
       <path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
-  );
-}
-
-function FilterChip({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${
-        active
-          ? "border-blue bg-blue/10 text-blue-dark"
-          : "border-edge bg-surface text-slate hover:border-blue/60 hover:text-ink"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -365,9 +340,9 @@ export function SearchFiltersPicker({
             <legend className="text-sm font-semibold text-ink">Minimum rating</legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {RATINGS.map((rating) => (
-                <FilterChip key={rating} active={minRating === rating} onClick={() => setMinRating(minRating === rating ? "" : rating)}>
+                <Chip key={rating} active={minRating === rating} onClick={() => setMinRating(minRating === rating ? "" : rating)}>
                   {rating}+ stars
-                </FilterChip>
+                </Chip>
               ))}
             </div>
           </fieldset>
@@ -376,9 +351,9 @@ export function SearchFiltersPicker({
             <legend className="text-sm font-semibold text-ink">Beds</legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {BED_COUNTS.map((count) => (
-                <FilterChip key={count} active={numBeds === count} onClick={() => setNumBeds(numBeds === count ? "" : count)}>
+                <Chip key={count} active={numBeds === count} onClick={() => setNumBeds(numBeds === count ? "" : count)}>
                   {count}+
-                </FilterChip>
+                </Chip>
               ))}
             </div>
           </fieldset>
@@ -387,9 +362,9 @@ export function SearchFiltersPicker({
             <legend className="text-sm font-semibold text-ink">Bed size</legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {BED_SIZES.map((size) => (
-                <FilterChip key={size} active={bedSize === size} onClick={() => setBedSize(bedSize === size ? "" : size)}>
+                <Chip key={size} active={bedSize === size} onClick={() => setBedSize(bedSize === size ? "" : size)}>
                   {size}
-                </FilterChip>
+                </Chip>
               ))}
             </div>
           </fieldset>
@@ -405,13 +380,13 @@ export function SearchFiltersPicker({
 
           <div className="mt-2 flex flex-wrap gap-2">
             {AMENITY_TAGS.map((tag) => (
-                <FilterChip
+                <Chip
                     key={tag}
                     active={tags.includes(tag)}
                     onClick={() => toggleTag(tag)}
                 >
                   {tag}
-                </FilterChip>
+                </Chip>
             ))}
           </div>
         </section>
@@ -426,13 +401,13 @@ export function SearchFiltersPicker({
 
           <div className="mt-2 flex flex-wrap gap-2">
             {TRAVELER_TAGS.map((tag) => (
-                <FilterChip
+                <Chip
                     key={tag}
                     active={tags.includes(tag)}
                     onClick={() => toggleTag(tag)}
                 >
                   {tag}
-                </FilterChip>
+                </Chip>
             ))}
           </div>
         </section>
