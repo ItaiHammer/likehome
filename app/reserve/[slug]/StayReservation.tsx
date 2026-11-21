@@ -925,7 +925,7 @@ export function StayReservation({
         <div className="mt-4">
           <div className="flex items-start justify-between gap-4">
             <h1 className="min-w-0 break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[56px] sm:leading-[64px]">{stay.name}</h1>
-            {/* Database hotels only: the saved list in My Bookings looks hotels up by id */}
+            {/* Database hotels only: a saved hotel is stored by hotels.id, which sample stays don't have */}
             {stay.bookable && <SaveHotelButton hotelId={stay.slug} className="mt-2 shrink-0 sm:mt-4" />}
           </div>
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-slate">

@@ -120,7 +120,7 @@ export function SearchResultCard({
               media
           )}
 
-          {/* Save/Heart Button overlaid on top-right of image container */}
+          {/* Only hotels saved in the database have an id; an unsaved LiteAPI hotel (liteapi_id only) gets no heart */}
           {stay.id && (
               <SaveHotelButton
                   hotelId={stay.id}

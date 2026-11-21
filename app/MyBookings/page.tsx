@@ -4,7 +4,7 @@ import { Button } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { firstName, groupBookings, toCancellationQuote, money, type Booking, type CancellationQuote } from "@/lib/bookings";
 import { getAccount } from "@/utils/accounts";
-import { getHotels } from "@/utils/hotels";
+import { getFavoriteHotels } from "@/utils/favorite-hotels";
 import { guestToday } from "@/utils/guest-today";
 import { getCancellationQuote } from "@/utils/reservations";
 import { getUserId } from "@/utils/user";
@@ -31,13 +31,13 @@ async function loadMyBookings() {
     account,
     bookingHistory,
     transactionHistory,
-    hotelsResult,
+    favoritesResult,
     pointsResult,
   ] = await Promise.all([
     getAccount(userId),
     getMyBookings(),
     getTransactionHistory(),
-    getHotels(),
+    getFavoriteHotels(userId),
     getPointsBalance(userId),
   ]);
 
@@ -48,8 +48,8 @@ async function loadMyBookings() {
   if (transactionHistory.error) {
     throw new Error(transactionHistory.error.message);
   }
-  if (hotelsResult.error) {
-    throw new Error(hotelsResult.error.message);
+  if (favoritesResult.error) {
+    throw new Error(favoritesResult.error.message);
   }
 
   if (pointsResult.error) {
@@ -83,7 +83,8 @@ async function loadMyBookings() {
     STAYS.map((stay) => [stay.name.toLowerCase().trim(), stay])
   );
 
-  const allHotels = (hotelsResult.data ?? []).map((h) => {
+  // Newest saved first
+  const savedHotels = (favoritesResult.data ?? []).flatMap((row) => [row.hotels ?? []].flat()).map((h) => {
   const matchedStay = staysByName.get(h.name.toLowerCase().trim());
 
 const staticPrices =
@@ -121,7 +122,7 @@ const price =
   };
 });
 
-  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, transactions, allHotels, pointsBalance: pointsResult.balance };
+  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, transactions, savedHotels, pointsBalance: pointsResult.balance };
 }
 // What cancelling each upcoming stay would cost. A quote that fails only leaves that cancel button unavailable.
 async function loadQuotes(bookings: Booking[]) {
@@ -155,10 +156,10 @@ export default async function MyBookingsPage({
         : "reservations";
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
 
-  const { name, email, bookings, transactions, allHotels, pointsBalance } = showSample
+  const { name, email, bookings, transactions, savedHotels, pointsBalance } = showSample
     ? {
         ...getSampleBookings(today, sample === "empty"),
-        allHotels: [],
+        savedHotels: [],
         transactions: [],
         pointsBalance: 0,
       }
@@ -266,7 +267,7 @@ export default async function MyBookingsPage({
 
             {activeTab === "saved" && (
                 <section aria-labelledby="saved-heading">
-                  <SavedHotelsList allHotels={allHotels} />
+                  <SavedHotelsList hotels={savedHotels} />
                 </section>
             )}
 

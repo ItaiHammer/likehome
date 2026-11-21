@@ -6,6 +6,7 @@ export const ROUTE_PREFIXES = {
 export const API_ROUTES = {
     AUTH_CALLBACK: '/api/auth/callback',
     MESSAGES: '/api/messages',
+    FAVORITES: '/api/favorites',
 }
 
 export const PAGE_ROUTES = {
