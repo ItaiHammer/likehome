@@ -1,7 +1,7 @@
 // Audit F9 (stay page picks a room that's free for the dates) and F3 (photo upload rules)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { freeUnitId, nightsByRoom, soldOutNights } from '../lib/room-availability.ts'
+import { blockedNights, freeUnitId, nightsByRoom, roomProblem, roomTaken, soldOutNights } from '../lib/room-availability.ts'
 import { photoProblem } from '../lib/listing-photos.ts'
 
 const king = {
@@ -137,4 +137,47 @@ test('photos removed by a save: only the owner\'s uploaded files are deleted', a
   assert.deepEqual(removedPhotoPaths(before, after, 'u1'), ['u1/a.jpg'])
   assert.deepEqual(removedPhotoPaths(before, before, 'u1'), [])
   assert.deepEqual(removedPhotoPaths([`${base}u1/../u2/x.jpg`], [], 'u1'), [])
+})
+
+test('the calendar crosses out the nights the chosen room is booked, whatever other rooms have free', () => {
+  assert.deepEqual(blockedNights(king, [], '2026-11-01'), ['2026-11-11'])
+  const single = { id: 's1', units: [{ id: 's1', bookedNights: ['2026-11-09', '2026-11-10'] }] }
+  assert.deepEqual(blockedNights(single, [], '2026-11-10'), ['2026-11-10'])
+})
+
+test('nights at another hotel are crossed out too, up to but not including its check-out', () => {
+  const other = [{ checkIn: '2026-11-20', checkOut: '2026-11-22' }]
+  assert.deepEqual(blockedNights(king, other, '2026-11-01'), ['2026-11-11', '2026-11-20', '2026-11-21'])
+  assert.deepEqual(blockedNights({ id: 'villa' }, other, '2026-11-21'), ['2026-11-21'])
+  assert.deepEqual(blockedNights(undefined, [], '2026-11-01'), [])
+})
+
+test('a booked or sold-out room is refused in the same words on both pages', () => {
+  assert.match(roomProblem({ name: 'King', soldOut: true, bookedForDates: true }), /booked for those dates/)
+  assert.match(roomProblem({ name: 'King', soldOut: true }), /sold out/)
+  assert.equal(roomProblem({ name: 'King' }), null)
+})
+
+test('a room is taken when another booking holds a night of the stay', () => {
+  const rows = [
+    { room_id: 'a', night: '2026-11-10' },
+    { room_id: 'a', night: '2026-11-11' },
+    { room_id: 'b', night: '2026-11-12' },
+  ]
+  assert.equal(roomTaken(rows, 'a', '2026-11-11', '2026-11-13'), true)
+  assert.equal(roomTaken(rows, 'a', '2026-11-12', '2026-11-14'), false)
+  assert.equal(roomTaken(rows, 'a', '2026-11-08', '2026-11-10'), false)
+  assert.equal(roomTaken(rows, 'c', '2026-11-10', '2026-11-12'), false)
+})
+
+test('a booking being changed does not block its own nights in its own room', () => {
+  const rows = [
+    { room_id: 'a', night: '2026-11-10' },
+    { room_id: 'a', night: '2026-11-11' },
+    { room_id: 'a', night: '2026-11-12' },
+  ]
+  const own = { roomId: 'a', checkIn: '2026-11-10', checkOut: '2026-11-12' }
+  assert.equal(roomTaken(rows, 'a', '2026-11-09', '2026-11-12', own), false)
+  assert.equal(roomTaken(rows, 'a', '2026-11-10', '2026-11-13', own), true)
+  assert.equal(roomTaken(rows, 'a', '2026-11-10', '2026-11-12', { ...own, roomId: 'b' }), true)
 })

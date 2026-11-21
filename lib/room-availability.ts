@@ -4,6 +4,8 @@
 // is free for the guest's nights. Nights are YYYY-MM-DD; a stay covers check-in up to, not
 // including, check-out (the check-out day is free for the next guest).
 
+import { addDays } from '../app/_components/dates.ts';
+
 export type RoomUnit = { id: string; bookedNights: string[] };
 type WithUnits = { id: string; units?: RoomUnit[] };
 
@@ -106,4 +108,41 @@ export function cardsForBooking<R extends WithUnits>(rooms: R[], unitId: string)
     const own = r.units?.find((u) => u.id === unitId);
     return own && r.units ? { ...r, id: unitId, units: [own, ...r.units.filter((u) => u !== own)] } : r;
   });
+}
+
+/**
+ * Nights (from `from` on) a stay in this room can't cover, for the calendar to cross out: every one
+ * of the card's identical rooms is booked, or the guest is staying at another hotel.
+ */
+export function blockedNights(room: WithUnits | undefined, otherStays: { checkIn: string; checkOut: string }[], from: string): string[] {
+  const nights = new Set(room ? soldOutNights([room]) : []);
+  for (const stay of otherStays) {
+    for (let night = stay.checkIn; night < stay.checkOut; night = addDays(night, 1)) nights.add(night);
+  }
+  return [...nights].filter((night) => night >= from).sort();
+}
+
+export const BLOCKED_NOTE = 'Struck-through dates are booked for this room or overlap another stay of yours. Other rooms may be free.';
+
+/** Why the chosen room can't be booked for the chosen dates, or null when it can. */
+export function roomProblem(room: { name: string; soldOut?: boolean; bookedForDates?: boolean }): string | null {
+  if (room.bookedForDates) return `${room.name} is booked for those dates. Pick another room or change your dates.`;
+  if (room.soldOut) return `${room.name} is sold out. Pick another room.`;
+  return null;
+}
+
+/**
+ * True when get_booked_nights rows show the room taken on a night of the stay. `own` is the booking
+ * being changed, whose nights in its own room don't count against it.
+ */
+export function roomTaken(
+  rows: { room_id: string; night: string }[],
+  roomId: string,
+  checkIn: string,
+  checkOut: string,
+  own?: { roomId: string; checkIn: string; checkOut: string },
+): boolean {
+  const inStay = coversNight(checkIn, checkOut);
+  const mine = own && own.roomId === roomId ? coversNight(own.checkIn, own.checkOut) : () => false;
+  return (nightsByRoom(rows).get(roomId) ?? []).some((night) => inStay(night) && !mine(night));
 }

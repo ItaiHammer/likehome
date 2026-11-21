@@ -47,6 +47,7 @@ export function RangeCalendar({
   onDone,
   resetKey,
   blockedOffsets = NO_BLOCKED,
+  blockedNote = "Struck-through dates are already booked.",
   tabs = false,
   quickPicks = false,
 }: {
@@ -59,6 +60,7 @@ export function RangeCalendar({
   resetKey: number;
   /** Booked nights, as days from today */
   blockedOffsets?: number[];
+  blockedNote?: string;
   /** Check-in / Check-out tabs choosing which date the next pick changes */
   tabs?: boolean;
   /** "This weekend", "Next weekend" and "Next week" shortcuts above the month */
@@ -362,7 +364,7 @@ export function RangeCalendar({
         <p className="text-sm text-ink" aria-live="polite">
           {hint}
         </p>
-        {blockedOffsets.length > 0 && <p className="text-sm text-slate">Struck-through dates are already booked.</p>}
+        {blockedOffsets.length > 0 && <p className="text-sm text-slate">{blockedNote}</p>}
         <div className="mt-3 grid grid-cols-2 gap-3">
           <button
             type="button"
