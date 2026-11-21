@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
-import { Button } from "@/app/_components/ui";
+import { Button, Tag } from "@/app/_components/ui";
+import { todayISO } from "@/app/_components/dates";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { cardBrandLabel, cardErrors, typedCardBrand, type CardBrandLabel } from "@/lib/card";
 import { pointsNumber } from "@/lib/rewards";
+import { cardExpired } from "@/utils/payment-logic";
 
 export interface PaymentMethod {
     id: string;
@@ -519,7 +521,7 @@ export function AccountTabContent({
                             {loading ? (
                                 <p className="text-xs text-slate py-2">Loading payment methods...</p>
                             ) : listError ? (
-                                <p role="alert" className="text-[11px] text-red-500 font-medium py-2">{listError}</p>
+                                <p role="alert" className="text-[11px] text-danger font-medium py-2">{listError}</p>
                             ) : paymentMethods.length > 0 ? (
                                 paymentMethods.map((pm) => (
                                     <div
@@ -534,6 +536,7 @@ export function AccountTabContent({
                                                 </p>
                                                 <p className="text-[11px] text-slate mt-0.5">
                                                     Expires {pm.expMonth}/{pm.expYear}
+                                                    {cardExpired(Number(pm.expMonth), Number(pm.expYear), todayISO()) && <span className="ml-2"><Tag>Expired</Tag></span>}
                                                 </p>
                                             </div>
                                         </div>
@@ -581,7 +584,7 @@ export function AccountTabContent({
                 <p className="mt-2 text-slate">
                     {removing ? `${removing.brand} ending in ${removing.last4} won’t be offered at checkout anymore.` : ""}
                 </p>
-                {removeError && <p role="alert" className="mt-3 text-sm font-medium text-red-500">{removeError}</p>}
+                {removeError && <p role="alert" className="mt-3 text-sm font-medium text-danger">{removeError}</p>}
                 <div className="mt-6 flex flex-wrap gap-3">
                     <Button onClick={() => removeDialogRef.current?.close()} aria-disabled={removePending || undefined}>
                         Keep card

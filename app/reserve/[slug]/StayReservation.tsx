@@ -248,8 +248,6 @@ export function StayReservation({
     ...new Set([...stay.blockedNights, ...soldOutOffsets, ...userBookingBlockedOffsets]),
   ];
 
-  const cancelBy = checkIn ? addDays(checkIn, -2) : "";
-  const freeCancel = !checkIn || !today || cancelBy > today;
 
   const detectedBrand = typedCardBrand(cardNumber);
 
