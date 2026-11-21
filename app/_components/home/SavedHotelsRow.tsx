@@ -1,17 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { onAccountChange } from "@/app/_components/accountChange";
 import { HotelCardRow } from "@/app/_components/HotelCardRow";
-import { useSavedHotels } from "@/app/_components/savedHotelsStore";
 import { ArrowIcon, arrowSlideClass, sectionLinkClass } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { shownSavedHotels, type SavedHotelCards } from "@/lib/saved-hotel-cards";
+import type { SavedHotelCards } from "@/lib/saved-hotel-cards";
 
-// A heart cleared here hides its card at once (and the row, with the last one); a failed removal brings it back
+// A heart cleared here keeps its card (with an empty heart) until the next page load, so focus stays put and
+// it can be saved again. The row goes once another account (or nobody) is signed in: it was the old one's list.
 export function SavedHotelsRow({ saved }: { saved: SavedHotelCards }) {
-  const hearts = useSavedHotels();
-  const { cards, more } = shownSavedHotels(saved, hearts.status === "signed-in" ? hearts.ids : null);
-  if (cards.length === 0) return null;
+  const [accountChanged, setAccountChanged] = useState(false);
+  useEffect(() => onAccountChange(() => setAccountChanged(true)), []);
+  if (accountChanged || saved.cards.length === 0) return null;
 
   return (
     <HotelCardRow
@@ -23,9 +25,9 @@ export function SavedHotelsRow({ saved }: { saved: SavedHotelCards }) {
           <ArrowIcon className={arrowSlideClass} />
         </Link>
       }
-      cards={cards}
+      cards={saved.cards}
       saveable
-      more={more ? { href: PAGE_ROUTES.MY_BOOKINGS_SAVED, label: "See all saved hotels" } : undefined}
+      more={saved.more ? { href: PAGE_ROUTES.MY_BOOKINGS_SAVED, label: "See all saved hotels" } : undefined}
     />
   );
 }

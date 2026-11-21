@@ -13,8 +13,14 @@ export type HotelCard = {
 
 type ViewedHotel = Pick<ComparisonHotelRow, 'id' | 'name' | 'city' | 'region' | 'country' | 'photo_urls' | 'liteapi_deleted_at'>
 
-// Rows that each carry a hotel (the history or the favorites, newest first): one card per hotel, leaving
-// out hotels that are gone or delisted (search hides those too)
+// False for a hotel that is gone or delisted (search hides those too)
+export function isListedHotel<T extends { id?: string | null; liteapi_deleted_at?: string | null }>(
+  hotel: T | null | undefined,
+): hotel is T {
+  return Boolean(hotel?.id && !hotel.liteapi_deleted_at)
+}
+
+// Rows that each carry a hotel (the history or the favorites, newest first): one card per listed hotel
 export function toHotelCards(rows: unknown, limit: number): HotelCard[] {
   if (!Array.isArray(rows)) return []
   const seen = new Set<string>()
@@ -22,7 +28,7 @@ export function toHotelCards(rows: unknown, limit: number): HotelCard[] {
   for (const row of rows as ({ hotels?: ViewedHotel | null } | null)[]) {
     if (cards.length >= limit) break
     const hotel = row?.hotels
-    if (!hotel?.id || hotel.liteapi_deleted_at || seen.has(hotel.id)) continue
+    if (!isListedHotel(hotel) || seen.has(hotel.id)) continue
     seen.add(hotel.id)
     cards.push({
       id: hotel.id,
