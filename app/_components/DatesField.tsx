@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { browserTimeZone, formatRange, formatShort, nightsBetween } from "./dates";
+import { datesLabel } from "@/lib/recent-searches";
+import { browserTimeZone, nightsBetween } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
 import { RangeCalendar, type RangeField } from "./RangeCalendar";
 
@@ -67,12 +68,8 @@ export function DatesField({
   }
 
   const nights = nightsBetween(checkIn, checkOut);
-  const label =
-    checkIn && checkOut
-      ? `${formatRange(checkIn, checkOut)} · ${nights} ${nights === 1 ? "night" : "nights"}`
-      : checkIn
-        ? `${formatShort(checkIn)} - Add check-out`
-        : "";
+  const dates = datesLabel(checkIn, checkOut);
+  const label = checkIn && checkOut ? `${dates} · ${nights} ${nights === 1 ? "night" : "nights"}` : dates;
 
   return (
     <div ref={ref} className={`relative ${className}`}>
@@ -93,7 +90,7 @@ export function DatesField({
       >
         {checkIn && checkOut ? (
           <span className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate text-base">{formatRange(checkIn, checkOut)}</span>
+            <span className="truncate text-base">{dates}</span>
             <span className="mt-1 text-xs font-medium text-slate">
               {nights} {nights === 1 ? "night" : "nights"}
             </span>
@@ -104,7 +101,8 @@ export function DatesField({
       </button>
 
       <input type="hidden" name="checkIn" value={checkIn} />
-      <input type="hidden" name="checkOut" value={checkOut} />
+      {/* A check-out with no check-in stays on screen but isn't searched, so /search never gets half a range */}
+      <input type="hidden" name="checkOut" value={checkIn ? checkOut : ""} />
       <input type="hidden" name="tz" value={timeZone} />
 
       <div
@@ -129,6 +127,8 @@ export function DatesField({
             restoreFocus();
             setOpen(false);
           }}
+          tabs
+          quickPicks
         />
       </div>
     </div>

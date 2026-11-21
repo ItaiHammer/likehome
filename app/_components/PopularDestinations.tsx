@@ -1,9 +1,15 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import { POPULAR_DESTINATIONS, POPULAR_TABS, type DestinationScene, type DestinationTab, type PopularDestination } from "../_data/destinations";
+import { PAGE_ROUTES } from "@/constants/routes";
+import { readSearchFields, type SearchFields } from "@/lib/recent-searches";
+import { searchQuery } from "@/lib/stay-filters";
+import { POPULAR_DESTINATIONS, POPULAR_TABS, type DestinationTab } from "../_data/destinations";
+import { browserTimeZone } from "./dates";
 import { isMotionReduced, useReducedMotion } from "./motion";
-import { buttonPrimary, buttonSecondary, iconButton } from "./ui";
+import { buttonPrimary, buttonSecondary, iconButton, SectionHeading } from "./ui";
 
 const STEP_MS = 3500; // how long the carousel rests on each position before moving on
 const RING_R = 12.75; // radius of the countdown ring on the (28px) pause button
@@ -23,17 +29,23 @@ function slideStep(track: HTMLElement) {
   return slides.length > 1 ? slides[1].offsetLeft - slides[0].offsetLeft : track.clientWidth;
 }
 
+// A tile's search: its place, plus the bar's dates (only as a full range) and party
+function searchHref(where: string, tz: string, bar: SearchFields | null) {
+  const dates = bar?.checkIn && bar.checkOut ? { checkIn: bar.checkIn, checkOut: bar.checkOut } : {};
+  const party = bar ? { adults: String(bar.adults), children: String(bar.children) } : {};
+  return `${PAGE_ROUTES.SEARCH}?${searchQuery({ where, ...dates, ...party, tz })}`;
+}
+
 /*
- * "Popular destinations": tabs for near / national / international, each a
- * swipeable carousel of ranked, illustrated tiles.
+ * "Find your next escape": tabs for near / national / international, each a
+ * swipeable carousel of ranked photo tiles.
  *
  * Autoplay: every STEP_MS it moves one tile along; once it reaches the end it
  * switches to the next tab. It pauses while hovered or off screen, stops for
  * good when someone uses the keyboard inside it or presses pause, and doesn't
  * start at all when motion is reduced.
  *
- * Choosing a tile fills the search bar's destination (DestinationInput listens
- * for the event) and scrolls back up to it.
+ * Choosing a tile opens the search results for that place.
  */
 export function PopularDestinations() {
   const [tab, setTab] = useState<DestinationTab>("near");
@@ -54,8 +66,18 @@ export function PopularDestinations() {
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ id: number; x: number; left: number; moved: boolean; lastX: number; lastT: number; v: number } | null>(null);
   const suppressClick = useRef(false);
+  // The page's search bar (if any), read as it reads itself on submit, each time a
+  // tile is pressed or focused so the tile's link carries its dates and party
+  const [bar, setBar] = useState<SearchFields | null>(null);
+  const readBar = () => {
+    const form = document.querySelector<HTMLFormElement>("form[data-search-bar]");
+    const next = form ? readSearchFields(new FormData(form)) : null;
+    setBar((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+  };
   const reduced = useReducedMotion();
   const pageVisible = useSyncExternalStore(subscribeVisibility, () => document.visibilityState === "visible", () => false);
+  // The search bar's tz, read the same way (empty in the server render); re-read when the tab comes back
+  const timeZone = useSyncExternalStore(subscribeVisibility, browserTimeZone, () => "");
   const baseId = useId();
   const sectionRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLUListElement>(null);
@@ -209,14 +231,9 @@ export function PopularDestinations() {
     el.scrollTo({ left: slides[i].offsetLeft - slides[0].offsetLeft, behavior: scrollBehavior() });
   }
 
-  function pick(d: PopularDestination) {
-    window.dispatchEvent(new CustomEvent("likehome:destination", { detail: `${d.name}, ${d.region}` }));
-    window.scrollTo({ top: 0, behavior: scrollBehavior() });
-  }
-
   // Card tilt: the side under the cursor presses away, up to ~7° each way.
   // Mouse and pen only; off when motion is reduced.
-  function tilt(e: React.PointerEvent<HTMLButtonElement>) {
+  function tilt(e: React.PointerEvent<HTMLAnchorElement>) {
     if (e.pointerType === "touch" || isMotionReduced()) return;
     if (drag.current?.moved) return untilt(e);
     const el = e.currentTarget;
@@ -227,7 +244,7 @@ export function PopularDestinations() {
     el.style.setProperty("--rx", `${((0.5 - py) * 12).toFixed(2)}deg`);
   }
 
-  function untilt(e: React.PointerEvent<HTMLButtonElement>) {
+  function untilt(e: React.PointerEvent<HTMLAnchorElement>) {
     e.currentTarget.style.setProperty("--rx", "0deg");
     e.currentTarget.style.setProperty("--ry", "0deg");
   }
@@ -328,10 +345,11 @@ export function PopularDestinations() {
         if (!e.currentTarget.contains(from) && (e.target as HTMLElement).matches(":focus-visible")) setAutoplayChoice(false);
       }}
     >
-      <h2 id={`${baseId}-title`} className="font-serif text-[40px] leading-[48px] text-ink">
-        Popular destinations
-      </h2>
-      <p className="mt-1 text-base text-slate">The places guests are booking most, close by, across the country and around the world.</p>
+      <SectionHeading
+        id={`${baseId}-title`}
+        title="Find your next escape"
+        subtitle="The places guests are booking most, close by, across the country and around the world."
+      />
 
       {/* relative z-[1]: stays clickable above the track's top bleed padding */}
       <div className="relative z-[1] mt-5 flex flex-wrap items-center justify-between gap-3">
@@ -414,9 +432,15 @@ export function PopularDestinations() {
                 className="tile-in h-full"
                 style={{ "--i": i } as React.CSSProperties}
               >
-                <button
-                  type="button"
-                  onClick={() => pick(d)}
+                {/* draggable={false}: the browser's own link dragging would cancel the
+                    mouse drag-to-scroll. No prefetch: autoplay brings every tile into
+                    view, and each one is a dynamic search page. */}
+                <Link
+                  href={searchHref(`${d.name}, ${d.region}`, timeZone, bar)}
+                  prefetch={false}
+                  draggable={false}
+                  onPointerDown={readBar}
+                  onFocus={readBar}
                   onPointerMove={tilt}
                   onPointerLeave={untilt}
                   aria-label={`Search stays in ${d.name}, ${d.region}`}
@@ -424,19 +448,21 @@ export function PopularDestinations() {
                     dragging ? "cursor-grabbing" : "cursor-grab"
                   }`}
                 >
-                  <div
-                    className="absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-                    style={{ background: `linear-gradient(160deg, ${d.colors[0]}, ${d.colors[1]})` }}
-                  >
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.45),transparent_55%)]" />
-                    <Scene kind={d.scene} />
-                  </div>
+                  <Image
+                    src={d.photo}
+                    alt=""
+                    fill
+                    sizes="(min-width: 1024px) 31vw, (min-width: 640px) 46vw, 80vw"
+                    placeholder="blur"
+                    draggable={false}
+                    className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+                  />
                   {/* Night: the tile dims with the theme */}
-                  <div className="absolute inset-0 bg-[#141a45]/45 opacity-0 dark:opacity-100" />
+                  <div className="absolute inset-0 bg-[#141a45]/30 opacity-0 dark:opacity-100" />
                   {/* Ink fade behind the caption: it eases in across the 112px top padding,
                       then stays at 58%+ under every line of text (however many lines the
                       name wraps to), so the white text clears 4.5:1 even if the
-                      illustration under it were pure white. Hover or keyboard focus
+                      photo under it were pure white. Hover or keyboard focus
                       deepens it to about 70%. */}
                   <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(to_bottom,rgb(7_13_47/0)_0,rgb(7_13_47/0.09)_28px,rgb(7_13_47/0.29)_56px,rgb(7_13_47/0.49)_84px,rgb(7_13_47/0.58)_112px,rgb(7_13_47/0.6))] p-5 pt-28 sm:p-6 sm:pt-28">
                     <div
@@ -447,7 +473,7 @@ export function PopularDestinations() {
                     <p className="relative font-serif text-[32px] leading-[38px] text-white">{d.name}</p>
                     <p className="relative truncate text-sm text-white">{d.region}</p>
                   </div>
-                </button>
+                </Link>
               </div>
             </li>
           ))}
@@ -514,73 +540,5 @@ export function PopularDestinations() {
         {status}
       </p>
     </section>
-  );
-}
-
-// Soft translucent landscape along the bottom of a tile; works over any tile color.
-function Scene({ kind }: { kind: DestinationScene }) {
-  const light = "rgba(255,255,255,0.4)";
-  const faint = "rgba(255,255,255,0.25)";
-  const shade = "rgba(34,44,100,0.2)";
-  return (
-    <svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMax slice" className="absolute inset-x-0 bottom-0 h-[70%] w-full" aria-hidden>
-      {kind === "coast" && (
-        <>
-          <rect x="0" y="120" width="400" height="80" fill={faint} />
-          <path d="M40 142 h36 M150 158 h44 M250 138 h30" stroke={light} strokeWidth="3" strokeLinecap="round" />
-          <path d="M270 200 V96 Q300 70 340 84 L400 76 V200 Z" fill={shade} />
-          <rect x="318" y="70" width="18" height="14" fill={light} />
-          <path d="M314 72 L327 62 L340 72 Z" fill={light} />
-        </>
-      )}
-      {kind === "lake" && (
-        <>
-          <path d="M0 120 L70 64 L130 104 L200 50 L280 110 L340 76 L400 112 V200 H0 Z" fill={shade} />
-          <path d="M0 132 Q200 118 400 132 V200 H0 Z" fill={faint} />
-          <path d="M60 150 h60 M220 160 h70" stroke={light} strokeWidth="3" strokeLinecap="round" />
-          {[24, 48, 352, 376].map((x, i) => (
-            <path key={x} d={`M${x} ${i % 2 ? 190 : 184} l14 -48 l14 48 z`} fill="rgba(34,44,100,0.28)" />
-          ))}
-        </>
-      )}
-      {kind === "beach" && (
-        <>
-          <circle cx="300" cy="70" r="26" fill="rgba(255,255,255,0.55)" />
-          <rect x="0" y="112" width="400" height="50" fill={faint} />
-          <path d="M0 150 Q120 138 240 150 T400 146 V200 H0 Z" fill="rgba(255,255,255,0.45)" />
-          <path d="M92 174 Q96 132 104 112" stroke="rgba(34,44,100,0.3)" strokeWidth="5" fill="none" strokeLinecap="round" />
-          <path d="M104 112 q-22 -4 -34 8 M104 112 q20 -8 34 4 M104 112 q-8 -18 -24 -20 M104 112 q10 -16 26 -16" stroke="rgba(34,44,100,0.3)" strokeWidth="4" fill="none" strokeLinecap="round" />
-        </>
-      )}
-      {kind === "mountain" && (
-        <>
-          <path d="M0 150 L110 44 L170 104 L250 30 L400 150 V200 H0 Z" fill={shade} />
-          <path d="M110 44 L90 64 L106 58 L118 68 L128 62 Z M250 30 L226 54 L244 48 L258 60 L272 50 Z" fill="rgba(255,255,255,0.7)" />
-          <path d="M0 160 Q140 128 280 150 T400 144 V200 H0 Z" fill={faint} />
-        </>
-      )}
-      {kind === "city" && (
-        <>
-          {[
-            [16, 96, 40],
-            [62, 64, 34],
-            [102, 110, 46],
-            [154, 44, 30],
-            [190, 84, 44],
-            [240, 58, 36],
-            [282, 100, 48],
-            [336, 72, 44],
-          ].map(([x, y, w]) => (
-            <g key={x}>
-              <rect x={x} y={y} width={w} height={200 - y} fill={shade} />
-              {[0, 1, 2].map((r) => (
-                <rect key={r} x={x + 8} y={y + 12 + r * 22} width={w - 16} height="6" fill={faint} />
-              ))}
-            </g>
-          ))}
-          <rect x="0" y="176" width="400" height="24" fill={faint} />
-        </>
-      )}
-    </svg>
   );
 }

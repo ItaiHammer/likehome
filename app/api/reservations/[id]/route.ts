@@ -12,6 +12,8 @@ import {
 } from '../../../../utils/reservation-logic.ts'
 import { partyOf } from '../../../../lib/liteapi/party.ts'
 import { liveRoomPrice } from '../../../../lib/liteapi/rates.ts'
+import { roomTaken } from '../../../../lib/room-availability.ts'
+import { getBookedNights } from '../../../../utils/rooms.ts'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
 const EXCLUSION_VIOLATION = '23P01'
@@ -129,6 +131,17 @@ export async function PATCH(
   const partyError = checkPartyLimits(input, room)
   if (partyError) {
     return Response.json({ error: partyError }, { status: 400 })
+  }
+
+  // Availability, checked here as the booking pages do; the database's own guard still has the last word.
+  // The lookup sees every guest's confirmed nights, so this booking's own are left out.
+  if (input.room_id !== curReservation.room_id || input.check_in !== curReservation.check_in || input.check_out !== curReservation.check_out) {
+    const { data: booked, error: bookedError } = await getBookedNights(room.hotel_id, input.check_in, input.check_out)
+    if (bookedError) console.error('get_booked_nights failed:', bookedError.message)
+    const own = { roomId: curReservation.room_id, checkIn: curReservation.check_in, checkOut: curReservation.check_out }
+    if (roomTaken(booked, input.room_id, input.check_in, input.check_out, own)) {
+      return Response.json({ error: 'Room is not available for those dates.' }, { status: 409 })
+    }
   }
 
   // Price. A change is quoted for its adults and children, as the change page priced it.

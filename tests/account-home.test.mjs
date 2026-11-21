@@ -13,65 +13,87 @@ register(
 )
 
 const { homeContentFor } = await import('../lib/account/home.ts')
+const { RECOMMENDED_CARDS } = await import('../lib/recommendations.ts')
 
-test("signed out keeps today's hero and has no welcome banner", () => {
+const ROLES = ['signed-out', 'unknown', 'personal', 'business']
+
+test("signed out keeps today's hero and opens with the sign-up card", () => {
   assert.deepEqual(homeContentFor('signed-out'), {
-    hero: { eyebrow: null, title: 'Feel at home, anywhere.', line: 'A new favorite stay starts with a hello.' },
+    hero: { title: 'Feel at home, anywhere.', line: 'A new favorite stay starts with a hello.' },
     welcome: null,
-    signedOutSections: true,
+    recommendedCards: RECOMMENDED_CARDS,
+    sections: ['join', 'destinations', 'recommended'],
   })
 })
 
-test('personal', () => {
+test('personal: next trip, points and shortcuts first, then their own history and saved hotels', () => {
   assert.deepEqual(homeContentFor('personal'), {
-    hero: { eyebrow: 'Your next chapter', title: 'Where to next?', line: 'Find a place that feels like yours.' },
+    hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: {
       title: 'Plans, in one place.',
-      body: 'Your bookings and favorites are always close by.',
-      actions: [
-        { label: 'My Bookings', href: '/MyBookings', variant: 'primary' },
-        { label: 'Browse stays', href: '/search', variant: 'secondary' },
+      body: 'Your bookings and saved hotels are always close by.',
+      shortcuts: [
+        { label: 'Browse stays', hint: 'Find somewhere new', href: '/search' },
+        { label: 'Saved hotels', hint: 'Your shortlist for later', href: '/MyBookings?tab=saved' },
+        { label: 'Messages', hint: 'From the hotels you booked', href: '/messages', unread: true },
       ],
     },
-    signedOutSections: false,
+    recommendedCards: 3,
+    sections: ['traveler-summary', 'recently-viewed', 'saved-hotels', 'recommended', 'destinations'],
   })
 })
 
-test('business', () => {
+test('business: guests, properties and how they are doing, before the shared sections', () => {
   assert.deepEqual(homeContentFor('business'), {
     hero: {
-      eyebrow: 'Your places',
       title: 'Where to next?',
       line: 'Find a stay anywhere. Your listings are just below.',
     },
     welcome: {
-      title: 'Listings, in one place.',
-      body: 'Your properties and their details are always close by.',
-      actions: [
-        { label: 'My Listings', href: '/listings', variant: 'primary' },
-        { label: 'Add property', href: '/listings/new', variant: 'secondary' },
+      title: 'Ready for your guests.',
+      body: 'See who’s arriving and keep your places up to date.',
+      shortcuts: [
+        { label: 'Message guests', hint: 'Write to guests who booked', href: '/property-dashboard/messages', icon: 'messages' },
+        { label: 'Add property', hint: 'List a new place', href: '/listings/new', icon: 'add' },
       ],
     },
-    signedOutSections: false,
+    recommendedCards: 3,
+    sections: ['owner-today', 'owner-week', 'owner-properties', 'owner-stats', 'destinations', 'recommended'],
   })
 })
 
-test('unknown (the account read failed): signed in, a neutral hero, no welcome banner and no sign-up promo', () => {
+test('unknown (the account read failed): signed in, a neutral hero, no welcome block and no sign-up card', () => {
   assert.deepEqual(homeContentFor('unknown'), {
-    hero: { eyebrow: null, title: 'Where to next?', line: 'Find a place that feels like yours.' },
+    hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: null,
-    signedOutSections: false,
+    recommendedCards: 3,
+    sections: ['destinations', 'recommended'],
   })
 })
 
-test('no signed-in state links to sign-in', () => {
+test('only signed-out visitors get the sign-up card', () => {
+  for (const role of ROLES) {
+    assert.equal(homeContentFor(role).sections.includes('join'), role === 'signed-out', role)
+  }
+})
+
+test('each role lists a section once, and a welcome block only with its copy', () => {
+  for (const role of ROLES) {
+    const { sections, welcome } = homeContentFor(role)
+    assert.equal(new Set(sections).size, sections.length, role)
+    const usesWelcome = sections.includes('traveler-summary') || sections.includes('owner-today')
+    assert.equal(usesWelcome, welcome !== null, role)
+  }
+})
+
+test('no signed-in shortcut links to sign-in', () => {
   for (const role of ['personal', 'business']) {
-    for (const a of homeContentFor(role).welcome.actions) assert.ok(!a.href.startsWith('/auth/'), `${role} ${a.href}`)
+    for (const s of homeContentFor(role).welcome.shortcuts) assert.ok(!s.href.startsWith('/auth/'), `${role} ${s.href}`)
   }
 })
 
 test('no hero says "Welcome back", so it reads right for a brand-new account too', () => {
-  for (const role of ['signed-out', 'unknown', 'personal', 'business']) {
+  for (const role of ROLES) {
     assert.ok(!/welcome back/i.test(homeContentFor(role).hero.title), role)
   }
 })

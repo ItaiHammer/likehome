@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { bookingCode, changeBlocker, datesProblem, findOverlap, formatStayDates, money, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
 import { calculateTotalPrice, MAX_NIGHTS, todayInTimeZone } from "@/utils/reservation-logic";
-import { browserTimeZone, formatDate, nightsBetween } from "../../_components/dates";
+import { browserTimeZone, formatDate, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, FormError, Stepper } from "../../_components/ui";
 import type { Room } from "../../_data/stays";
@@ -14,7 +14,7 @@ import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
 import { guestLabel } from "../../reserve/[slug]/GuestsField";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
 import { useBookedNightsLookup } from "../../reserve/[slug]/useBookedNightsLookup";
-import { freeUnitId, markBookedRooms, mergeBookedNights, withoutStay, type BookedWindow } from "@/lib/room-availability";
+import { blockedOffsets as calendarBlockedOffsets, BLOCKED_NOTE, freeUnitId, markBookedRooms, mergeBookedNights, roomProblem, withoutStay, type BookedWindow } from "@/lib/room-availability";
 import { HotelPhoto } from "../_components/HotelPhoto";
 
 export type BookingToChange = {
@@ -39,6 +39,7 @@ type Stay = { checkIn: string; checkOut: string; guests: number; children: numbe
 type LivePrices = { key: string; byId: Record<string, Partial<Room>> };
 type Errors = { dates?: string; guests?: string; form?: string; signIn?: boolean };
 
+const noSubscribe = () => () => {};
 const nightsLabel = (n: number) => `${n} ${n === 1 ? "night" : "nights"}`;
 const guestsLabel = (s: Pick<Stay, "guests" | "children">) => guestLabel(s.guests - s.children, s.children);
 
@@ -121,6 +122,10 @@ export function ChangeBooking({
   const mine = withoutStay(known, booking.roomId, booking.checkIn, booking.checkOut);
   const rooms = markBookedRooms(mine, checkIn, checkOut);
   const room = rooms.find((r) => r.id === roomId) ?? rooms[0];
+  // Empty on the server, like the stay page's calendar
+  const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
+  // The same nights the stay page crosses out, with this booking's own nights left open
+  const blockedOffsets = calendarBlockedOffsets(rooms, { adults, children }, otherStays, today, { moreRoomsMayAppear: booking.livePrices });
   const currentRoom = rooms.find((r) => r.id === current.roomId);
   const changed = checkIn !== current.checkIn || checkOut !== current.checkOut || !sameGuests || roomId !== current.roomId;
   // Any change is repriced at today's nightly price (the API does the same), so until something
@@ -194,7 +199,8 @@ export function ChangeBooking({
     const clash = findOverlap(otherStays, checkIn, checkOut);
     if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (lookingUp) return { field: "dates", message: "Still checking which rooms are free on those dates. Try again in a moment." };
-    if (room.bookedForDates) return { field: "guests", message: `${room.name} is booked for those dates. Pick another room or change your dates.` };
+    const taken = roomProblem(room);
+    if (taken) return { field: "guests", message: taken };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     return null;
   }
@@ -330,7 +336,8 @@ export function ChangeBooking({
                   setCheckOut(b);
                   setErrors(({ guests: g }) => ({ guests: g }));
                 }}
-                blockedOffsets={[]}
+                blockedOffsets={blockedOffsets}
+                blockedNote={BLOCKED_NOTE}
                 open={datesOpen}
                 onOpenChange={setDatesOpen}
                 error={errors.dates}

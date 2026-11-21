@@ -24,6 +24,33 @@ export const formatShort = (iso: string) => format(iso, { month: "short", day: "
 export const formatRange = (from: string, to: string) => `${formatShort(from)} - ${formatShort(to)}`;
 /** "Wednesday, October 14" (for screen readers) */
 export const formatLong = (iso: string) => format(iso, { weekday: "long", month: "long", day: "numeric" });
+/** "Wed", or "Wednesday" when long */
+export const formatWeekday = (iso: string, long = false) => format(iso, { weekday: long ? "long" : "short" });
+
+// A calendar month; m counts from 0 like Date
+export type Month = { y: number; m: number };
+
+export const monthOf = (iso: string): Month => {
+  const [y, m] = iso.split("-").map(Number);
+  return { y, m: m - 1 };
+};
+
+export const shiftMonth = ({ y, m }: Month, delta: number): Month => {
+  const t = y * 12 + m + delta;
+  return { y: Math.floor(t / 12), m: t % 12 };
+};
+
+/** "December 2026" */
+export const formatMonth = ({ y, m }: Month) =>
+  new Date(Date.UTC(y, m, 1)).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+
+/** The month's days as YYYY-MM-DD, after a null for each weekday before the 1st (weeks start on Sunday) */
+export function monthCells({ y, m }: Month): (string | null)[] {
+  const lead = new Date(Date.UTC(y, m, 1)).getUTCDay();
+  const count = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const first = fromUTC(Date.UTC(y, m, 1));
+  return [...Array<null>(lead).fill(null), ...Array.from({ length: count }, (_, d) => addDays(first, d))];
+}
 
 export const todayISO = () => {
   const d = new Date();

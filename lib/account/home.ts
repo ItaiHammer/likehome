@@ -1,55 +1,90 @@
 import { PAGE_ROUTES } from '@/constants/routes'
+import { RECOMMENDED_CARDS } from '@/lib/recommendations'
 import type { ViewerRole } from './role'
 
-export type HomeAction = { label: string; href: string; variant: 'primary' | 'secondary' }
+export type HomeShortcut = {
+  label: string
+  /** What the link is for, shown under its label */
+  hint: string
+  href: string
+  icon?: 'messages' | 'add'
+  /** The hint gives way to the inbox's unread count once it loads */
+  unread?: true
+}
+
+export type HomeSection =
+  // Signed out: the sign-up card and the feature cards
+  | 'join'
+  // Personal: next trip, points and shortcuts
+  | 'traveler-summary'
+  // Business: the title card with its shortcuts, and who is staying or arriving
+  | 'owner-today'
+  // Rooms booked each night this week, linking into the My Listings calendar
+  | 'owner-week'
+  | 'owner-properties'
+  | 'owner-stats'
+  | 'recently-viewed'
+  | 'saved-hotels'
+  | 'recommended'
+  | 'destinations'
 
 export type HomeContent = {
-  hero: { eyebrow: string | null; title: string; line: string }
-  welcome: { title: string; body: string; actions: HomeAction[] } | null
-  // The member promo and feature cards
-  signedOutSections: boolean
+  hero: { title: string; line: string }
+  // The signed-in top block's title, line and shortcuts
+  welcome: { title: string; body: string; shortcuts: HomeShortcut[] } | null
+  recommendedCards: number
+  // Everything under the hero, in order
+  sections: HomeSection[]
 }
 
 export type HomeRole = Exclude<ViewerRole, 'unchosen'>
 
+const SIGNED_IN_CARDS = 3
+const DEFAULT_SECTIONS: HomeSection[] = ['destinations', 'recommended']
+
 const CONTENT: Record<HomeRole, HomeContent> = {
   'signed-out': {
-    hero: { eyebrow: null, title: 'Feel at home, anywhere.', line: 'A new favorite stay starts with a hello.' },
+    hero: { title: 'Feel at home, anywhere.', line: 'A new favorite stay starts with a hello.' },
     welcome: null,
-    signedOutSections: true,
+    recommendedCards: RECOMMENDED_CARDS,
+    sections: ['join', ...DEFAULT_SECTIONS],
   },
   unknown: {
-    hero: { eyebrow: null, title: 'Where to next?', line: 'Find a place that feels like yours.' },
+    hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: null,
-    signedOutSections: false,
+    recommendedCards: SIGNED_IN_CARDS,
+    sections: DEFAULT_SECTIONS,
   },
   personal: {
-    hero: { eyebrow: 'Your next chapter', title: 'Where to next?', line: 'Find a place that feels like yours.' },
+    hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: {
       title: 'Plans, in one place.',
-      body: 'Your bookings and favorites are always close by.',
-      actions: [
-        { label: 'My Bookings', href: PAGE_ROUTES.MY_BOOKINGS, variant: 'primary' },
-        { label: 'Browse stays', href: PAGE_ROUTES.SEARCH, variant: 'secondary' },
+      body: 'Your bookings and saved hotels are always close by.',
+      shortcuts: [
+        { label: 'Browse stays', hint: 'Find somewhere new', href: PAGE_ROUTES.SEARCH },
+        { label: 'Saved hotels', hint: 'Your shortlist for later', href: PAGE_ROUTES.MY_BOOKINGS_SAVED },
+        { label: 'Messages', hint: 'From the hotels you booked', href: PAGE_ROUTES.MESSAGES, unread: true },
       ],
     },
-    signedOutSections: false,
+    recommendedCards: SIGNED_IN_CARDS,
+    // Their own history and saved hotels first; each row hides itself when it has nothing
+    sections: ['traveler-summary', 'recently-viewed', 'saved-hotels', 'recommended', 'destinations'],
   },
   business: {
     hero: {
-      eyebrow: 'Your places',
       title: 'Where to next?',
       line: 'Find a stay anywhere. Your listings are just below.',
     },
     welcome: {
-      title: 'Listings, in one place.',
-      body: 'Your properties and their details are always close by.',
-      actions: [
-        { label: 'My Listings', href: PAGE_ROUTES.LISTINGS, variant: 'primary' },
-        { label: 'Add property', href: PAGE_ROUTES.LISTINGS_NEW, variant: 'secondary' },
+      title: 'Ready for your guests.',
+      body: 'See who’s arriving and keep your places up to date.',
+      shortcuts: [
+        { label: 'Message guests', hint: 'Write to guests who booked', href: PAGE_ROUTES.OWNER_MESSAGES, icon: 'messages' },
+        { label: 'Add property', hint: 'List a new place', href: PAGE_ROUTES.LISTINGS_NEW, icon: 'add' },
       ],
     },
-    signedOutSections: false,
+    recommendedCards: SIGNED_IN_CARDS,
+    sections: ['owner-today', 'owner-week', 'owner-properties', 'owner-stats', ...DEFAULT_SECTIONS],
   },
 }
 

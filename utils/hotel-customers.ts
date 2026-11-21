@@ -2,6 +2,7 @@ import {getUserId} from '@/utils/user'
 import {getHotelBookingHistory, getHotelCustomerHistory} from '@/utils/history'
 import {getHotelsByOwner} from '@/utils/hotels'
 import {guestToday} from '@/utils/guest-today'
+import {isUuid} from '@/lib/ids'
 import {
     toHotelCustomerHistory,
     type HotelBookingRow,
@@ -10,7 +11,6 @@ import {
     type OwnerListing,
 } from '@/lib/hotel-customers'
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // Both history RPCs raise this for a listing the caller doesn't own (or that doesn't exist)
 const NOT_OWNER = '42501'
 
@@ -24,7 +24,7 @@ export type HotelCustomersResult =
 export async function getHotelCustomers(hotelId?: string): Promise<HotelCustomersResult> {
     const {userId} = await getUserId()
     if (!userId) return {ok: false, reason: 'signed-out'}
-    if (hotelId !== undefined && !UUID.test(hotelId)) return {ok: false, reason: 'invalid-listing'}
+    if (hotelId !== undefined && !isUuid(hotelId)) return {ok: false, reason: 'invalid-listing'}
 
     const today = await guestToday()
     const [bookings, customers, hotels] = await Promise.all([

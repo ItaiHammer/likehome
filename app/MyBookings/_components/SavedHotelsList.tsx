@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { Button } from "@/app/_components/ui";
+import { Button, Card } from "@/app/_components/ui";
 import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
-import { STAYS } from "@/app/_data/stays";
+import { useSavedHotels } from "@/app/_components/savedHotelsStore";
+import { useAccountChanged } from "@/app/_components/useAccountChanged";
 
-interface Hotel {
+export interface SavedHotel {
     id: string;
     name: string;
     city?: string | null;
@@ -17,96 +18,51 @@ interface Hotel {
     tags?: string[] | null;
 }
 
-export function SavedHotelsList({ allHotels }: { allHotels: Hotel[] }) {
-    const [savedIds, setSavedIds] = useState<string[]>([]);
-    const [isLoaded, setIsLoaded] = useState(false);
+function ListNotice({ title, body, children }: { title: string; body: string; children?: React.ReactNode }) {
+    return (
+        <Card className="sm:p-8">
+            <p className="text-lg font-semibold text-ink">{title}</p>
+            <p className="mt-1 text-slate">{body}</p>
+            {children}
+        </Card>
+    );
+}
+
+// `hotels` is the account's saved list from the server, newest first. A heart cleared on this page hides its card;
+// the store's list can be older than the server's, so it hides nothing else.
+export function SavedHotelsList({ hotels }: { hotels: SavedHotel[] }) {
     const [sortBy, setSortBy] = useState<"recent" | "name_asc" | "name_desc">("recent");
+    const saved = useSavedHotels();
+    const accountChanged = useAccountChanged();
 
-    const loadSaved = () => {
-        const saved = JSON.parse(localStorage.getItem("likehome_saved_hotels") || "[]");
-        setSavedIds(saved);
-        setIsLoaded(true);
-    };
-
-    useEffect(() => {
-        loadSaved();
-        window.addEventListener("saved_hotels_updated", loadSaved);
-        return () => window.removeEventListener("saved_hotels_updated", loadSaved);
-    }, []);
-
-    if (!isLoaded) {
-        return <p className="text-sm text-slate">Loading saved hotels...</p>;
+    if (accountChanged) {
+        return (
+            <ListNotice
+                title="You signed out or switched accounts"
+                body="Reload the page to see saved hotels for the account signed in now."
+            />
+        );
     }
 
-    const savedHotelsRaw = savedIds
-        .map((id): Hotel | null => {
-            const strId = String(id);
+    const kept = hotels.filter((h) => !(saved.known.has(h.id) && !saved.ids.has(h.id)));
 
-            let staticStay = STAYS.find(
-                (stay) => stay.slug === strId
-            );
-            const dbHotel = allHotels.find((h) => String(h.id) === strId);
-
-            if (!staticStay && dbHotel) {
-                const cleanDbName = dbHotel.name.toLowerCase().trim();
-                staticStay = STAYS.find((s) => {
-                    const cleanStayName = s.name.toLowerCase().trim();
-                    return cleanDbName.includes(cleanStayName) || cleanStayName.includes(cleanDbName);
-                });
-            }
-
-            const matchedDbHotel =
-                dbHotel ||
-                (staticStay
-                    ? allHotels.find((h) => {
-                        const cleanDbName = h.name.toLowerCase().trim();
-                        const cleanStayName = staticStay.name.toLowerCase().trim();
-                        return cleanDbName.includes(cleanStayName) || cleanStayName.includes(cleanDbName);
-                    })
-                    : null);
-
-            const name = staticStay?.name || matchedDbHotel?.name;
-            if (!name) return null;
-
-            return {
-                id: strId,
-                name,
-                city: staticStay?.location ?? matchedDbHotel?.city ?? null,
-                region: matchedDbHotel?.region ?? null,
-                country: matchedDbHotel?.country ?? null,
-                photoUrl:
-                    staticStay?.photos?.[0] ??
-                    matchedDbHotel?.photoUrl ??
-                    null,
-                pricePerNight:
-                    matchedDbHotel?.pricePerNight ??
-                    (staticStay
-                        ? Math.min(...staticStay.rooms.map((room) => room.nightly))
-                        : null),
-                tags: staticStay?.tags || matchedDbHotel?.tags || null,
-            };
-        })
-        .filter((h): h is Hotel => h !== null);
-
-    const savedHotels = [...savedHotelsRaw].sort((a, b) => {
+    const savedHotels = [...kept].sort((a, b) => {
         if (sortBy === "name_asc") {
             return a.name.localeCompare(b.name);
         }
         if (sortBy === "name_desc") {
             return b.name.localeCompare(a.name);
         }
-        return savedIds.indexOf(a.id) - savedIds.indexOf(b.id);
+        return hotels.indexOf(a) - hotels.indexOf(b);
     });
 
     if (savedHotels.length === 0) {
         return (
-            <div className="rounded-lg border border-edge bg-surface p-6 sm:p-8">
-                <p className="text-lg font-semibold text-ink">No saved hotels yet</p>
-                <p className="mt-1 text-slate">Click the heart icon on any hotel card to save it here.</p>
+            <ListNotice title="No saved hotels yet" body="Click the heart icon on any hotel card to save it here.">
                 <Button href="/search" className="mt-5">
                     Explore stays
                 </Button>
-            </div>
+            </ListNotice>
         );
     }
 
@@ -162,7 +118,7 @@ export function SavedHotelsList({ allHotels }: { allHotels: Hotel[] }) {
                                     </div>
                                 )}
 
-                                <SaveHotelButton hotelId={hotel.id} className="absolute top-3 right-3 z-10" />
+                                <SaveHotelButton hotelId={hotel.id} hotelName={hotel.name} saved className="absolute top-3 right-3 z-10" />
                             </div>
 
                             {/* Card Details */}

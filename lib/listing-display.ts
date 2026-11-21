@@ -58,8 +58,13 @@ export function formatLocation(listing: Pick<Listing, "city" | "region" | "count
   return [listing.city, listing.region || countryLabel(listing.country)].filter(Boolean).join(", ");
 }
 
+// Every physical room across the listing's room types
+export function totalRooms(rooms: Pick<Listing["rooms"][number], "roomCount">[]) {
+  return rooms.reduce((sum, room) => sum + room.roomCount, 0);
+}
+
 export function formatRoomCount(rooms: Listing["rooms"]) {
-  const total = rooms.reduce((sum, room) => sum + room.roomCount, 0);
+  const total = totalRooms(rooms);
   if (total === 0) return "No rooms yet";
   return total === 1 ? "1 room" : `${total} rooms`;
 }

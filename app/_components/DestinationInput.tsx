@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { loadRecentSearches, searchDetails, type RecentSearch, type SearchOwner } from "@/lib/recent-searches";
 import { DESTINATIONS } from "../_data/destinations";
+import { todayISO } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
 
 const MAX_RESULTS = 7;
@@ -14,13 +16,14 @@ const PLACES_DELAY_MS = 250;
 const FOLDS: [RegExp, string][] = [[/ø/g, "o"], [/æ/g, "ae"], [/œ/g, "oe"], [/ß/g, "ss"], [/ł/g, "l"], [/đ/g, "d"]];
 const norm = (s: string) =>
   FOLDS.reduce((t, [re, to]) => t.replace(re, to), s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase());
+const wordsOf = (s: string) => norm(s).split(/[\s,.'-]+/);
 
 const INDEX = DESTINATIONS.map(([name, region], rank) => ({
   name,
   region,
   rank,
   key: norm(name),
-  words: norm(name).split(/[\s,.'-]+/),
+  words: wordsOf(name),
   regionKey: norm(region),
   // The text a picked destination leaves in the field, e.g. "paris, france"
   full: norm(`${name}, ${region}`),
@@ -32,6 +35,15 @@ type Result = (typeof INDEX)[number];
 type Option = { key: string; name: string; region: string; placeId?: string };
 
 type RemotePlace = { placeId: string; name: string; region: string };
+
+/** A row in the list: one of the guest's recent searches, or a place */
+type Item = { kind: "recent"; key: string; search: RecentSearch } | { kind: "place"; key: string; option: Option };
+
+// A recent search shows while the field is empty, or when its place (or a word in it) starts with what's typed
+function matchesRecent(where: string, query: string) {
+  const q = norm(query.trim());
+  return !q || norm(where).startsWith(q) || wordsOf(where).some((w) => w.startsWith(q));
+}
 
 function search(query: string): Result[] {
   const q = norm(query.trim());
@@ -76,29 +88,53 @@ function PinIcon({ className }: { className: string }) {
   );
 }
 
+function ClockIcon({ className }: { className: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4l3 2" />
+    </svg>
+  );
+}
+
+const NO_RECENTS: RecentSearch[] = [];
+
 // Destination field: instant suggestions from a bundled list, then LiteAPI's places (any town, airport or landmark)
-// after a typing pause. Picking one of LiteAPI's sends its place id with the search.
+// after a typing pause. Picking one of LiteAPI's sends its place id with the search. With `onPickRecent`, the
+// recent searches of `recentsOwner` (kept in this browser) come first; picking one fills this field and hands the
+// search over so the bar can fill its dates and guests.
 export function DestinationInput({
   className = "",
   initialValue = "",
   initialPlace = "",
   autoFocusFrom,
+  onPickRecent,
+  recentsOwner,
 }: {
   className?: string;
   initialValue?: string;
   initialPlace?: string;
   /** Focus the field when it mounts, e.g. back from AI search; "pointer" keeps the keyboard ring off */
   autoFocusFrom?: "keyboard" | "pointer";
+  onPickRecent?: (search: RecentSearch) => void;
+  recentsOwner?: SearchOwner;
 }) {
   const listId = useId();
   const [query, setQuery] = useState(initialValue);
   const [focused, setFocused] = useState(false);
   const [active, setActive] = useState(-1);
-  // The last place filled in by picking (a suggestion or a popular-destination tile)
+  // The last place filled in by picking (a suggestion or a recent search)
   const [picked, setPicked] = useState(initialValue);
   // LiteAPI's id for the picked place; typing anything else clears it
   const [placeId, setPlaceId] = useState(initialPlace);
   const [remote, setRemote] = useState<{ query: string; places: RemotePlace[] }>({ query: "", places: [] });
+  // Read from the browser while the field is focused (never on the server, where it isn't), again each time
+  // it's focused and whenever the account changes, so another account's searches never show
+  const wantsRecents = Boolean(onPickRecent);
+  const recents = useMemo(
+    () => (focused && wantsRecents ? loadRecentSearches(todayISO(), recentsOwner) : NO_RECENTS),
+    [focused, wantsRecents, recentsOwner],
+  );
   // Text fields match :focus-visible even when clicked, so the search bar's
   // keyboard focus ring is turned off while the field was focused by mouse or touch
   const [pointerFocus, setPointerFocus] = useState(autoFocusFrom === "pointer");
@@ -115,6 +151,14 @@ export function DestinationInput({
         .map((p) => ({ key: p.placeId, name: p.name, region: p.region, placeId: p.placeId })),
     ];
   }, [query, trimmed, remote]);
+  const recentItems = useMemo<Item[]>(
+    () => recents.filter((r) => matchesRecent(r.where, query)).map((r, i) => ({ kind: "recent", key: `recent-${i}`, search: r })),
+    [recents, query],
+  );
+  const items = useMemo<Item[]>(
+    () => [...recentItems, ...options.map((option): Item => ({ kind: "place", key: option.key, option }))],
+    [recentItems, options],
+  );
 
   useEffect(() => {
     if (trimmed.length < 2 || trimmed === picked.trim()) return;
@@ -131,48 +175,71 @@ export function DestinationInput({
     };
   }, [trimmed, picked]);
 
-  // Popular destination tiles fill this field.
-  useEffect(() => {
-    const onPick = (e: Event) => {
-      const place = (e as CustomEvent<string>).detail;
-      setQuery(place);
-      setPicked(place);
-      setPlaceId("");
-      setActive(-1);
-    };
-    window.addEventListener("likehome:destination", onPick);
-    return () => window.removeEventListener("likehome:destination", onPick);
-  }, []);
   // "No matches" is for typing, once LiteAPI has answered too; a picked place that isn't in the
-  // suggestion list (some popular-destination tiles) just closes the list instead
-  const showNoMatches = trimmed !== "" && options.length === 0 && query !== picked && remote.query === trimmed;
-  const open = focused && (options.length > 0 || showNoMatches);
+  // suggestion list (a recent search for what someone typed) just closes the list instead
+  const showNoMatches = trimmed !== "" && items.length === 0 && query !== picked && remote.query === trimmed;
+  const open = focused && (items.length > 0 || showNoMatches);
+  const placesHeading = !trimmed ? "Popular destinations" : recentItems.length ? "Suggestions" : "";
 
-  function choose(option: Option) {
-    const place = option.region ? `${option.name}, ${option.region}` : option.name;
+  function openList() {
+    setFocused(true);
+  }
+
+  function choose(item: Item) {
+    const place =
+      item.kind === "recent" ? item.search.where : item.option.region ? `${item.option.name}, ${item.option.region}` : item.option.name;
     setQuery(place);
     setPicked(place);
-    setPlaceId(option.placeId ?? "");
+    setPlaceId((item.kind === "recent" ? item.search.place : item.option.placeId) ?? "");
     setFocused(false);
     setActive(-1);
+    if (item.kind === "recent") onPickRecent?.(item.search);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
-      if (!focused) return setFocused(true);
-      const n = options.length;
+      if (!focused) return openList();
+      const n = items.length;
       if (!n) return;
       const down = e.key === "ArrowDown";
       // From nothing selected: Down goes to the first result, Up to the last
       setActive((i) => (i < 0 ? (down ? 0 : n - 1) : (i + (down ? 1 : -1) + n) % n));
     } else if (e.key === "Enter" && open && active >= 0) {
       e.preventDefault();
-      choose(options[active]);
+      choose(items[active]);
     } else if (e.key === "Escape") {
       setFocused(false);
     }
   }
+
+  const headingClass = "cascade px-3 pb-1 pt-2 text-sm font-semibold text-slate";
+  // Cascade order of the places' heading, after the recent searches and theirs
+  const placesStart = recentItems.length ? recentItems.length + 1 : 0;
+  const renderItem = (item: Item, i: number, order: number) => (
+    <li
+      key={item.key}
+      id={`${listId}-${i}`}
+      role="option"
+      aria-selected={i === active}
+      onClick={() => choose(item)}
+      onMouseEnter={() => setActive(i)}
+      style={{ "--i": order } as React.CSSProperties}
+      className={`cascade flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 ${i === active ? "bg-blue/10" : ""}`}
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue/10 text-blue">
+        {item.kind === "recent" ? <ClockIcon className="h-4 w-4" /> : <PinIcon className="h-4 w-4" />}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-base font-medium text-ink">
+          <Highlight text={item.kind === "recent" ? item.search.where : item.option.name} query={query} />
+        </span>
+        <span className="block truncate text-sm text-slate">
+          {item.kind === "recent" ? searchDetails(item.search) : item.option.region}
+        </span>
+      </span>
+    </li>
+  );
 
   return (
     <div
@@ -184,7 +251,7 @@ export function DestinationInput({
         if (target === inputRef.current || target.closest('[role="listbox"]')) return;
         e.preventDefault();
         setPointerFocus(true);
-        setFocused(true);
+        openList();
         inputRef.current?.focus();
       }}
     >
@@ -201,10 +268,10 @@ export function DestinationInput({
             setActive(-1);
             setFocused(true);
           }}
-          onFocus={() => setFocused(true)}
+          onFocus={openList}
           onPointerDown={() => setPointerFocus(true)}
           // Clicking the field again (it keeps focus after a pick) reopens the list
-          onClick={() => setFocused(true)}
+          onClick={openList}
           onBlur={() => {
             setFocused(false);
             setPointerFocus(false);
@@ -234,35 +301,36 @@ export function DestinationInput({
         data-open={open}
         className="dropdown absolute left-0 right-0 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-2 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:right-auto md:w-[26rem]"
       >
-        {!query.trim() && (
-          <p className="cascade px-3 pb-1 pt-2 text-sm font-semibold text-slate">Popular destinations</p>
-        )}
-        <ul role="listbox" id={listId} aria-label="Destinations">
-          {options.map((d, i) => (
-            <li
-              key={d.key}
-              id={`${listId}-${i}`}
-              role="option"
-              aria-selected={i === active}
-              // Keep focus in the input so the list doesn't close before the click lands
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={() => choose(d)}
-              onMouseEnter={() => setActive(i)}
-              style={{ "--i": i + 1 } as React.CSSProperties}
-              className={`cascade flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 ${i === active ? "bg-blue/10" : ""}`}
+        {/* Keep focus in the input so the list doesn't close before a click lands */}
+        <div role="listbox" id={listId} aria-label="Destinations" onPointerDown={(e) => e.preventDefault()}>
+          {recentItems.length > 0 && (
+            <ul role="group" aria-labelledby={`${listId}-recent`}>
+              <li role="presentation" id={`${listId}-recent`} className={headingClass}>
+                Recent searches
+              </li>
+              {recentItems.map((item, i) => renderItem(item, i, 1 + i))}
+            </ul>
+          )}
+          {options.length > 0 && (
+            <ul
+              role="group"
+              aria-labelledby={placesHeading ? `${listId}-places` : undefined}
+              aria-label={placesHeading ? undefined : "Suggestions"}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue/10 text-blue">
-                <PinIcon className="h-4 w-4" />
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-base font-medium text-ink">
-                  <Highlight text={d.name} query={query} />
-                </span>
-                <span className="block truncate text-sm text-slate">{d.region}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
+              {placesHeading && (
+                <li
+                  role="presentation"
+                  id={`${listId}-places`}
+                  className={headingClass}
+                  style={{ "--i": placesStart } as React.CSSProperties}
+                >
+                  {placesHeading}
+                </li>
+              )}
+              {items.slice(recentItems.length).map((item, i) => renderItem(item, recentItems.length + i, placesStart + 1 + i))}
+            </ul>
+          )}
+        </div>
         {showNoMatches && (
           <p className="px-3 py-3 text-sm text-slate">No matches yet. Try a city, region or country.</p>
         )}

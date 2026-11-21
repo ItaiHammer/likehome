@@ -16,6 +16,7 @@ let mockReservationResult
 let mockRoomResult
 let mockEditResult
 let mockEditCalls
+let mockBookedNights
 
 mock.module('../utils/user.ts', {
   namedExports: {
@@ -37,6 +38,10 @@ mock.module('../utils/user.ts', {
       userId: mockAuthUser ? mockAuthUser.id : null,
     }),
   },
+})
+
+mock.module('../utils/rooms.ts', {
+  namedExports: { getBookedNights: async () => ({ data: mockBookedNights.data ?? [], error: mockBookedNights.error }) },
 })
 
 mock.module('../utils/reservations.ts', {
@@ -94,6 +99,7 @@ beforeEach((t) => {
   }
 
   mockEditResult = null
+  mockBookedNights = { data: [], error: null }
   mockEditCalls = []
   
   liveRoomPrice.mock.resetCalls()
@@ -304,6 +310,37 @@ test('returns 409 on database exclusion-constraint violation', async () => {
   assert.equal(res.status, 409)
   const json = await res.json()
   assert.equal(json.error, 'Room is not available for those dates.')
+})
+
+test('returns 409 without saving when another booking holds the room on the new nights', async () => {
+  mockBookedNights = { data: [{ room_id: 'room-1', night: getDateFromToday(5) }], error: null }
+  const req = createMockRequest({ check_out: getDateFromToday(6) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 409)
+  assert.equal((await res.json()).error, 'Room is not available for those dates.')
+  assert.equal(mockEditCalls.length, 0)
+})
+
+test("the booking's own nights don't block moving it within them", async () => {
+  mockBookedNights = {
+    data: [2, 3, 4].map((d) => ({ room_id: 'room-1', night: getDateFromToday(d) })),
+    error: null,
+  }
+  const req = createMockRequest({ check_in: getDateFromToday(3), check_out: getDateFromToday(6) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  assert.equal(mockEditCalls.length, 1)
+})
+
+test('a failed booked-nights lookup leaves the decision to the database', async () => {
+  mockBookedNights = { data: null, error: { message: 'down' } }
+  const req = createMockRequest({ check_out: getDateFromToday(6) })
+  const res = await PATCH(req, { params: Promise.resolve({ id: 'res-1' }) })
+
+  assert.equal(res.status, 200)
+  assert.equal(mockEditCalls.length, 1)
 })
 
 test('maps edit errors to the appropriate HTTP status and message', async () => {

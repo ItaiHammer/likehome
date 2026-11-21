@@ -81,6 +81,38 @@ export function Tabs<T extends string>({
 }
 
 /**
+ * Small rounded toggle, pressed while `active` (the search filters' options).
+ *
+ *   <Chip active={wifi} onClick={() => setWifi(!wifi)}>Wi-Fi</Chip>
+ */
+export function Chip({
+  active,
+  children,
+  onClick,
+  className = "",
+}: {
+  active: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${
+        active
+          ? "border-blue bg-blue/10 text-blue-dark"
+          : "border-edge bg-surface text-slate hover:border-blue/60 hover:text-ink"
+      } ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
  * −/+ counter with a label, e.g. adults and children.
  *
  *   <Stepper label="Adults" hint="Ages 13 or above" value={adults} min={1} max={16} onChange={setAdults} />

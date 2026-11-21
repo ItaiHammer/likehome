@@ -6,9 +6,12 @@ import { AuthButton } from "@/components/auth-button";
 import { SignOutButton } from "@/components/sign-out-button";
 import { accountMenuItemsFor, accountMenuLinkFor, navItemsFor } from "@/lib/account/nav";
 import { accountLabel } from "@/lib/account/role";
+import { bellSummary, type BellSummary } from "@/lib/messages";
+import { getInbox } from "@/utils/inbox";
 import { getPointsBalance } from "@/utils/points";
 import { getViewer } from "@/utils/viewer";
 import { AccountMenu } from "./AccountMenu";
+import { MessagesBell } from "./MessagesBell";
 import { PointsPill } from "./PointsPill";
 
 function Logo() {
@@ -20,24 +23,49 @@ function Logo() {
   );
 }
 
+// A failed read leaves the bell empty instead of breaking the header
+async function loadBell(): Promise<BellSummary> {
+  try {
+    const { messages, error } = await getInbox();
+    if (!error) return bellSummary(messages);
+    console.error("Inbox read failed:", error);
+  } catch (error) {
+    console.error("Inbox read failed:", error);
+  }
+  return bellSummary([]);
+}
+
 export async function SiteHeader() {
   const viewer = await getViewer();
   const items = navItemsFor(viewer.role);
   const label = accountLabel(viewer.role);
   const menuLink = accountMenuLinkFor(viewer.role);
-  // Rewards are for personal accounts (they live under /MyBookings)
-  const pointsRead = viewer.role === "personal" && viewer.userId ? await getPointsBalance(viewer.userId) : null;
+  const bellRole = viewer.role === "personal" || viewer.role === "business" ? viewer.role : null;
+  // Rewards are for personal accounts (they live under /MyBookings); both reads run together
+  const [bell, pointsRead] = await Promise.all([
+    viewer.role === "personal" ? loadBell() : bellSummary([]),
+    viewer.role === "personal" && viewer.userId ? getPointsBalance(viewer.userId) : null,
+  ]);
   // A failed read hides the pill rather than showing 0 pts
   const points = pointsRead && !pointsRead.error ? pointsRead.balance : null;
   return (
     <header className="relative border-b border-edge bg-surface">
-      <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
-        <Logo />
+      {/* With the bell, the controls only fit beside the logo at 360px with tighter gaps on phones */}
+      {/* From md the links sit in a middle column between two equal sides, so they stay centered on the page
+          however wide the controls on the right get */}
+      <div className={`mx-auto flex h-16 max-w-[1400px] items-center justify-between px-4 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr] lg:px-10 ${bellRole ? "gap-2 sm:gap-4" : "gap-4"}`}>
+        <div className="md:justify-self-start">
+          <Logo />
+        </div>
         <nav aria-label="Main" className="hidden md:block">
           <DesktopNav items={items} />
         </nav>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
+        <div className={`flex items-center md:justify-self-end ${bellRole ? "gap-1 sm:gap-2" : "gap-2"}`}>
+          {/* 8px apart, so the two buttons' 44px tap areas meet without overlapping */}
+          <div className="flex items-center gap-2">
+            {bellRole && <MessagesBell role={bellRole} unread={bell.unread} messages={bell.latest} />}
+            <ThemeToggle />
+          </div>
           {points !== null && <PointsPill points={points} />}
           <AuthButton signedIn={viewer.role !== "signed-out"}>
             {menuLink ? (

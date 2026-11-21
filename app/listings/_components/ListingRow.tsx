@@ -6,10 +6,12 @@ import { ListingCover } from "./ListingCover";
 
 // The SAME card renders both actual and development-only sample listings.
 // Sample mode changes only actions so test data cannot reach the real editor.
-export function ListingRow({ listing, index, isSample = false }: {
+// `headingLevel` h3 fits the card under a section's h2 (the home page).
+export function ListingRow({ listing, index, isSample = false, headingLevel: Heading = "h2" }: {
   listing: Listing;
   index: number;
   isSample?: boolean;
+  headingLevel?: "h2" | "h3";
 }) {
   const editHref = `/listings/${listing.id}/edit`;
   const rate = lowestRate(listing.rooms);
@@ -30,7 +32,7 @@ export function ListingRow({ listing, index, isSample = false }: {
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
             <div className="min-w-0">
-              <h2 className="font-serif text-[32px] leading-[38px] text-ink">{listing.name}</h2>
+              <Heading className="font-serif text-[32px] leading-[38px] text-ink">{listing.name}</Heading>
               <p className="mt-1 text-slate">{formatLocation(listing)}</p>
             </div>
             {rate !== null && (
