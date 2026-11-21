@@ -1,7 +1,9 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
+import { POPULAR_DESTINATIONS } from "@/app/_data/destinations";
 import { HotelPhoto } from "@/app/MyBookings/_components/HotelPhoto";
-import { ArrowIcon, arrowSlideClass, Card, tintLink } from "@/app/_components/ui";
+import { ArrowIcon, arrowSlideClass, Card, SectionHeading, tintLink } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import type { HomeShortcut } from "@/lib/account/home";
 import { bookingSummary, changeBlocker } from "@/lib/bookings";
@@ -11,14 +13,14 @@ import { guestToday } from "@/utils/guest-today";
 import { getMyBookings } from "@/utils/history";
 import { getInbox } from "@/utils/inbox";
 import { getPointsBalance } from "@/utils/points";
-import { CardAction, MembersLabel } from "./ShortcutTile";
-import { blockFrame, blockTitle, cardLabel, pulse } from "./styles";
+import { CardAction } from "./ShortcutTile";
+import { blockFrame, cardLabel, pulse } from "./styles";
 
 const TITLE_ID = "traveler-summary-title";
 const SHORTCUTS_ID = "traveler-shortcuts-title";
 
-// Personal: the next trip, points and shortcuts in the sign-up card's white frame. Phones drop the
-// frame: the heading sits on the page and the cards stack. Each card's read streams in on its own.
+// Personal: the next trip, points and shortcuts in a white frame, under a heading lined up with the
+// rows below. Phones drop the frame and the cards stack. Each card's read streams in on its own.
 export function TravelerSummary({
   accountId,
   title,
@@ -31,16 +33,10 @@ export function TravelerSummary({
   shortcuts: HomeShortcut[];
 }) {
   return (
-    <section aria-labelledby={TITLE_ID} className={`${blockFrame} sm:pb-9`}>
-      <MembersLabel />
-      <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1.5">
-        <h2 id={TITLE_ID} className={blockTitle}>
-          {title}
-        </h2>
-        <p className="text-base leading-6 text-slate">{body}</p>
-      </div>
+    <section aria-labelledby={TITLE_ID}>
+      <SectionHeading id={TITLE_ID} title={title} subtitle={body} />
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <div className={`mt-6 grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] ${blockFrame} sm:py-9`}>
         <div className="grid sm:col-span-2 lg:col-span-1">
           <Suspense fallback={<div aria-hidden className={`h-72 sm:h-44 ${pulse}`} />}>
             <NextTrip />
@@ -70,37 +66,67 @@ async function loadNextTrip() {
 async function NextTrip() {
   const result = await loadNextTrip();
   if (!result) {
-    return <NoTrip title="Your trips" body="We couldn’t load your next trip just now." action="Open My Bookings" href={PAGE_ROUTES.MY_BOOKINGS} />;
+    return <TripCard label="Next trip" title="Your trips" body="We couldn’t load your next trip just now." action="Open My Bookings" href={PAGE_ROUTES.MY_BOOKINGS} />;
   }
   const { today, trip } = result;
   if (!trip) {
-    return <NoTrip title="No trips planned yet" body="When you book a stay, it shows up here." action="Browse stays" href={PAGE_ROUTES.SEARCH} />;
+    return <FirstTrip />;
   }
 
   return (
-    <Card href={`${PAGE_ROUTES.MY_BOOKINGS}/${trip.id}`} padding="none" className="overflow-hidden">
-      <div className="flex h-full flex-col sm:flex-row">
-        <HotelPhoto url={trip.photoUrl} className="h-36 w-full rounded-none sm:h-auto sm:min-h-40 sm:w-36" />
-        <div className="flex min-w-0 flex-1 flex-col p-5 sm:px-[22px]">
-          <h3 className={cardLabel}>{tripLabel(trip.checkIn, today)}</h3>
-          <p className="mt-1.5 font-serif text-[26px] leading-8 text-ink [overflow-wrap:anywhere]">{trip.hotelName}</p>
-          <p className="mt-1.5 text-[15px] leading-6 text-slate">{bookingSummary(trip)}</p>
-          {/* From check-in day on, the booking page only shows it */}
-          <CardAction>{changeBlocker(trip, today) ? "View booking" : "View or change booking"}</CardAction>
-        </div>
-      </div>
-    </Card>
+    <TripCard
+      href={`${PAGE_ROUTES.MY_BOOKINGS}/${trip.id}`}
+      photo={<HotelPhoto url={trip.photoUrl} className="h-36 w-full rounded-none sm:h-auto sm:min-h-40 sm:w-36" />}
+      label={tripLabel(trip.checkIn, today)}
+      title={trip.hotelName}
+      body={bookingSummary(trip)}
+      // From check-in day on, the booking page only shows it
+      action={changeBlocker(trip, today) ? "View booking" : "View or change booking"}
+    />
   );
 }
 
-function NoTrip({ title, body, action, href }: { title: string; body: string; action: string; href: string }) {
+// No trips yet: the booked trip's shape, with a destination photo in the hotel photo's place
+function FirstTrip() {
+  const { photo } = POPULAR_DESTINATIONS.near[0];
   return (
-    <Card href={href}>
-      <div className="flex h-full flex-col">
-        <h3 className={cardLabel}>Next trip</h3>
-        <p className="mt-1.5 font-serif text-[26px] leading-8 text-ink">{title}</p>
-        <p className="mt-1.5 text-[15px] leading-6 text-slate">{body}</p>
-        <CardAction>{action}</CardAction>
+    <TripCard
+      href={PAGE_ROUTES.SEARCH}
+      photo={
+        <div className="relative h-36 w-full shrink-0 sm:h-auto sm:min-h-40 sm:w-36">
+          <Image src={photo} alt="" fill sizes="(min-width: 640px) 144px, 100vw" placeholder="blur" className="object-cover" />
+        </div>
+      }
+      label="Next trip"
+      title="Plan your first trip"
+      body="When you book a stay, it shows up here."
+      action="Browse stays"
+    />
+  );
+}
+
+// The next-trip card: a photo beside the text when there is one
+function TripCard({ href, photo, label, title, body, action }: { href: string; photo?: React.ReactNode; label: string; title: string; body: string; action: string }) {
+  const text = (
+    <>
+      <h3 className={cardLabel}>{label}</h3>
+      <p className="mt-1.5 font-serif text-[26px] leading-8 text-ink [overflow-wrap:anywhere]">{title}</p>
+      <p className="mt-1.5 text-[15px] leading-6 text-slate">{body}</p>
+      <CardAction>{action}</CardAction>
+    </>
+  );
+  if (!photo) {
+    return (
+      <Card href={href}>
+        <div className="flex h-full flex-col">{text}</div>
+      </Card>
+    );
+  }
+  return (
+    <Card href={href} padding="none" className="overflow-hidden">
+      <div className="flex h-full flex-col sm:flex-row">
+        {photo}
+        <div className="flex min-w-0 flex-1 flex-col p-5 sm:px-[22px]">{text}</div>
       </div>
     </Card>
   );

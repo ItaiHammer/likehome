@@ -13,7 +13,7 @@ const TITLE_ID = "owner-today-title";
 export function OwnerToday({ title, body, shortcuts }: { title: string; body: string; shortcuts: HomeShortcut[] }) {
   return (
     <section aria-labelledby={TITLE_ID} className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
-      <div className={`flex flex-col ${blockFrame} sm:pb-8`}>
+      <div className={`flex flex-col ${blockFrame} sm:py-8`}>
         <h2 id={TITLE_ID} className={blockTitle}>
           {title}
         </h2>
