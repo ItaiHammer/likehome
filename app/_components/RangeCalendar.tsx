@@ -2,28 +2,16 @@
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { quickDateRanges, type QuickDates } from "@/lib/quick-dates";
-import { addDays, formatDate, formatLong, formatRange, formatShort, nightsBetween, todayISO } from "./dates";
+import { addDays, formatDate, formatLong, formatMonth, formatRange, formatShort, monthCells, monthOf, nightsBetween, shiftMonth, todayISO, type Month } from "./dates";
 import { buttonPrimary, buttonSecondary, Chip, iconButton } from "./ui";
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const ARROW_STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 const NO_BLOCKED: number[] = [];
 const FIELD_TABS = [
   { id: "in", label: "Check-in" },
   { id: "out", label: "Check-out" },
 ] as const;
-
-type Month = { y: number; m: number };
-const monthOf = (iso: string): Month => {
-  const [y, m] = iso.split("-").map(Number);
-  return { y, m: m - 1 };
-};
-const shiftMonth = ({ y, m }: Month, delta: number): Month => {
-  const t = y * 12 + m + delta;
-  return { y: Math.floor(t / 12), m: t % 12 };
-};
-const isoOf = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
 const noSubscribe = () => () => {};
 
@@ -205,13 +193,7 @@ export function RangeCalendar({
     }
   }
 
-  const cells: (string | null)[] = [];
-  if (shown) {
-    const lead = new Date(Date.UTC(shown.y, shown.m, 1)).getUTCDay();
-    const count = new Date(Date.UTC(shown.y, shown.m + 1, 0)).getUTCDate();
-    for (let i = 0; i < lead; i++) cells.push(null);
-    for (let d = 1; d <= count; d++) cells.push(isoOf(shown.y, shown.m, d));
-  }
+  const cells = shown ? monthCells(shown) : [];
   const weeks = Array.from({ length: Math.ceil(cells.length / 7) }, (_, w) => cells.slice(w * 7, w * 7 + 7));
   const cascadeAt = (i: number) => ({ "--i": i }) as React.CSSProperties;
 
@@ -279,7 +261,7 @@ export function RangeCalendar({
           <Chevron d="M15 6l-6 6 6 6" />
         </button>
         <p className="text-base font-semibold text-ink" aria-live="polite">
-          {shown ? `${MONTHS[shown.m]} ${shown.y}` : ""}
+          {shown ? formatMonth(shown) : ""}
         </p>
         <button type="button" aria-label="Next month" disabled={!shown} onClick={() => shown && setView(shiftMonth(shown, 1))} className={iconButton}>
           <Chevron d="M9 6l6 6-6 6" />

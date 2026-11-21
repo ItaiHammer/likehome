@@ -273,6 +273,9 @@ export function SearchExperience({
   // On tablets Search and Ask AI sit under the fields, so picked dates and the guest count fit in the row
   const searchButtonSize = compact ? "h-12 lg:h-auto lg:w-[56px]" : "h-14 lg:h-auto lg:w-[66px]";
   const toggleSize = compact ? "h-12 lg:h-auto lg:w-[54px]" : "h-14 lg:h-auto lg:w-[58px]";
+  // The homepage bar lines up under the centered title: from xl an empty space as wide as the two buttons
+  // and their gaps (66 + 58 + 2 × 10 = 144px) balances them on the left
+  const centerBar = compact ? "" : "xl:-mx-[72px] xl:pl-[144px]";
 
   // The form still submits as normal (including Apply filters' requestSubmit)
   const rememberSearch = (event: FormEvent<HTMLFormElement>) =>
@@ -310,7 +313,7 @@ export function SearchExperience({
           onInput={syncSummary}
           onClick={syncSummary}
           onKeyUp={syncSummary}
-          className={`flex min-w-0 flex-1 flex-col gap-2.5 lg:flex-row ${collapsible ? "max-sm:relative" : ""}`}
+          className={`flex min-w-0 flex-1 flex-col gap-2.5 lg:flex-row ${centerBar} ${collapsible ? "max-sm:relative" : ""}`}
         >
           {collapsible && (
             <div className="flex gap-3 sm:hidden">
@@ -419,7 +422,7 @@ export function SearchExperience({
         </form>
       ) : (
         <>
-        <form action="/search" onSubmit={submitAiSearch} aria-busy={aiBusy} className="flex min-w-0 flex-1 flex-col gap-2.5 lg:flex-row">
+        <form action="/search" onSubmit={submitAiSearch} aria-busy={aiBusy} className={`flex min-w-0 flex-1 flex-col gap-2.5 lg:flex-row ${centerBar}`}>
           <div
             className={`flex min-w-0 flex-1 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md ${barPadding}`}
           >

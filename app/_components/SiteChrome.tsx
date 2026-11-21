@@ -51,12 +51,16 @@ export async function SiteHeader() {
   return (
     <header className="relative border-b border-edge bg-surface">
       {/* With the bell, the controls only fit beside the logo at 360px with tighter gaps on phones */}
-      <div className={`mx-auto flex h-16 max-w-[1400px] items-center justify-between px-4 sm:px-6 lg:px-10 ${bellRole ? "gap-2 sm:gap-4" : "gap-4"}`}>
-        <Logo />
+      {/* From md the links sit in a middle column between two equal sides, so they stay centered on the page
+          however wide the controls on the right get */}
+      <div className={`mx-auto flex h-16 max-w-[1400px] items-center justify-between px-4 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr] lg:px-10 ${bellRole ? "gap-2 sm:gap-4" : "gap-4"}`}>
+        <div className="md:justify-self-start">
+          <Logo />
+        </div>
         <nav aria-label="Main" className="hidden md:block">
           <DesktopNav items={items} />
         </nav>
-        <div className={`flex items-center ${bellRole ? "gap-1 sm:gap-2" : "gap-2"}`}>
+        <div className={`flex items-center md:justify-self-end ${bellRole ? "gap-1 sm:gap-2" : "gap-2"}`}>
           {/* 8px apart, so the two buttons' 44px tap areas meet without overlapping */}
           <div className="flex items-center gap-2">
             {bellRole && <MessagesBell role={bellRole} unread={bell.unread} messages={bell.latest} />}

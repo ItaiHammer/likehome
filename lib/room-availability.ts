@@ -10,7 +10,7 @@ import { roomFits } from './stay-filters.ts';
 export type RoomUnit = { id: string; bookedNights: string[] };
 type WithUnits = { id: string; units?: RoomUnit[] };
 
-const coversNight = (checkIn: string, checkOut: string) => (night: string) => night >= checkIn && night < checkOut;
+export const coversNight = (checkIn: string, checkOut: string) => (night: string) => night >= checkIn && night < checkOut;
 
 /**
  * The room id to book for these dates: the first identical room that's free every night, or null

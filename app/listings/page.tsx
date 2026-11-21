@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { SkyBackground } from "@/app/_components/SkyBackground";
 import { Button } from "@/app/_components/ui";
@@ -8,8 +9,11 @@ import type { Listing } from "@/types/listing";
 import { getCurrentUser } from "@/utils/current-user";
 import { getAccount } from "@/utils/accounts";
 import { getMyListings } from "@/utils/listings";
+import { guestToday } from "@/utils/guest-today";
+import { CALENDAR_ANCHOR, calendarDateParam } from "@/lib/owner-calendar";
 import { OwnerSidebar } from "@/app/property-dashboard/_components/OwnerSidebar";
 import { EmptyListings } from "./_components/EmptyListings";
+import { ListingsCalendar, ListingsCalendarSkeleton } from "./_components/ListingsCalendar";
 import { ListingCreationToast } from "./_components/ListingCreationToast";
 import { ListingPreview } from "./_components/ListingPreview";
 import { ListingRow } from "./_components/ListingRow";
@@ -17,14 +21,14 @@ import { ListingRow } from "./_components/ListingRow";
 export const metadata: Metadata = { title: "My listings - LikeHome" };
 
 type Props = {
-  searchParams: Promise<{ sample?: string; id?: string; created?: string }>;
+  searchParams: Promise<{ sample?: string; id?: string; created?: string; date?: string }>;
 };
 
 export default async function MyListingsPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect(PAGE_ROUTES.LOGIN);
 
-  const { sample, id, created } = await searchParams;
+  const { sample, id, created, date } = await searchParams;
   const isDevelopment = process.env.NODE_ENV === "development";
   const isSample = isDevelopment && (sample === "1" || sample === "preview");
 
@@ -70,6 +74,10 @@ export default async function MyListingsPage({ searchParams }: Props) {
     );
   }
 
+  // The calendar opens on ?date= (the homepage's day tiles link there), else the owner's today
+  const today = await guestToday();
+  const calendarDate = calendarDateParam(date) ?? today;
+
   const toastKind =
     created === "1" && !isSample
       ? "created"
@@ -93,6 +101,13 @@ export default async function MyListingsPage({ searchParams }: Props) {
       <div className="mx-auto grid w-full max-w-6xl flex-1 items-start gap-6 px-4 pb-12 sm:px-6 lg:grid-cols-[248px_minmax(0,1fr)] lg:gap-8">
         <OwnerSidebar active="listings" name={ownerName} email={ownerEmail} className="w-full lg:sticky lg:top-5" />
         <div className="min-w-0 space-y-5">
+          {listings.length > 0 && (
+            <div id={CALENDAR_ANCHOR} className="scroll-mt-6">
+              <Suspense fallback={<ListingsCalendarSkeleton />}>
+                <ListingsCalendar listings={listings} today={today} date={calendarDate} sample={isSample} />
+              </Suspense>
+            </div>
+          )}
           {(isDevelopment || listings.length > 0) && (
             <div className="flex flex-wrap items-center gap-3">
               {isDevelopment && (

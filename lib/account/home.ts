@@ -19,6 +19,8 @@ export type HomeSection =
   | 'traveler-summary'
   // Business: the title card with its shortcuts, and who is staying or arriving
   | 'owner-today'
+  // Rooms booked each night this week, linking into the My Listings calendar
+  | 'owner-week'
   | 'owner-properties'
   | 'owner-stats'
   | 'recently-viewed'
@@ -82,7 +84,7 @@ const CONTENT: Record<HomeRole, HomeContent> = {
       ],
     },
     recommendedCards: SIGNED_IN_CARDS,
-    sections: ['owner-today', 'owner-properties', 'owner-stats', ...DEFAULT_SECTIONS],
+    sections: ['owner-today', 'owner-week', 'owner-properties', 'owner-stats', ...DEFAULT_SECTIONS],
   },
 }
 

@@ -4,6 +4,7 @@ import { JoinCard } from "./_components/home/JoinCard";
 import { OwnerProperties, OwnerPropertiesSkeleton } from "./_components/home/OwnerProperties";
 import { OwnerStats } from "./_components/home/OwnerStats";
 import { OwnerToday } from "./_components/home/OwnerToday";
+import { OwnerWeek, OwnerWeekSkeleton } from "./_components/home/OwnerWeek";
 import { SavedHotels } from "./_components/home/SavedHotels";
 import { TravelerSummary } from "./_components/home/TravelerSummary";
 import { PopularDestinations } from "./_components/PopularDestinations";
@@ -29,6 +30,11 @@ export default async function Home() {
         <TravelerSummary accountId={viewer.userId} title={welcome.title} body={welcome.body} shortcuts={welcome.shortcuts} />
       ) : null,
     "owner-today": welcome ? <OwnerToday title={welcome.title} body={welcome.body} shortcuts={welcome.shortcuts} /> : null,
+    "owner-week": viewer.userId ? (
+      <Suspense fallback={<OwnerWeekSkeleton />}>
+        <OwnerWeek ownerId={viewer.userId} />
+      </Suspense>
+    ) : null,
     "owner-properties": viewer.userId ? (
       <Suspense fallback={<OwnerPropertiesSkeleton />}>
         <OwnerProperties ownerId={viewer.userId} />
@@ -90,8 +96,12 @@ export default async function Home() {
       </section>
 
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-12 sm:px-6">
-        {sections.map((id) => (
-          <Fragment key={id}>{sectionContent[id]}</Fragment>
+        {sections.map((id, i) => (
+          <Fragment key={id}>
+            {/* Browsing starts at the destinations: the viewer's own sections are above the line */}
+            {id === "destinations" && i > 0 && <hr className="border-0 border-t border-edge" />}
+            {sectionContent[id]}
+          </Fragment>
         ))}
       </div>
     </main>

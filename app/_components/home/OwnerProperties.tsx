@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ListingRow } from "@/app/listings/_components/ListingRow";
 import { ArrowIcon, arrowSlideClass, SectionHeading, sectionLinkClass } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { getMyListings } from "@/utils/listings";
+import { loadOwnerListings } from "./owner-history";
 import { ShortcutTile } from "./ShortcutTile";
 import { pulse } from "./styles";
 
@@ -10,20 +10,9 @@ const TITLE = "Your properties";
 const TITLE_ID = "owner-properties-title";
 const SHOWN = 2;
 
-async function loadListings(ownerId: string) {
-  try {
-    const { data, error } = await getMyListings(ownerId);
-    if (!error && data) return data;
-    console.error("Listings read failed", error);
-  } catch (error) {
-    console.error("Listings read failed", error);
-  }
-  return null;
-}
-
 // The first two of the owner's listings, as My Listings shows them. A failed read hides the section.
 export async function OwnerProperties({ ownerId }: { ownerId: string }) {
-  const listings = await loadListings(ownerId);
+  const listings = await loadOwnerListings(ownerId);
   if (!listings) return null;
   const shown = listings.slice(0, SHOWN);
 

@@ -58,7 +58,7 @@ test('business: guests, properties and how they are doing, before the shared sec
       ],
     },
     recommendedCards: 3,
-    sections: ['owner-today', 'owner-properties', 'owner-stats', 'destinations', 'recommended'],
+    sections: ['owner-today', 'owner-week', 'owner-properties', 'owner-stats', 'destinations', 'recommended'],
   })
 })
 
