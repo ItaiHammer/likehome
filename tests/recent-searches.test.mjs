@@ -84,6 +84,7 @@ test('datesLabel: the dates field’s text, empty with no dates', () => {
   assert.equal(datesLabel('2026-12-03', '2026-12-06'), 'Dec 3 - Dec 6')
   assert.equal(datesLabel('2026-12-03', ''), 'Dec 3 - Add check-out')
   assert.equal(datesLabel('', ''), '')
+  assert.equal(datesLabel('', '2026-11-29'), 'Add check-in - Nov 29')
 })
 
 test('addRecentSearch: newest first, at most three', () => {

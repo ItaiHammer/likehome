@@ -304,6 +304,7 @@ export function SearchExperience({
       {mode === "standard" ? (
         <form
           ref={formRef}
+          data-search-bar
           action="/search"
           onSubmit={rememberSearch}
           onInput={syncSummary}

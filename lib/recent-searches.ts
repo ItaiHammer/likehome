@@ -60,9 +60,11 @@ export function readSearchFields(source: FieldSource): SearchFields {
   return fields
 }
 
-/** "Nov 27 - Nov 29", "Nov 27 - Add check-out" while only check-in is set, or "" with no dates */
+/** "Nov 27 - Nov 29", "Nov 27 - Add check-out" / "Add check-in - Nov 29" while one end is set, or "" with no dates */
 export function datesLabel(checkIn = '', checkOut = '') {
-  return checkIn && checkOut ? formatRange(checkIn, checkOut) : checkIn ? `${formatShort(checkIn)} - Add check-out` : ''
+  if (checkIn && checkOut) return formatRange(checkIn, checkOut)
+  if (checkIn) return `${formatShort(checkIn)} - Add check-out`
+  return checkOut ? `Add check-in - ${formatShort(checkOut)}` : ''
 }
 
 /** "Nov 27 - Nov 29 · 2 guests", or "Any dates · 2 guests" */

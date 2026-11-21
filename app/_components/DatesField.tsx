@@ -101,7 +101,8 @@ export function DatesField({
       </button>
 
       <input type="hidden" name="checkIn" value={checkIn} />
-      <input type="hidden" name="checkOut" value={checkOut} />
+      {/* A check-out with no check-in stays on screen but isn't searched, so /search never gets half a range */}
+      <input type="hidden" name="checkOut" value={checkIn ? checkOut : ""} />
       <input type="hidden" name="tz" value={timeZone} />
 
       <div

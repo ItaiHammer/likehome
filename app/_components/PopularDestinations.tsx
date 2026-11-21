@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
+import { readSearchFields, type SearchFields } from "@/lib/recent-searches";
+import { searchQuery } from "@/lib/stay-filters";
 import { POPULAR_DESTINATIONS, POPULAR_TABS, type DestinationTab } from "../_data/destinations";
 import { browserTimeZone } from "./dates";
 import { isMotionReduced, useReducedMotion } from "./motion";
@@ -27,10 +29,11 @@ function slideStep(track: HTMLElement) {
   return slides.length > 1 ? slides[1].offsetLeft - slides[0].offsetLeft : track.clientWidth;
 }
 
-function searchHref(where: string, tz: string) {
-  const params = new URLSearchParams({ where });
-  if (tz) params.set("tz", tz);
-  return `${PAGE_ROUTES.SEARCH}?${params}`;
+// A tile's search: its place, plus the bar's dates (only as a full range) and party
+function searchHref(where: string, tz: string, bar: SearchFields | null) {
+  const dates = bar?.checkIn && bar.checkOut ? { checkIn: bar.checkIn, checkOut: bar.checkOut } : {};
+  const party = bar ? { adults: String(bar.adults), children: String(bar.children) } : {};
+  return `${PAGE_ROUTES.SEARCH}?${searchQuery({ where, ...dates, ...party, tz })}`;
 }
 
 /*
@@ -63,6 +66,14 @@ export function PopularDestinations() {
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ id: number; x: number; left: number; moved: boolean; lastX: number; lastT: number; v: number } | null>(null);
   const suppressClick = useRef(false);
+  // The page's search bar (if any), read as it reads itself on submit, each time a
+  // tile is pressed or focused so the tile's link carries its dates and party
+  const [bar, setBar] = useState<SearchFields | null>(null);
+  const readBar = () => {
+    const form = document.querySelector<HTMLFormElement>("form[data-search-bar]");
+    const next = form ? readSearchFields(new FormData(form)) : null;
+    setBar((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+  };
   const reduced = useReducedMotion();
   const pageVisible = useSyncExternalStore(subscribeVisibility, () => document.visibilityState === "visible", () => false);
   // The search bar's tz, read the same way (empty in the server render); re-read when the tab comes back
@@ -425,9 +436,11 @@ export function PopularDestinations() {
                     mouse drag-to-scroll. No prefetch: autoplay brings every tile into
                     view, and each one is a dynamic search page. */}
                 <Link
-                  href={searchHref(`${d.name}, ${d.region}`, timeZone)}
+                  href={searchHref(`${d.name}, ${d.region}`, timeZone, bar)}
                   prefetch={false}
                   draggable={false}
+                  onPointerDown={readBar}
+                  onFocus={readBar}
                   onPointerMove={tilt}
                   onPointerLeave={untilt}
                   aria-label={`Search stays in ${d.name}, ${d.region}`}
