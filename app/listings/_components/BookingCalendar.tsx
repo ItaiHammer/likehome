@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { formatDate, formatLong, formatMonth, monthOf, shiftMonth, type Month } from "@/app/_components/dates";
+import { formatLong, formatMonth, monthOf, shiftMonth, type Month } from "@/app/_components/dates";
+import { DayBookings } from "@/app/_components/DayBookings";
 import { PropertyDot } from "@/app/_components/PropertyDot";
 import { ArrowIcon, arrowSlideClass, Chip, ChevronIcon, iconButtonClass, sectionLinkClass } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
@@ -13,11 +14,8 @@ import {
   forProperty,
   isFull,
   monthGrid,
-  movementSummary,
   roomsAcross,
   roomsBookedLabel,
-  stayNote,
-  stayPlace,
   type BusyLevel,
   type CalendarDay,
   type CalendarProperty,
@@ -132,7 +130,20 @@ export function BookingCalendar({
           </div>
         </div>
 
-        <DayPanel day={day} today={today} byId={byId} colorOf={colorOf} />
+        <DayBookings
+          day={day}
+          today={today}
+          byId={byId}
+          colorOf={colorOf}
+          action={
+            dayGuests(day).length > 0 && (
+              <Link href={PAGE_ROUTES.OWNER_MESSAGES} className={`${sectionLinkClass} text-sm`}>
+                Message these guests
+                <ArrowIcon className={arrowSlideClass} />
+              </Link>
+            )
+          }
+        />
       </div>
     </>
   );
@@ -188,55 +199,5 @@ function DayButton({
         )}
       </span>
     </button>
-  );
-}
-
-function DayPanel({
-  day,
-  today,
-  byId,
-  colorOf,
-}: {
-  day: CalendarDay;
-  today: string;
-  byId: Map<string, CalendarProperty>;
-  colorOf: (s: CalendarStay) => number;
-}) {
-  const guests = dayGuests(day);
-  return (
-    <section aria-label="Selected day" className="rounded-[10px] border border-edge px-4 pb-1.5 pt-4">
-      <div aria-live="polite">
-        <p className="text-[13px] font-semibold text-blue-dark">
-          {formatDate(day.date)}
-          {day.date === today && " · Today"}
-        </p>
-        <p className="mb-1 mt-0.5 font-serif text-2xl leading-[30px] text-ink">{roomsBookedLabel(day)}</p>
-        <p className="mb-1.5 text-[13px] text-slate">{movementSummary(day)}</p>
-      </div>
-      {guests.length === 0 ? (
-        <p className="border-t border-edge/60 py-3 text-sm text-slate">Nobody is staying this night.</p>
-      ) : (
-        <>
-          <ul>
-            {guests.map((s) => (
-              <li key={s.id} className="flex gap-2.5 border-t border-edge/60 py-3">
-                <PropertyDot color={colorOf(s)} className="mt-[5px]" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-semibold text-ink">{s.guest}</p>
-                  <p className="text-[13px] text-slate">{stayPlace(s, byId.get(s.hotelId))}</p>
-                  <p className="mt-0.5 text-[13px] text-blue-dark">{stayNote(s, day.date)}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="border-t border-edge/60 py-3">
-            <Link href={PAGE_ROUTES.OWNER_MESSAGES} className={`${sectionLinkClass} text-sm`}>
-              Message these guests
-              <ArrowIcon className={arrowSlideClass} />
-            </Link>
-          </div>
-        </>
-      )}
-    </section>
   );
 }

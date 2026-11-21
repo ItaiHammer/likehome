@@ -111,34 +111,8 @@ export function monthGrid(month: Month, stays: CalendarStay[], rooms: number): (
   return monthCells(month).map((date) => (date ? calendarDay(date, stays, rooms) : null))
 }
 
-export type Movement = { kind: 'arrives' | 'leaves'; date: string; stay: CalendarStay }
-
-/** Arrivals and departures over these days, in date order, arrivals first on each day */
-export function movements(days: CalendarDay[]): Movement[] {
-  return days.flatMap((d) => [
-    ...d.arrivals.map((stay) => ({ kind: 'arrives' as const, date: d.date, stay })),
-    ...d.departures.map((stay) => ({ kind: 'leaves' as const, date: d.date, stay })),
-  ])
-}
-
-/** "Arrives today", "Leaves Thu" */
-export function movementLabel(m: Movement, today: string): string {
-  return `${m.kind === 'arrives' ? 'Arrives' : 'Leaves'} ${m.date === today ? 'today' : formatWeekday(m.date)}`
-}
-
 /** "Today", then weekday names */
 export const dayName = (date: string, today: string) => (date === today ? 'Today' : formatWeekday(date))
-
-export const CALENDAR_HINT = 'Each day opens the full calendar on that date.'
-
-/** The week card's note on its first full night: "Friday is full" */
-export function fullNightNote(days: CalendarDay[], today: string): { title: string; body: string } | null {
-  const full = days.find(isFull)
-  if (!full) return null
-  const name = full.date === today ? 'Tonight' : formatWeekday(full.date, true)
-  const rooms = full.rooms === 1 ? 'Your only room is' : `All ${full.rooms} rooms are`
-  return { title: `${name} is full`, body: `${rooms} booked. ${CALENDAR_HINT}` }
-}
 
 /** Under one guest in the day panel: "Arrives today", "Leaves today" or "Until Dec 9" */
 export function stayNote(stay: CalendarStay, date: string): string {
@@ -156,6 +130,9 @@ export function movementSummary(day: CalendarDay): string {
 
 /** Everyone the day panel lists: guests staying that night, then those who left that morning */
 export const dayGuests = (day: CalendarDay) => [...day.staying, ...day.departures]
+
+/** "1 reservation", "3 reservations": the reservations the day panel lists */
+export const reservationsLabel = (day: CalendarDay) => plural(dayGuests(day).length, 'reservation')
 
 /** "3 of 8 rooms booked" */
 export const roomsBookedLabel = (day: CalendarDay) => `${day.booked} of ${plural(day.rooms, 'room')} booked`

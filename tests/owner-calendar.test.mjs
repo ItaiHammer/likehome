@@ -99,34 +99,21 @@ test('one property filter keeps only its rooms and stays', () => {
   assert.deepEqual(loft.stays.map((s) => s.id), ['b'])
 })
 
-test('the week: seven days, its arrivals and departures, and the first full night', () => {
+test('the week: seven days named from today, and each day counts its reservations', () => {
   const stays = cal.calendarStays([
     booking({ id: 'a', checkIn: '2026-11-20', checkOut: '2026-11-22' }),
     booking({ id: 'b', checkIn: '2026-11-24', checkOut: '2026-11-30' }),
     booking({ id: 'c', checkIn: '2026-11-18', checkOut: '2026-11-20' }),
   ])
-  const days = cal.calendarDays('2026-11-20', 7, stays, 1)
+  const days = cal.calendarDays('2026-11-20', 7, stays, 2)
   assert.equal(days.length, 7)
   assert.equal(days[6].date, '2026-11-26')
-  const moves = cal.movements(days)
-  assert.deepEqual(
-    moves.map((m) => [m.kind, m.stay.id, cal.movementLabel(m, '2026-11-20')]),
-    [
-      ['arrives', 'a', 'Arrives today'],
-      ['leaves', 'c', 'Leaves today'],
-      ['leaves', 'a', 'Leaves Sun'],
-      ['arrives', 'b', 'Arrives Tue'],
-    ],
-  )
   assert.equal(cal.dayName('2026-11-20', '2026-11-20'), 'Today')
   assert.equal(cal.dayName('2026-11-21', '2026-11-20'), 'Sat')
-  assert.deepEqual(cal.fullNightNote(days, '2026-11-20'), {
-    title: 'Tonight is full',
-    body: 'Your only room is booked. Each day opens the full calendar on that date.',
-  })
-  const later = cal.calendarDays('2026-11-22', 7, stays, 1)
-  assert.equal(cal.fullNightNote(later, '2026-11-22').title, 'Tuesday is full')
-  assert.equal(cal.fullNightNote(cal.calendarDays('2026-11-21', 7, stays, 4), '2026-11-21'), null)
+  // Nov 20: a arrives, c leaves that morning
+  assert.equal(cal.reservationsLabel(days[0]), '2 reservations')
+  assert.equal(cal.reservationsLabel(days[1]), '1 reservation')
+  assert.equal(cal.reservationsLabel(days[3]), '0 reservations')
 })
 
 test('day panel notes and summary', () => {
