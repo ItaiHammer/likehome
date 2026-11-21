@@ -6,7 +6,7 @@ import { AuthButton } from "@/components/auth-button";
 import { SignOutButton } from "@/components/sign-out-button";
 import { accountMenuItemsFor, accountMenuLinkFor, navItemsFor } from "@/lib/account/nav";
 import { accountLabel } from "@/lib/account/role";
-import { getPointsBalanceOnce } from "@/utils/rewards";
+import { getPointsBalance } from "@/utils/points";
 import { getViewer } from "@/utils/viewer";
 import { AccountMenu } from "./AccountMenu";
 import { PointsPill } from "./PointsPill";
@@ -26,7 +26,7 @@ export async function SiteHeader() {
   const label = accountLabel(viewer.role);
   const menuLink = accountMenuLinkFor(viewer.role);
   // Rewards are for personal accounts (they live under /MyBookings)
-  const pointsRead = viewer.role === "personal" && viewer.userId ? await getPointsBalanceOnce(viewer.userId) : null;
+  const pointsRead = viewer.role === "personal" && viewer.userId ? await getPointsBalance(viewer.userId) : null;
   // A failed read hides the pill rather than showing 0 pts
   const points = pointsRead && !pointsRead.error ? pointsRead.balance : null;
   return (

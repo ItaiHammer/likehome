@@ -11,7 +11,6 @@ import {
   historyPage,
   matchesFilter,
   pageCount,
-  pageList,
   pointsNeeded,
   pointsNumber,
   pointsCharge,
@@ -117,16 +116,6 @@ test('history has 10 rows per page and always at least one page', () => {
   assert.equal(pageCount(0), 1)
   assert.equal(pageCount(10), 1)
   assert.equal(pageCount(11), 2)
-})
-
-test('page links show the ends and the neighbours, with … for longer gaps', () => {
-  assert.deepEqual(pageList(1, 1), [1])
-  assert.deepEqual(pageList(2, 3), [1, 2, 3])
-  assert.deepEqual(pageList(5, 20), [1, null, 4, 5, 6, null, 20])
-  assert.deepEqual(pageList(1, 20), [1, 2, null, 20])
-  assert.deepEqual(pageList(20, 20), [1, null, 19, 20])
-  assert.deepEqual(pageList(4, 7), [1, 2, 3, 4, 5, 6, 7])
-  assert.deepEqual(pageList(4, 8), [1, 2, 3, 4, 5, null, 8])
 })
 
 test('the points checkout showed come back from the URL only as a positive whole number', () => {

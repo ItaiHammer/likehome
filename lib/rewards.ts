@@ -88,20 +88,6 @@ export function historyPage(param: string | string[] | undefined): number {
 
 export const pageCount = (total: number) => Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE))
 
-/** Page links to show: first, last and the current one ±1; null is a "…" gap */
-export function pageList(current: number, pages: number): (number | null)[] {
-  const shown = [...new Set([1, current - 1, current, current + 1, pages])].filter((p) => p >= 1 && p <= pages).sort((a, b) => a - b)
-  const list: (number | null)[] = []
-  let previous = 0
-  for (const page of shown) {
-    if (page - previous === 2) list.push(previous + 1)
-    else if (page - previous > 2) list.push(null)
-    list.push(page)
-    previous = page
-  }
-  return list
-}
-
 // Earning and refunds are always positive and redeeming always negative (points_storage.sql)
 export function matchesFilter(activity: PointsActivity, filter: HistoryFilter): boolean {
   if (filter === 'earned') return activity.points > 0

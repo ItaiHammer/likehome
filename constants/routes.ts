@@ -15,6 +15,9 @@ export const PAGE_ROUTES = {
     AUTHORIZATION_ERROR: '/auth/z/error',
     LOGIN: '/auth/login',
     MY_BOOKINGS: '/MyBookings',
+    MY_BOOKINGS_ACCOUNT: '/MyBookings?tab=account',
+    REWARDS: '/MyBookings/rewards',
+    REWARDS_HISTORY: '/MyBookings/rewards/history',
     ACCOUNT_TYPE: '/account-type',
 } as const;
 

@@ -7,7 +7,7 @@ import {savedHotelId} from "@/utils/liteapi-hotels";
 import {getOtherStays} from "@/lib/other-stays";
 import {markBookedRooms, mergeBookedNights, outsideWindow} from "@/lib/room-availability";
 import {getBookedNights} from "@/utils/rooms";
-import {getPointsBalanceOnce} from "@/utils/rewards";
+import { getPointsBalance } from "@/utils/points";
 import {matchingRoom, originalSearch, readRoomFilters} from "@/lib/stay-filters";
 import {recordHotelView} from "@/utils/recently-viewed";
 import {countNights, MAX_NIGHTS, parseDate, todayUTC} from "@/utils/reservation-logic";
@@ -143,7 +143,7 @@ export default async function ReservePage(props: PageProps<"/reserve/[slug]">) {
 
     const [otherStays, pointsRead] = await Promise.all([
         claims?.sub && stay.bookable ? getOtherStays(claims.sub, stay.slug) : [],
-        claims?.sub && stay.bookable ? getPointsBalanceOnce(claims.sub) : null,
+        claims?.sub && stay.bookable ? getPointsBalance(claims.sub) : null,
     ]);
     // A failed read shows "couldn't load your points", not 0 points
     const pointsBalance = pointsRead && !pointsRead.error ? pointsRead.balance : null;

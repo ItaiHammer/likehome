@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Card } from "@/app/_components/ui";
+import { Pagination } from "@/app/_components/Pagination";
+import { ArrowIcon, Card } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { HISTORY_PAGE_SIZE, historyFilter, historyPage, matchesFilter, pageCount, type HistoryFilter } from "@/lib/rewards";
 import { getRewardsHistory } from "@/utils/rewards";
@@ -10,7 +11,6 @@ import { TZ_COOKIE } from "@/utils/tz-cookie";
 import { getUserId } from "@/utils/user";
 import { SampleNotice } from "../../_components/SampleNotice";
 import { HistoryList } from "../_components/HistoryList";
-import { Pagination } from "../_components/Pagination";
 import { getSampleActivity } from "../sampleRewards";
 
 export const metadata: Metadata = { title: "Rewards history — LikeHome" };
@@ -33,7 +33,7 @@ function historyHref(filter: HistoryFilter, page: number, sample: boolean) {
   if (filter !== "all") params.set("type", filter);
   if (page > 1) params.set("page", String(page));
   const query = params.toString();
-  return `${PAGE_ROUTES.MY_BOOKINGS}/rewards/history${query ? `?${query}` : ""}`;
+  return `${PAGE_ROUTES.REWARDS_HISTORY}${query ? `?${query}` : ""}`;
 }
 
 async function loadHistory(filter: HistoryFilter, page: number) {
@@ -66,12 +66,10 @@ export default async function RewardsHistoryPage(props: PageProps<"/MyBookings/r
       {showSample && <SampleNotice>Sample rewards, shown only on your local dev server.</SampleNotice>}
 
       <Link
-        href={`${PAGE_ROUTES.MY_BOOKINGS}/rewards${showSample ? "?sample" : ""}`}
+        href={`${PAGE_ROUTES.REWARDS}${showSample ? "?sample" : ""}`}
         className="group inline-flex items-center gap-1 text-base font-semibold text-ink"
       >
-        <span aria-hidden className="transition-transform duration-200 group-hover:-translate-x-1">
-          ←
-        </span>{" "}
+        <ArrowIcon className="h-4 w-4 -scale-x-100 transition-transform duration-200 group-hover:-translate-x-1" />
         Back to rewards
       </Link>
       <p className="mt-4 text-sm font-semibold uppercase tracking-[0.08em] text-ink">Your rewards</p>
@@ -109,7 +107,7 @@ export default async function RewardsHistoryPage(props: PageProps<"/MyBookings/r
         </div>
       </Card>
 
-      <Pagination current={page} pages={pageCount(total)} href={href} />
+      <Pagination current={page} pages={pageCount(total)} href={href} label="Activity pages" />
     </main>
   );
 }

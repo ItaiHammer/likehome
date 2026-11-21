@@ -2,16 +2,17 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Button, Card, Tag } from "@/app/_components/ui";
+import { PointsAmount } from "@/app/_components/rewards/PointsAmount";
+import { ArrowIcon, Button, Card, Tag } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { money } from "@/lib/bookings";
 import { STAY_DISCOUNTS, formatPoints, pointsToDollars } from "@/lib/rewards";
-import { getPointsBalanceOnce, getRewardsHistory } from "@/utils/rewards";
+import { getPointsBalance } from "@/utils/points";
+import { getRewardsHistory } from "@/utils/rewards";
 import { TZ_COOKIE } from "@/utils/tz-cookie";
 import { getUserId } from "@/utils/user";
 import { SampleNotice } from "../_components/SampleNotice";
 import { HistoryList } from "./_components/HistoryList";
-import { PointsAmount } from "./_components/PointsAmount";
 import { getSampleActivity, SAMPLE_BALANCE } from "./sampleRewards";
 
 export const metadata: Metadata = { title: "Rewards — LikeHome" };
@@ -20,9 +21,9 @@ const cardEyebrow = "text-sm font-semibold uppercase tracking-[0.08em] text-blue
 
 async function loadRewards() {
   const { userId } = await getUserId();
-  if (!userId) redirect(`${PAGE_ROUTES.LOGIN}?next=${encodeURIComponent(`${PAGE_ROUTES.MY_BOOKINGS}/rewards`)}`);
+  if (!userId) redirect(`${PAGE_ROUTES.LOGIN}?next=${encodeURIComponent(PAGE_ROUTES.REWARDS)}`);
 
-  const [points, history] = await Promise.all([getPointsBalanceOnce(userId), getRewardsHistory(userId)]);
+  const [points, history] = await Promise.all([getPointsBalance(userId), getRewardsHistory(userId)]);
   if (points.error) throw new Error(points.error.message);
   if (history.error) throw new Error(history.error.message);
   return { balance: points.balance, activity: history.data };
@@ -71,7 +72,7 @@ export default async function RewardsPage(props: PageProps<"/MyBookings/rewards"
             <>
               <HistoryList activity={activity.slice(0, 3)} timeZone={timeZone} />
               <div className="flex justify-end border-t border-edge py-4">
-                <ArrowLink href={`${PAGE_ROUTES.MY_BOOKINGS}/rewards/history${showSample ? "?sample" : ""}`}>View all activity</ArrowLink>
+                <ArrowLink href={`${PAGE_ROUTES.REWARDS_HISTORY}${showSample ? "?sample" : ""}`}>View all activity</ArrowLink>
               </div>
             </>
           ) : (
@@ -120,9 +121,7 @@ function ArrowLink({ href, children }: { href: string; children: React.ReactNode
   return (
     <Link href={href} className="group inline-flex items-center gap-1 text-sm font-semibold text-blue-dark hover:text-blue">
       {children}
-      <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-1">
-        →
-      </span>
+      <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
     </Link>
   );
 }

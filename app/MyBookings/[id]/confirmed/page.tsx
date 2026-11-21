@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Button, Card } from "@/app/_components/ui";
+import { ArrowIcon, Button, Card } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { bookingCode, formatStayDates, money } from "@/lib/bookings";
 import { formatPoints, pointsShortfall, pointsToDollars, shortfallNote, shownPointsParam } from "@/lib/rewards";
 import { countNights } from "@/utils/reservation-logic";
 import { guestToday } from "@/utils/guest-today";
 import { getPaymentsByReservation } from "@/utils/payments";
-import { getPointsBalanceOnce, getPointsUsedOnBooking } from "@/utils/rewards";
+import { getPointsBalance } from "@/utils/points";
+import { getPointsUsedOnBooking } from "@/utils/rewards";
 import { getAmountPaid } from "@/utils/transactions";
 import { getHotelStay } from "../../../reserve/[slug]/hotelStay";
 import { HotelPhoto } from "../../_components/HotelPhoto";
@@ -31,7 +32,7 @@ async function loadConfirmation(id: string, today: string) {
     getPaymentsByReservation(r.id),
     getAmountPaid(r.id),
     getPointsUsedOnBooking(r.id),
-    getPointsBalanceOnce(userId),
+    getPointsBalance(userId),
   ]);
   // The rewards card is extra: if points can't be read, it's left out instead of failing the page
   const rewards = pointsUsed.error || points.error ? null : { used: pointsUsed.data, balance: points.balance };
@@ -147,7 +148,7 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
           balance={rewards.balance}
           shortfall={pointsShortfall(shownPointsParam(shownParam), rewards.used)}
           paid={paid}
-          href={`${PAGE_ROUTES.MY_BOOKINGS}/rewards${showSample ? "?sample" : ""}`}
+          href={`${PAGE_ROUTES.REWARDS}${showSample ? "?sample" : ""}`}
         />
       )}
 
@@ -186,9 +187,7 @@ function RewardsUsed({ used, balance, shortfall, paid, href }: { used: number; b
       )}
       <Link href={href} className="group mt-4 inline-flex items-center gap-1 text-sm font-semibold text-blue-dark hover:text-blue">
         View rewards
-        <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-1">
-          →
-        </span>
+        <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
       </Link>
     </Card>
   );

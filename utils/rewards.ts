@@ -1,13 +1,8 @@
 import { cookies } from "next/headers";
-import { cache } from "react";
-import { getPointsBalance } from "@/utils/points";
 import { createClient } from "@/utils/supabase/server";
 import { HISTORY_PAGE_SIZE, type HistoryFilter, type PointsActivity, type PointsTransactionType } from "@/lib/rewards";
 
 // Read-only views of the points ledger (points_storage.sql); RLS limits rows to the signed-in account.
-
-/** getPointsBalance read once per request: the header and the page both need it */
-export const getPointsBalanceOnce = cache(getPointsBalance);
 
 type ActivityRow = {
   id: string;

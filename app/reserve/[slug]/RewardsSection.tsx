@@ -1,8 +1,8 @@
-import Image from "next/image";
-import { STAY_DISCOUNTS, formatPoints, rewardPrice } from "@/lib/rewards";
+import { STAY_DISCOUNTS, rewardPrice } from "@/lib/rewards";
 import { Card } from "../../_components/ui";
-import { RewardCard } from "../../MyBookings/rewards/_components/RewardCard";
-import { RewardCarousel } from "../../MyBookings/rewards/_components/RewardCarousel";
+import { PointsAmount } from "../../_components/rewards/PointsAmount";
+import { RewardCard } from "../../_components/rewards/RewardCard";
+import { RewardCarousel } from "../../_components/rewards/RewardCarousel";
 
 type RewardsSectionProps = {
   step: number;
@@ -25,8 +25,7 @@ export function RewardsSection({ step, hotelName, balance, total, appliedId, onA
           <p className="mt-1 text-sm text-slate">Pay for part of your stay with points.</p>
         </div>
         <p className="inline-flex items-center gap-1 rounded-full border border-edge bg-surface py-1 pl-2 pr-3 text-sm font-semibold text-blue-dark">
-          <Image src="/rewards/leaf.png" alt="" width={20} height={25} className="h-[25px] w-5" />
-          {formatPoints(balance)} available
+          <PointsAmount points={balance} size="xs" /> available
         </p>
       </div>
 
