@@ -14,7 +14,9 @@ import {
   pageList,
   pointsNeeded,
   pointsNumber,
+  pointsCharge,
   pointsShortfall,
+  shortfallNote,
   shownPointsParam,
   pointsToDollars,
   rewardPrice,
@@ -97,6 +99,10 @@ test('URL params fall back to all activity and page 1', () => {
   assert.equal(historyPage('-2'), 1)
   assert.equal(historyPage('two'), 1)
   assert.equal(historyPage(undefined), 1)
+  // A huge page would ask the database for an absurd offset
+  assert.equal(historyPage('999999'), 999999)
+  assert.equal(historyPage('1000000'), 1)
+  assert.equal(historyPage('9'.repeat(400)), 1)
 })
 
 test('activity dates use the guest’s time zone, falling back to UTC', () => {
@@ -136,4 +142,21 @@ test('a shortfall is only reported when fewer points were spent than shown', () 
   assert.equal(pointsShortfall(26850, 20000), 6850)
   assert.equal(pointsShortfall(26850, 26850), 0)
   assert.equal(pointsShortfall(null, 0), 0)
+})
+
+test('the confirmation only says the card was charged when it was', () => {
+  assert.match(shortfallNote(500, 12.5), /The difference was charged to your card\./)
+  for (const charged of [0, null]) {
+    const note = shortfallNote(500, charged)
+    assert.doesNotMatch(note, /charged/)
+    assert.match(note, /room price was lower, so fewer points were needed/)
+  }
+})
+
+test('the card pays what points leave, with points capped at the balance and the total like checkout_reservation', () => {
+  assert.equal(pointsCharge(38997, 50000, 389.97), 0)
+  assert.equal(pointsCharge(38997, 10000, 389.97), 289.97)
+  assert.equal(pointsCharge(99999, 99999, 389.97), 0)
+  assert.equal(pointsCharge(0, 50000, 389.97), 389.97)
+  assert.equal(pointsCharge(9749, 50000, 389.97), 292.48)
 })

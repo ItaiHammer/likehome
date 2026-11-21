@@ -9,7 +9,7 @@ import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookin
 import { freeUnitId, markBookedRooms, mergeBookedNights, soldOutNights } from "@/lib/room-availability";
 import { matchingRoom, roomFits } from "@/lib/stay-filters";
 import { cardErrors } from "@/lib/card";
-import { discountPoints, findDiscount, formatPoints, pointsToDollars } from "@/lib/rewards";
+import { PRICE_CHANGED_ERROR, discountPoints, findDiscount, formatPoints, pointsToDollars } from "@/lib/rewards";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
@@ -508,7 +508,8 @@ export function StayReservation({
           children,
           savedPaymentMethodId: selectedCard.id,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          points: reward?.points,
+          rewardId: reward?.id,
+          expectedTotal: total,
         })
       : checkoutRequest({
           // Use whichever identical room is free for these dates.
@@ -522,18 +523,20 @@ export function StayReservation({
           cvc: text("cvc"),
           cardName: text("cardName"),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          points: reward?.points,
+          rewardId: reward?.id,
+          expectedTotal: total,
         });
 
     saveRequest.current?.abort();
     const request = new AbortController();
     saveRequest.current = request;
-    void saveBooking(snapshot, payload, request.signal);
+    void saveBooking(snapshot, payload, reward?.points ?? 0, request.signal);
   }
 
   async function saveBooking(
       snapshot: Omit<Booking, "confirmation" | "saved">,
       payload: ReturnType<typeof checkoutRequest>,
+      shownPoints: number,
       signal: AbortSignal,
   ) {
     const fail = (message: string, signIn = false) => {
@@ -567,6 +570,7 @@ export function StayReservation({
         document.getElementById("cardNumber")?.focus();
         return;
       }
+      if (res.status === 409 && body.error === PRICE_CHANGED_ERROR) return fail(body.error);
       if (res.status === 409) {
         setSubmitting(false);
         return showDatesHere(`${body.error ?? "Those dates were just booked."} Pick other dates.`);
@@ -577,7 +581,7 @@ export function StayReservation({
       router.refresh();
       if (id) {
         // The points shown here, so the confirmation can say if the server spent fewer
-        router.push(`${PAGE_ROUTES.MY_BOOKINGS}/${id}/confirmed${payload.points ? `?points=${payload.points}` : ""}`);
+        router.push(`${PAGE_ROUTES.MY_BOOKINGS}/${id}/confirmed${shownPoints ? `?points=${shownPoints}` : ""}`);
         return;
       }
 

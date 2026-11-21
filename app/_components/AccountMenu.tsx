@@ -35,7 +35,7 @@ export function AccountMenu({
       trigger={
         <>
           <Avatar name={name} email={email} />
-          <span className="max-w-[8rem] truncate">{firstName(name) ?? "Account"}</span>
+          <span className="sr-only sm:not-sr-only sm:max-w-[8rem] sm:truncate">{firstName(name) ?? "Account"}</span>
           <span className="sr-only">, account menu</span>
         </>
       }

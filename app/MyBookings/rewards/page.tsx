@@ -55,7 +55,7 @@ export default async function RewardsPage(props: PageProps<"/MyBookings/rewards"
           </div>
         </Card>
 
-        <Card as="section">
+        <Card as="section" className="flex flex-col">
           <h2 className={cardEyebrow}>Use your points</h2>
           <UsePoints balance={balance} />
         </Card>
@@ -86,7 +86,7 @@ export default async function RewardsPage(props: PageProps<"/MyBookings/rewards"
 // Points pay for new bookings at checkout; nothing can add a reward to a booked stay yet
 function UsePoints({ balance }: { balance: number }) {
   return (
-    <div className="mt-4 flex h-full flex-col gap-4">
+    <div className="mt-4 flex flex-1 flex-col gap-4">
       <p className="text-ink">
         {balance > 0 ? (
           <>

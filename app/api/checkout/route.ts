@@ -16,9 +16,13 @@ import { authorizeMockPayment, validatePaymentInput } from '@/utils/payment-logi
 import { partyOf } from '@/lib/liteapi/party'
 import { liveRoomPrice } from '@/lib/liteapi/rates'
 import { checkoutReservation, getCancelInsurancePremium } from '@/utils/reservations'
+import { getPointsBalance } from '@/utils/points'
+import { PRICE_CHANGED_ERROR, discountPoints, findDiscount, pointsCharge } from '@/lib/rewards'
 
 // Postgres error code for an exclusion-constraint violation (DB-level double booking guard).
 const EXCLUSION_VIOLATION = '23P01'
+// checkout_reservation's p_points is a Postgres integer
+const MAX_POINTS = 2147483647
 
 export async function POST(request: Request) {
   const { supabase, userId } = await getUserId()
@@ -41,13 +45,25 @@ export async function POST(request: Request) {
     return Response.json({ error: 'has_insurance must be true or false.' }, { status: 400 })
   }
 
-  // Extract and validate optional points (omission or negative defaults to 0)
+  // A reward is priced below from this route's own total; raw points are only read without one
+  // (omission or negative defaults to 0)
+  let reward: ReturnType<typeof findDiscount> = null
+  let expectedTotal = 0
   let pointsToRedeem = 0
-  if (inputBody.points !== undefined) {
+  if (inputBody.reward_id !== undefined) {
+    reward = typeof inputBody.reward_id === 'string' ? findDiscount(inputBody.reward_id) : null
+    if (!reward) {
+      return Response.json({ error: 'Unknown reward.' }, { status: 400 })
+    }
+    if (typeof inputBody.expected_total !== 'number' || !Number.isFinite(inputBody.expected_total)) {
+      return Response.json({ error: 'expected_total must be a number.' }, { status: 400 })
+    }
+    expectedTotal = inputBody.expected_total
+  } else if (inputBody.points !== undefined) {
     if (typeof inputBody.points !== 'number' || !Number.isInteger(inputBody.points)) {
       return Response.json({ error: 'points must be an integer.' }, { status: 400 })
     }
-    pointsToRedeem = Math.max(0, inputBody.points)
+    pointsToRedeem = Math.min(Math.max(0, inputBody.points), MAX_POINTS)
   }
 
   const timeZone = typeof inputBody.time_zone === 'string' ? inputBody.time_zone : null
@@ -105,11 +121,26 @@ export async function POST(request: Request) {
   if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
     return Response.json({ error: 'The room does not have a valid booking price.' }, { status: 422 })
   }
+  if (reward) {
+    // The guest chose the reward against the price they saw; never charge a different one silently
+    if (Math.abs(expectedTotal - totalPrice) >= 0.01) {
+      return Response.json({ error: PRICE_CHANGED_ERROR }, { status: 409 })
+    }
+    pointsToRedeem = discountPoints(reward.percent, totalPrice)
+  }
   const insurancePremium = hasInsurance ? getCancelInsurancePremium() : 0
   const totalCharged = Math.round((totalPrice + insurancePremium) * 100) / 100
-  const authorization = authorizeMockPayment(payment.cardNumber, totalCharged)
-  if (!authorization.approved) {
-    return Response.json({ error: authorization.reason }, { status: 402 })
+  // The card is still validated above when points cover everything, but there is nothing to authorize
+  let cardCharge = totalCharged
+  if (pointsToRedeem > 0) {
+    const { balance, error: balanceError } = await getPointsBalance(userId)
+    if (!balanceError) cardCharge = pointsCharge(pointsToRedeem, balance, totalCharged)
+  }
+  if (cardCharge > 0) {
+    const authorization = authorizeMockPayment(payment.cardNumber, cardCharge)
+    if (!authorization.approved) {
+      return Response.json({ error: authorization.reason }, { status: 402 })
+    }
   }
 
   const { data, error } = await checkoutReservation(

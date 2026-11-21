@@ -34,6 +34,15 @@ export function rewardPrice(discount: StayDiscount, total: number): { points: nu
   return { points, value: pointsToDollars(points) }
 }
 
+/** What the card pays after points, capped like checkout_reservation at the balance and the checkout total */
+export function pointsCharge(requested: number, balance: number, checkoutTotal: number): number {
+  const points = Math.max(0, Math.min(requested, balance, dollarsToPoints(checkoutTotal)))
+  return Math.max(0, Math.round((checkoutTotal - pointsToDollars(points)) * 100) / 100)
+}
+
+/** /api/checkout's 409 when its price no longer matches the one the reward was chosen against */
+export const PRICE_CHANGED_ERROR = 'The price changed. Please review your booking.'
+
 export const pointsNeeded = (balance: number, cost: number) => Math.max(0, cost - balance)
 
 /** The points checkout showed, passed to the confirmation as ?points= */
@@ -44,6 +53,14 @@ export function shownPointsParam(param: string | string[] | undefined): number |
 /** Points checkout showed but the server didn't spend (it caps at the current balance and its own price) */
 export function pointsShortfall(shown: number | null, used: number): number {
   return shown !== null && used < shown ? shown - used : 0
+}
+
+/** Why the confirmation used fewer points than checkout showed; `charged` is what the card paid */
+export function shortfallNote(shortfall: number, charged: number | null): string {
+  const fewer = `We used ${formatPoints(shortfall)} fewer than checkout showed`
+  return charged !== null && charged > 0
+    ? `${fewer}, because your points balance or the room price changed. The difference was charged to your card.`
+    : `${fewer}, because the room price was lower, so fewer points were needed.`
 }
 
 export type PointsTransactionType = 'earn' | 'redeem' | 'refund' | 'adjust'
@@ -65,7 +82,7 @@ export function historyFilter(param: string | string[] | undefined): HistoryFilt
 }
 
 export function historyPage(param: string | string[] | undefined): number {
-  const page = typeof param === 'string' && /^\d+$/.test(param) ? Number(param) : 1
+  const page = typeof param === 'string' && /^\d{1,6}$/.test(param) ? Number(param) : 1
   return page >= 1 ? page : 1
 }
 

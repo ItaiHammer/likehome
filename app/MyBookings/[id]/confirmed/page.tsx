@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { Button, Card } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { bookingCode, formatStayDates, money } from "@/lib/bookings";
-import { formatPoints, pointsShortfall, pointsToDollars, shownPointsParam } from "@/lib/rewards";
+import { formatPoints, pointsShortfall, pointsToDollars, shortfallNote, shownPointsParam } from "@/lib/rewards";
 import { countNights } from "@/utils/reservation-logic";
 import { guestToday } from "@/utils/guest-today";
 import { getPaymentsByReservation } from "@/utils/payments";
@@ -146,6 +146,7 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
           used={rewards.used}
           balance={rewards.balance}
           shortfall={pointsShortfall(shownPointsParam(shownParam), rewards.used)}
+          paid={paid}
           href={`${PAGE_ROUTES.MY_BOOKINGS}/rewards${showSample ? "?sample" : ""}`}
         />
       )}
@@ -161,7 +162,7 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
 }
 
 // Figma frame 07's "Your rewards" card, without "You'll earn": checkout_reservation records points spent, nothing records points earned yet
-function RewardsUsed({ used, balance, shortfall, href }: { used: number; balance: number; shortfall: number; href: string }) {
+function RewardsUsed({ used, balance, shortfall, paid, href }: { used: number; balance: number; shortfall: number; paid: number | null; href: string }) {
   return (
     <Card as="section" tone="tint" className="mt-6">
       <p className="text-sm font-semibold uppercase tracking-[0.08em] text-blue-dark">Your rewards</p>
@@ -181,10 +182,7 @@ function RewardsUsed({ used, balance, shortfall, href }: { used: number; balance
         </div>
       </dl>
       {shortfall > 0 && (
-        <p className="mt-4 rounded-lg border border-edge bg-surface p-3 text-sm text-ink">
-          We used {formatPoints(shortfall)} fewer than checkout showed, because your points balance or the room price changed. The
-          difference was charged to your card.
-        </p>
+        <p className="mt-4 rounded-lg border border-edge bg-surface p-3 text-sm text-ink">{shortfallNote(shortfall, paid)}</p>
       )}
       <Link href={href} className="group mt-4 inline-flex items-center gap-1 text-sm font-semibold text-blue-dark hover:text-blue">
         View rewards

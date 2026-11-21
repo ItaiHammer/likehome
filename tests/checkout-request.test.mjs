@@ -67,15 +67,18 @@ test('adults and children are sent together as guests, and the children apart fo
   assert.equal(checkoutRequest(form({ adults: 1, children: 0 })).children, 0)
 })
 
-test('reward points are sent as a whole number, and left out when none are used', () => {
-  assert.equal(checkoutRequest(form({ points: 26850 })).points, 26850)
-  assert.equal(checkoutRequest(form({ points: 100.4 })).points, 100)
-  assert.equal('points' in checkoutRequest(form()), false)
-  assert.equal('points' in checkoutRequest(form({ points: 0 })), false)
+test('a reward is sent by id with the total the guest saw, and left out when none is chosen', () => {
+  const body = checkoutRequest(form({ rewardId: 'free-stay', expectedTotal: 389.96999999 }))
+  assert.equal(body.reward_id, 'free-stay')
+  assert.equal(body.expected_total, 389.97)
+  assert.equal('points' in body, false)
+  assert.equal('reward_id' in checkoutRequest(form()), false)
+  assert.equal('expected_total' in checkoutRequest(form()), false)
 })
 
-test('points go with a saved card too', () => {
-  const body = checkoutRequest({ ...form(), cardNumber: undefined, expiry: undefined, cvc: undefined, cardName: undefined, savedPaymentMethodId: 'pm-1', points: 2800 })
-  assert.equal(body.points, 2800)
+test('a reward goes with a saved card too', () => {
+  const body = checkoutRequest({ ...form(), cardNumber: undefined, expiry: undefined, cvc: undefined, cardName: undefined, savedPaymentMethodId: 'pm-1', rewardId: 'half-off', expectedTotal: 200 })
+  assert.equal(body.reward_id, 'half-off')
+  assert.equal(body.expected_total, 200)
   assert.deepEqual(body.payment, { saved_payment_method_id: 'pm-1' })
 })

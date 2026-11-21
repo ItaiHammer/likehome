@@ -1,6 +1,7 @@
 "use client";
 
 import { Children, useCallback, useEffect, useRef, useState } from "react";
+import { isMotionReduced } from "@/app/_components/motion";
 import { iconButtonClass } from "@/app/_components/ui";
 
 /** A scrollable row of reward cards with ‹ n / total › arrows (the arrows only show when it overflows) */
@@ -34,7 +35,7 @@ export function RewardCarousel({ label, children }: { label: string; children: R
     const track = trackRef.current;
     const card = track?.firstElementChild as HTMLElement | null;
     if (!track || !card) return;
-    track.scrollBy({ left: direction * (card.offsetWidth + 12), behavior: "smooth" });
+    track.scrollBy({ left: direction * (card.offsetWidth + 12), behavior: isMotionReduced() ? "auto" : "smooth" });
   }
 
   return (
