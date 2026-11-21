@@ -1,6 +1,6 @@
 // No Supabase / Next.js imports here so it can be unit tested with `npm test`.
-// Messages are one-way: a hotel owner sends to guests with a reservation there. One send stores
-// one row per recipient. Rows come from the /api/messages JSON, so every shape is checked.
+// Messages are one-way: a hotel owner sends to guests with a reservation there. Rows come from
+// the /api/messages JSON, so every shape is checked.
 
 export type InboxMessage = {
   id: string
@@ -11,15 +11,6 @@ export type InboxMessage = {
   createdAt: string
   readAt: string | null
 }
-
-export type SentMessage = { key: string; subject: string; body: string; sentAt: string; recipients: number; read: number }
-
-export type Recipient = { accountId: string; email: string; name: string; lastCheckIn: string | null; lastStatus: string | null }
-
-export type ComposeProblem = { field: 'hotel' | 'recipients' | 'subject' | 'body'; message: string }
-
-export const SUBJECT_MAX = 120
-export const BODY_MAX = 2000
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -126,86 +117,4 @@ export function markRead(messages: InboxMessage[], id: string, at: string): Inbo
   if (!Array.isArray(messages)) return []
   if (!filled(at)) return [...messages]
   return messages.map((m) => (m?.id === id && isUnread(m) ? { ...m, readAt: at } : m))
-}
-
-const timeOf = (iso: string) => {
-  const t = Date.parse(iso)
-  return Number.isNaN(t) ? -Infinity : t
-}
-
-export function groupSent(rows: unknown): SentMessage[] {
-  if (!Array.isArray(rows)) return []
-  const groups = new Map<string, SentMessage>()
-  for (const row of rows) {
-    if (!isRecord(row)) continue
-    const id = filled(row.id)
-    const subject = filled(row.subject)
-    const sentAt = filled(row.created_at)
-    if (!id || !subject || !sentAt) continue
-    const body = asText(row.body)
-    const read = filled(row.read_at) ? 1 : 0
-    const groupKey = JSON.stringify([asText(row.hotel_id), sentAt, subject, body])
-    const group = groups.get(groupKey)
-    if (!group) {
-      groups.set(groupKey, { key: id, subject, body, sentAt, recipients: 1, read })
-      continue
-    }
-    group.recipients += 1
-    group.read += read
-    // Rows sharing a created_at come back in any order, so the smallest id keeps the key stable
-    if (id < group.key) group.key = id
-  }
-  return [...groups.values()].sort((a, b) => timeOf(b.sentAt) - timeOf(a.sentAt))
-}
-
-export function toRecipients(rows: unknown): Recipient[] {
-  if (!Array.isArray(rows)) return []
-  const byId = new Map<string, Recipient>()
-  for (const row of rows) {
-    if (!isRecord(row)) continue
-    const accountId = filled(row.account_id)
-    if (!accountId || byId.has(accountId)) continue
-    const email = asText(row.email).trim()
-    byId.set(accountId, {
-      accountId,
-      email,
-      name: filled(row.full_name)?.trim() || email || 'Guest',
-      lastCheckIn: filled(row.last_check_in),
-      lastStatus: filled(row.last_status),
-    })
-  }
-  // The database returns them in account id order, which means nothing to an owner
-  return [...byId.values()].sort(
-    (a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }) || a.email.localeCompare(b.email, 'en'),
-  )
-}
-
-export function filterRecipients(list: Recipient[], query: string): Recipient[] {
-  if (!Array.isArray(list)) return []
-  const q = asText(query).trim().toLowerCase()
-  if (!q) return [...list]
-  return list.filter((r) => asText(r?.name).toLowerCase().includes(q) || asText(r?.email).toLowerCase().includes(q))
-}
-
-// Mirrors POST /api/messages, which trims every field before saving
-export function composeProblem(input: {
-  hotelId: string
-  recipientIds: string[]
-  subject: string
-  body: string
-}): ComposeProblem | null {
-  const form: Record<string, unknown> = isRecord(input) ? input : {}
-  if (!filled(form.hotelId)) return { field: 'hotel', message: 'Pick the hotel this message is from.' }
-
-  const recipients = Array.isArray(form.recipientIds) ? form.recipientIds.filter((id) => filled(id)) : []
-  if (recipients.length === 0) return { field: 'recipients', message: 'Pick at least one guest to send this to.' }
-
-  const subject = asText(form.subject).trim()
-  if (!subject) return { field: 'subject', message: 'Add a subject.' }
-  if (subject.length > SUBJECT_MAX) return { field: 'subject', message: `Subjects can be up to ${SUBJECT_MAX} characters.` }
-
-  const body = asText(form.body).trim()
-  if (!body) return { field: 'body', message: 'Write a message to send.' }
-  if (body.length > BODY_MAX) return { field: 'body', message: `Messages can be up to ${BODY_MAX} characters.` }
-  return null
 }

@@ -6,7 +6,6 @@ export const ROUTE_PREFIXES = {
 export const API_ROUTES = {
     AUTH_CALLBACK: '/api/auth/callback',
     MESSAGES: '/api/messages',
-    MESSAGES_RECIPIENTS: '/api/messages/recipients',
 }
 
 export const PAGE_ROUTES = {
@@ -19,7 +18,7 @@ export const PAGE_ROUTES = {
     MY_BOOKINGS: '/MyBookings',
     ACCOUNT_TYPE: '/account-type',
     MESSAGES: '/messages',
-    MESSAGES_NEW: '/messages/new',
+    OWNER_MESSAGES: '/property-dashboard/messages',
 } as const;
 
 export const ROUTE_ACCESS = {

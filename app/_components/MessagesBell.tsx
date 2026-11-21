@@ -25,7 +25,7 @@ type BellData = { unread: number; messages: InboxMessage[] };
 export function MessagesBell({ role, unread, messages }: { role: "personal" | "business" } & BellData) {
   if (role === "business") {
     return (
-      <Link href={PAGE_ROUTES.MESSAGES} aria-label="Messages" className={bellClass}>
+      <Link href={PAGE_ROUTES.OWNER_MESSAGES} aria-label="Messages" className={bellClass}>
         <BellIcon />
       </Link>
     );
