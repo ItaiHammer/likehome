@@ -11,6 +11,7 @@ register(
     encodeURIComponent(`export async function resolve(s, c, next) {
       if (s.startsWith('@/')) return next(new URL(s.slice(2) + '.ts', ${JSON.stringify(ROOT)}).href, c)
       if (s === 'next/headers') return next('next/headers.js', c)
+      if (s.startsWith('./') && !s.endsWith('.ts') && c.parentURL?.includes('/utils/')) return next(s + '.ts', c)
       return next(s, c)
     }`)
 )
@@ -24,7 +25,10 @@ let roomResult
 const checkoutReservation = mock.fn()
 const consoleError = mock.method(console, 'error', () => {})
 
-mock.module('next/headers', { namedExports: { cookies: async () => ({}) } })
+let tzCookie
+mock.module('next/headers', {
+  namedExports: { cookies: async () => ({ get: (name) => (name === 'tz' && tzCookie ? { value: tzCookie } : undefined) }) },
+})
 mock.module('@/utils/user', {
   namedExports: {
     getUserId: async () => ({
@@ -51,6 +55,12 @@ mock.module('@/utils/reservations', {
 let pointsBalance
 const getPointsBalance = mock.fn(async () => pointsBalance)
 mock.module('@/utils/points', { namedExports: { getPointsBalance } })
+
+let savedCard
+const getSavedPaymentMethod = mock.fn(async (id, accountId) =>
+  savedCard && savedCard.id === id && savedCard.account_id === accountId ? { data: savedCard, error: null } : { data: null, error: null }
+)
+mock.module('@/utils/saved-payment-methods', { namedExports: { getSavedPaymentMethod } })
 
 const liveRoomPrice = mock.fn(async () => ({ status: 'unavailable' }))
 mock.module('@/lib/liteapi/rates', { namedExports: { liveRoomPrice } })
@@ -101,9 +111,12 @@ beforeEach(() => {
   userId = 'user-1'
   roomResult = { data: { ...ROOM }, error: null }
   pointsBalance = { balance: 100000, error: null }
+  tzCookie = undefined
+  savedCard = { id: 'pm-1', account_id: 'user-1', brand: 'amex', last4: '0005', exp_month: 3, exp_year: 2031, name_on_card: 'Alex Rivera' }
 
   for (const fn of [
     checkoutReservation,
+    getSavedPaymentMethod,
     getPointsBalance,
     liveRoomPrice,
     consoleError,
@@ -479,7 +492,6 @@ describe('success', () => {
       guests: 2,
       adults: 2,
       children: 0,
-      status: undefined
     })
     assert.deepEqual(paymentDetails, {
       total_price: 389.97,
@@ -669,5 +681,82 @@ describe('checkout rewards', () => {
     const r = await post(withReward('free-stay', 389.97, withCard('1234')))
     assert.equal(r.status, 400)
     assert.equal(checkoutCalls(), 0)
+  })
+})
+
+describe('status', () => {
+  test('a status from the browser is ignored, so the database default (confirmed) applies', async () => {
+    for (const status of ['cancelled', 'pending', 'confirmed']) {
+      const r = await post({ ...validBody(), status })
+      assert.equal(r.status, 201)
+    }
+    for (const call of checkoutReservation.mock.calls) {
+      assert.equal('status' in call.arguments[0], false)
+    }
+  })
+})
+
+describe('saved cards', () => {
+  const withSaved = (saved_payment_method_id = 'pm-1', extra = {}) => ({ ...validBody(), payment: { saved_payment_method_id }, ...extra })
+
+  test('books with the stored card: its last 4 and expiry, no card number needed', async () => {
+    const r = await post(withSaved())
+    assert.equal(r.status, 201)
+    assert.deepEqual(getSavedPaymentMethod.mock.calls[0].arguments, ['pm-1', 'user-1'])
+    const payment = checkoutReservation.mock.calls[0].arguments[1]
+    assert.equal(payment.card_last4, '0005')
+    assert.equal(payment.exp_month, 3)
+    assert.equal(payment.exp_year, 2031)
+    assert.deepEqual(r.json.payment, { id: 'pay-1', brand: 'amex', last4: '0005' })
+  })
+
+  test('card details sent next to a saved card id are not used', async () => {
+    const body = withSaved()
+    body.payment = { ...body.payment, card_number: '4000 0000 0000 0002', exp_month: 1, exp_year: 2020 }
+    const r = await post(body)
+    assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[1].card_last4, '0005')
+  })
+
+  test("another account's card: 404, nothing written", async () => {
+    savedCard = { ...savedCard, account_id: 'user-2' }
+    const r = await post(withSaved())
+    assert.deepEqual(r, { status: 404, json: { error: 'Saved card not found.' } })
+    assert.equal(checkoutCalls(), 0)
+  })
+
+  test('a card id that does not exist: 404', async () => {
+    const r = await post(withSaved('pm-missing'))
+    assert.equal(r.status, 404)
+    assert.equal(checkoutCalls(), 0)
+  })
+
+  test('an expired saved card: 400, nothing written', async () => {
+    savedCard = { ...savedCard, exp_month: 1, exp_year: 2020 }
+    const r = await post(withSaved())
+    assert.deepEqual(r, { status: 400, json: { error: 'This saved card has expired.' } })
+    assert.equal(checkoutCalls(), 0)
+  })
+
+  test("expiry is judged on the guest's day: Oct 31 evening in UTC is already Nov 1 in Tokyo", async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-31T16:00:00Z') })
+    savedCard = { ...savedCard, exp_month: 10, exp_year: 2026 }
+    const stay = { check_in: '2026-11-10', check_out: '2026-11-12' }
+    const tokyo = await post(withSaved('pm-1', { ...stay, time_zone: 'Asia/Tokyo' }))
+    assert.equal(tokyo.status, 400)
+    assert.equal(tokyo.json.error, 'This saved card has expired.')
+    // the tz cookie stands in when the request has no time_zone
+    tzCookie = 'Asia/Tokyo'
+    assert.equal((await post(withSaved('pm-1', stay))).status, 400)
+    tzCookie = undefined
+    assert.equal((await post(withSaved('pm-1', { ...stay, time_zone: 'UTC' }))).status, 201)
+  })
+
+  test('rewards still price on the server with a saved card', async () => {
+    const r = await post({ ...withSaved(), reward_id: 'half-off', expected_total: 389.97 })
+    assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 19499)
+    const changed = await post({ ...withSaved(), reward_id: 'half-off', expected_total: 300 })
+    assert.equal(changed.status, 409)
   })
 })

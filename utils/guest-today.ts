@@ -11,3 +11,13 @@ export async function guestToday(): Promise<string> {
   const store = await cookies()
   return todayInTimeZone(store.get(TZ_COOKIE)?.value)
 }
+
+/**
+ * The guest's time zone for an API request: the `time_zone` the browser sent with it, else the `tz`
+ * cookie. Null when neither is there, so callers fall back to UTC as todayInTimeZone does.
+ */
+export async function guestTimeZone(sent: unknown): Promise<string | null> {
+  if (typeof sent === 'string' && sent.trim() !== '') return sent.trim()
+  const store = await cookies()
+  return store.get(TZ_COOKIE)?.value || null
+}

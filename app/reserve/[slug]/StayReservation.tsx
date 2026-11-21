@@ -8,12 +8,13 @@ import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
 import { blockedNights, BLOCKED_NOTE, freeUnitId, markBookedRooms, mergeBookedNights, roomProblem } from "@/lib/room-availability";
 import { matchingRoom, roomFits } from "@/lib/stay-filters";
-import { cardErrors } from "@/lib/card";
+import { cardBrandLabel, cardErrors, typedCardBrand, type CardBrandLabel } from "@/lib/card";
 import { PRICE_CHANGED_ERROR, discountPoints, findDiscount, formatPoints, pointsToDollars } from "@/lib/rewards";
+import { cardExpired } from "@/utils/payment-logic";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
-import { buttonPrimary, buttonSecondary, Card, Field, Stars } from "../../_components/ui";
+import { buttonPrimary, buttonSecondary, Card, Field, Stars, Tag } from "../../_components/ui";
 import { HotelPhoto } from "../../MyBookings/_components/HotelPhoto";
 import { TAX_RATE, type Room, type Stay } from "../../_data/stays";
 import { checkoutRequest } from "./checkoutRequest";
@@ -31,14 +32,14 @@ type Errors = Partial<Record<string, string>>;
 type Popover = "dates" | "guests" | null;
 type Contact = { firstName: string; lastName: string; email: string; phone: string };
 
-export interface PaymentMethod {
+type SavedCard = {
   id: string;
-  brand: "Visa" | "Mastercard" | "Amex" | "Discover" | "Card";
+  brand: CardBrandLabel;
   last4: string;
-  expMonth: string;
-  expYear: string;
-  isDefault?: boolean;
-}
+  expMonth: number;
+  expYear: number;
+  isDefault: boolean;
+};
 
 type Booking = {
   confirmation: string;
@@ -58,20 +59,10 @@ type StayProblem = { field: "dates" | "guests"; message: string };
 const noSubscribe = () => () => {};
 const CONTACT_FIELDS = ["firstName", "lastName", "email", "phone"] as const;
 
-// Card brand auto-detection
-const getCardBrand = (num: string): PaymentMethod["brand"] => {
-  const clean = num.replace(/\D/g, "");
-  if (/^4/.test(clean)) return "Visa";
-  if (/^(5[1-5]|2[2-7])/.test(clean)) return "Mastercard";
-  if (/^3[47]/.test(clean)) return "Amex";
-  if (/^(6011|65|64[4-9])/.test(clean)) return "Discover";
-  return "Card";
-};
-
 // Formats card number according to brand
 const formatCard = (v: string) => {
   const digits = v.replace(/\D/g, "");
-  const brand = getCardBrand(digits);
+  const brand = typedCardBrand(digits);
   const maxDigits = brand === "Amex" ? 15 : 16;
   const truncated = digits.slice(0, maxDigits);
 
@@ -134,11 +125,11 @@ export function StayReservation({
   const [rewardId, setRewardId] = useState<string | null>(null);
   const [contact, setContact] = useState<Contact>({ firstName: "", lastName: "", email: "", phone: "" });
 
-  // Saved Payment Methods State
-  const [savedCards, setSavedCards] = useState<PaymentMethod[]>([]);
-  const [selectedCardId, setSelectedCardId] = useState<string | "new">("new");
+  const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
+  // null until the guest picks: the default card is used, even when the list arrives late
+  const [pickedCardId, setPickedCardId] = useState<string | null>(null);
   const [cardNumber, setCardNumber] = useState("");
-  const [saveCardForFuture, setSaveCardForFuture] = useState(true);
+  const [saveCardForFuture, setSaveCardForFuture] = useState(false);
 
   const [livePrices, setLivePrices] = useState<{ key: string; byId: Record<string, Partial<Room>> } | null>(null);
   // Every room the prices route listed, including ones saved after the page loaded because LiteAPI offered them for
@@ -240,58 +231,43 @@ export function StayReservation({
     };
   }, [priceKey, initialKey, liveKey, stay.slug]);
 
-  const cancelBy = checkIn ? addDays(checkIn, -2) : "";
-  const freeCancel = !checkIn || !today || cancelBy > today;
 
-  const detectedBrand = getCardBrand(cardNumber);
+  const detectedBrand = typedCardBrand(cardNumber);
 
+  // Saved cards only matter where a booking is saved: signed in, on a real hotel
+  const canUseSavedCards = Boolean(account) && stay.bookable;
   useEffect(() => {
-    async function loadSavedPaymentMethods() {
+    if (!canUseSavedCards) return;
+    const request = new AbortController();
+    (async () => {
       try {
-        const response = await fetch("/api/saved-payment-methods");
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error ?? "Could not load payment methods.");
-        }
-
-        const cards: PaymentMethod[] = (result.paymentMethods ?? []).map(
-          (pm: {
-            id: string;
-            brand: string;
-            last4: string;
-            exp_month: number;
-            exp_year: number;
-            is_default?: boolean;
-          }) => ({
+        const response = await fetch("/api/saved-payment", { signal: request.signal });
+        if (!response.ok) throw new Error(`Saved cards request failed (${response.status})`);
+        const result = (await response.json()) as {
+          paymentMethods?: { id: string; brand: string; last4: string; exp_month: number; exp_year: number; is_default?: boolean }[];
+        };
+        setSavedCards(
+          (result.paymentMethods ?? []).map((pm) => ({
             id: pm.id,
-            brand:
-              pm.brand === "visa"
-                ? "Visa"
-                : pm.brand === "mastercard"
-                  ? "Mastercard"
-                  : pm.brand === "amex"
-                    ? "Amex"
-                    : "Discover",
+            brand: cardBrandLabel(pm.brand),
             last4: pm.last4,
-            expMonth: String(pm.exp_month).padStart(2, "0"),
-            expYear: String(pm.exp_year),
-            isDefault: pm.is_default,
-          })
+            expMonth: Number(pm.exp_month),
+            expYear: Number(pm.exp_year),
+            isDefault: Boolean(pm.is_default),
+          })),
         );
-
-        setSavedCards(cards);
-
-        const defaultCard = cards.find((card) => card.isDefault) ?? cards[0];
-        if (defaultCard) {
-          setSelectedCardId(defaultCard.id);
-        }
-      } catch (error) {
-        console.error("Failed to load saved payment methods:", error);
+      } catch {
+        // The new-card form still works without them
       }
-    }
-    loadSavedPaymentMethods();
-  }, []);
+    })();
+    return () => request.abort();
+  }, [canUseSavedCards]);
+
+  const isExpired = (card: SavedCard) => Boolean(today) && cardExpired(card.expMonth, card.expYear, today);
+  const usableCards = savedCards.filter((card) => !isExpired(card));
+  const defaultCardId = (usableCards.find((card) => card.isDefault) ?? usableCards[0])?.id ?? "new";
+  const pickedIsUsable = pickedCardId === "new" || usableCards.some((card) => card.id === pickedCardId);
+  const selectedCardId = pickedCardId !== null && pickedIsUsable ? pickedCardId : defaultCardId;
 
   const setDatesOpen = useCallback((open: boolean) => setPopover((p) => (open ? "dates" : p === "dates" ? null : p)), []);
   const setGuestsOpen = useCallback((open: boolean) => setPopover((p) => (open ? "guests" : p === "guests" ? null : p)), []);
@@ -482,9 +458,11 @@ export function StayReservation({
       (card) => card.id === selectedCardId
     );
 
+    // Use whichever identical room is free for these dates.
+    const roomToBook = freeUnitId(room, checkIn, checkOut) ?? room.id;
     const payload = selectedCard
       ? checkoutRequest({
-          roomId: room.id,
+          roomId: roomToBook,
           checkIn,
           checkOut,
           adults, 
@@ -495,8 +473,7 @@ export function StayReservation({
           expectedTotal: total,
         })
       : checkoutRequest({
-          // Use whichever identical room is free for these dates.
-          roomId: freeUnitId(room, checkIn, checkOut) ?? room.id,
+          roomId: roomToBook,
           checkIn,
           checkOut,
           adults, 
@@ -513,7 +490,7 @@ export function StayReservation({
     saveRequest.current?.abort();
     const request = new AbortController();
     saveRequest.current = request;
-    void saveBooking(snapshot, payload, reward?.points ?? 0, request.signal);
+    void saveBooking(snapshot, payload, reward?.points ?? 0, request.signal, !selectedCard && saveCardForFuture);
   }
 
   async function saveBooking(
@@ -521,6 +498,7 @@ export function StayReservation({
       payload: ReturnType<typeof checkoutRequest>,
       shownPoints: number,
       signal: AbortSignal,
+      saveCard: boolean,
   ) {
     const fail = (message: string, signIn = false) => {
       setSubmitting(false);
@@ -548,8 +526,11 @@ export function StayReservation({
       const body = (await res.json().catch(() => ({}))) as { error?: string; reservation?: { id?: string; total_price?: number | string } };
       if (res.status === 401) return fail("Your sign-in has ended. Sign in again to finish booking.", true);
       if (res.status === 402) {
+        const message = `${body.error ?? "Your card was declined."} Try another card.`;
+        // A saved card has no card number field to show it under
+        if ("saved_payment_method_id" in payload.payment) return fail(message);
         setSubmitting(false);
-        setErrors({ cardNumber: `${body.error ?? "Your card was declined."} Try another card.` });
+        setErrors({ cardNumber: message });
         document.getElementById("cardNumber")?.focus();
         return;
       }
@@ -563,6 +544,16 @@ export function StayReservation({
         return showDatesHere(`${body.error ?? "Those dates were just booked."} Pick other dates.`);
       }
       if (!res.ok || !body.reservation) return fail(body.error ?? "We couldn’t save your booking. Try again.");
+
+      if (saveCard) {
+        // The booking is already made, so a card that can't be saved doesn't stop it
+        await fetch("/api/saved-payment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload.payment, time_zone: payload.time_zone }),
+          signal,
+        }).catch(() => undefined);
+      }
 
       const { id, total_price } = body.reservation;
       router.refresh();
@@ -670,70 +661,57 @@ export function StayReservation({
                     </p>
                 )}
 
-                {/* Saved Cards Selection List */}
                 {savedCards.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-slate">Select payment method</p>
-                      <div className="space-y-2">
-                        {savedCards.map((card) => (
-                            <label
-                                key={card.id}
-                                className={`flex items-center justify-between rounded-xl border p-3 cursor-pointer transition-all ${
-                                    selectedCardId === card.id
-                                        ? "border-blue bg-blue/5 shadow-sm"
-                                        : "border-edge bg-surface hover:bg-paper"
-                                }`}
-                            >
-                              <div className="flex items-center gap-3">
+                    <fieldset className="mt-5">
+                      <legend className="mb-2 text-base font-semibold leading-5 text-ink">Pay with</legend>
+                      <div className="flex flex-col gap-3">
+                        {[...savedCards.map((card) => ({ card, id: card.id })), { card: null, id: "new" }].map(({ card, id }) => {
+                          const expired = card ? isExpired(card) : false;
+                          const on = !expired && selectedCardId === id;
+                          return (
+                              <label
+                                  key={id}
+                                  // Same states as the room options: default, selected, disabled
+                                  className={`flex items-center gap-4 rounded-control border p-4 transition has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-blue ${
+                                      expired
+                                          ? "cursor-not-allowed border-disabled bg-disabled"
+                                          : on
+                                              ? "cursor-pointer border-blue bg-surface ring-1 ring-blue"
+                                              : "cursor-pointer border-edge bg-surface hover:border-blue"
+                                  }`}
+                              >
                                 <input
                                     type="radio"
-                                    name="payment_selection"
-                                    value={card.id}
-                                    checked={selectedCardId === card.id}
-                                    onChange={() => setSelectedCardId(card.id)}
-                                    className="text-blue focus:ring-blue"
+                                    name="paymentChoice"
+                                    value={id}
+                                    checked={on}
+                                    disabled={expired}
+                                    onChange={() => setPickedCardId(id)}
+                                    className="h-4 w-4 shrink-0 accent-blue"
                                 />
-                                <div>
-                                  <p className="text-xs font-semibold text-ink">
-                                    {card.brand} ending in {card.last4}
+                                <div className="min-w-0 flex-1">
+                                  <p className={`text-base font-semibold leading-5 ${expired ? "text-slate" : "text-ink"}`}>
+                                    {card ? `${card.brand} ending in ${card.last4}` : "Use a new card"}
                                   </p>
-                                  <p className="text-[11px] text-slate">
-                                    Expires {card.expMonth}/{card.expYear}
-                                  </p>
+                                  {card && (
+                                      <p className="mt-1 text-sm text-slate">
+                                        {expired ? "Expired" : "Expires"} {String(card.expMonth).padStart(2, "0")}/{card.expYear}
+                                      </p>
+                                  )}
                                 </div>
-                              </div>
-                              {card.isDefault && (
-                                  <span className="text-[10px] font-medium text-slate bg-paper border border-edge px-2 py-0.5 rounded-md">
-                            Default
-                          </span>
-                              )}
-                            </label>
-                        ))}
-
-                        <label
-                            className={`flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
-                                selectedCardId === "new"
-                                    ? "border-blue bg-blue/5 shadow-sm"
-                                    : "border-edge bg-surface hover:bg-paper"
-                            }`}
-                        >
-                          <input
-                              type="radio"
-                              name="payment_selection"
-                              value="new"
-                              checked={selectedCardId === "new"}
-                              onChange={() => setSelectedCardId("new")}
-                              className="text-blue focus:ring-blue"
-                          />
-                          <span className="text-xs font-semibold text-ink">Use a new credit or debit card</span>
-                        </label>
+                                {card?.isDefault && !expired && <Tag>Default</Tag>}
+                                {expired && <Tag>Expired</Tag>}
+                              </label>
+                          );
+                        })}
                       </div>
-                    </div>
+                    </fieldset>
                 )}
 
                 {/* New Card Fields */}
                 {selectedCardId === "new" && (
-                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    // Typing a new card is a choice too, so a saved list that loads late doesn't replace it
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2" onInput={() => setPickedCardId((picked) => picked ?? "new")}>
                       <Field
                           id="cardNumber"
                           name="cardNumber"
@@ -780,17 +758,17 @@ export function StayReservation({
                       <Field id="cardName" name="cardName" label="Name on card" autoComplete="cc-name" error={errors.cardName} onChange={() => clear("cardName")} />
                       <Field id="postalCode" name="postalCode" label="Billing postal code" autoComplete="postal-code" maxLength={5} error={errors.postalCode} onChange={() => clear("postalCode")} />
 
-                      <div className="sm:col-span-2 pt-1">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                              type="checkbox"
-                              checked={saveCardForFuture}
-                              onChange={(e) => setSaveCardForFuture(e.target.checked)}
-                              className="rounded border-edge text-blue focus:ring-blue"
-                          />
-                          <span className="text-xs text-slate">Save this card to my account for future bookings</span>
-                        </label>
-                      </div>
+                      {canUseSavedCards && (
+                          <label className="flex cursor-pointer items-center gap-2 text-sm text-ink sm:col-span-2">
+                            <input
+                                type="checkbox"
+                                checked={saveCardForFuture}
+                                onChange={(e) => setSaveCardForFuture(e.target.checked)}
+                                className="h-4 w-4 shrink-0 accent-blue"
+                            />
+                            Save this card for next time
+                          </label>
+                      )}
                     </div>
                 )}
               </Card>
