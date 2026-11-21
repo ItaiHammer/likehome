@@ -54,6 +54,10 @@ export const authLinkClass =
 // Tighter on phones so "Sign out" stays on one line beside the Menu button at 360px
 export const headerAuthLinkClass = `${authLinkClass} whitespace-nowrap px-2 sm:px-3`;
 
+/** Hotel cards: the card lifts a little on hover, and its photo (inside an element with `group`) zooms in slightly */
+export const cardLiftClass = "transition-transform duration-200 hover:-translate-y-0.5";
+export const photoZoomClass = "transition-transform duration-500 group-hover:scale-[1.025]";
+
 /** The header's plain 36px icon buttons (theme, messages bell); after: gives each a 44px tap area */
 export const headerIconButtonClass =
   "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-ink transition-colors after:absolute after:-inset-1 hover:bg-ink/5 hover:text-blue-dark focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-blue dark:hover:bg-white/10";

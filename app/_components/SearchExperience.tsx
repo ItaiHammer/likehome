@@ -273,9 +273,16 @@ export function SearchExperience({
   // On tablets Search and Ask AI sit under the fields, so picked dates and the guest count fit in the row
   const searchButtonSize = compact ? "h-12 lg:h-auto lg:w-[56px]" : "h-14 lg:h-auto lg:w-[66px]";
   const toggleSize = compact ? "h-12 lg:h-auto lg:w-[54px]" : "h-14 lg:h-auto lg:w-[58px]";
-  // The homepage bar lines up under the centered title: from xl an empty space as wide as the two buttons
-  // and their gaps (66 + 58 + 2 × 10 = 144px) balances them on the left
-  const centerBar = compact ? "" : "xl:-mx-[72px] xl:pl-[144px]";
+  // Homepage: once the buttons fit beside the fields, the whole form becomes the white bar with Search and
+  // Ask AI inside its right end, so it's one piece centered under the title at any width. The compact bar
+  // on /search keeps its buttons outside.
+  const barSurface = "rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md";
+  const row = compact
+    ? "lg:flex-row"
+    : "lg:flex-row lg:gap-2 lg:rounded-2xl lg:border lg:border-(--bar-edge) lg:bg-surface/80 lg:p-2 lg:shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] lg:backdrop-blur-md";
+  const barCell = compact ? "" : "lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none";
+  const buttonsCell = "lg:contents";
+  const insideBar = compact ? "" : "lg:rounded-xl lg:shadow-none";
 
   // The form still submits as normal (including Apply filters' requestSubmit)
   const rememberSearch = (event: FormEvent<HTMLFormElement>) =>
@@ -313,7 +320,7 @@ export function SearchExperience({
           onInput={syncSummary}
           onClick={syncSummary}
           onKeyUp={syncSummary}
-          className={`flex min-w-0 flex-1 flex-col gap-2.5 lg:flex-row ${centerBar} ${collapsible ? "max-sm:relative" : ""}`}
+          className={`flex min-w-0 flex-1 flex-col gap-2.5 ${row} ${collapsible ? "max-sm:relative" : ""}`}
         >
           {collapsible && (
             <div className="flex gap-3 sm:hidden">
@@ -354,7 +361,7 @@ export function SearchExperience({
           >
             <div
               style={{ "--i": 0 } as React.CSSProperties}
-              className={`grid min-w-0 flex-1 grid-cols-1 divide-y divide-edge/60 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md sm:grid-cols-2 sm:divide-y-0 md:flex md:flex-row ${barPadding} ${
+              className={`grid min-w-0 flex-1 grid-cols-1 divide-y divide-edge/60 ${barSurface} sm:grid-cols-2 sm:divide-y-0 md:flex md:flex-row ${barCell} ${barPadding} ${
                 collapsible ? `${phonePanelRow} ${phoneFieldsGrid} max-sm:divide-y-0 max-sm:bg-surface` : ""
               }`}
             >
@@ -401,12 +408,12 @@ export function SearchExperience({
               )}
             </div>
 
-            <div style={{ "--i": 1 } as React.CSSProperties} className={`flex gap-2.5 lg:contents ${collapsible ? phonePanelRow : ""}`}>
+            <div style={{ "--i": 1 } as React.CSSProperties} className={`flex gap-2.5 ${buttonsCell} ${collapsible ? phonePanelRow : ""}`}>
               <button
                 type="submit"
                 aria-label="Search"
                 title="Search"
-                className={`flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue text-base font-semibold text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,translate] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue lg:flex-none ${searchButtonSize}`}
+                className={`flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue text-base font-semibold text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,translate] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue lg:flex-none ${searchButtonSize} ${insideBar}`}
               >
                 <SearchIcon className={compact ? "h-5 w-5" : "h-6 w-6"} />
                 <span className="lg:sr-only">Search</span>
@@ -415,16 +422,16 @@ export function SearchExperience({
                 // detail is 0 when Enter or Space pressed the button
                 onClick={(e) => switchMode("ai", e.detail > 0)}
                 // On phones the summary bar has its own Ask AI
-                className={`flex-1 lg:flex-none ${toggleSize} ${collapsible ? "max-sm:hidden" : ""}`}
+                className={`flex-1 lg:flex-none ${toggleSize} ${insideBar} ${collapsible ? "max-sm:hidden" : ""}`}
               />
             </div>
           </div>
         </form>
       ) : (
         <>
-        <form action="/search" onSubmit={submitAiSearch} aria-busy={aiBusy} className={`flex min-w-0 flex-1 flex-col gap-2.5 lg:flex-row ${centerBar}`}>
+        <form action="/search" onSubmit={submitAiSearch} aria-busy={aiBusy} className={`flex min-w-0 flex-1 flex-col gap-2.5 ${row}`}>
           <div
-            className={`flex min-w-0 flex-1 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md ${barPadding}`}
+            className={`flex min-w-0 flex-1 ${barSurface} ${barCell} ${barPadding}`}
           >
             <label className={`${field} w-full`} onPointerDown={() => setAiPointerFocus(true)}>
               <span className={`flex shrink-0 items-center justify-center rounded-xl bg-blue/10 text-blue ${compact ? "h-8 w-8" : "h-9 w-9"}`}>
@@ -463,13 +470,13 @@ export function SearchExperience({
             </label>
           </div>
 
-          <div className="flex gap-2.5 lg:contents">
+          <div className={`flex gap-2.5 ${buttonsCell}`}>
             <button
               type="submit"
               aria-label={aiBusy ? "Searching with AI" : "Search with AI"}
               title="Search with AI"
               aria-disabled={aiBusy}
-              className={`flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue text-base font-semibold text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,translate] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue aria-disabled:cursor-progress lg:flex-none ${searchButtonSize}`}
+              className={`flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue text-base font-semibold text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,translate] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue aria-disabled:cursor-progress lg:flex-none ${searchButtonSize} ${insideBar}`}
             >
               {aiBusy ? (
                 <span className={`animate-spin rounded-full border-2 border-on-blue/40 border-t-on-blue ${compact ? "h-5 w-5" : "h-6 w-6"}`} aria-hidden />
@@ -482,7 +489,7 @@ export function SearchExperience({
                 type="button"
                 aria-pressed="true"
                 onClick={(e) => switchMode("standard", e.detail > 0)}
-                className={`standard-return-button flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl text-blue transition-[border-color,color,background-color,translate] duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue lg:flex-none ${toggleSize}`}
+                className={`standard-return-button flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl text-blue transition-[border-color,color,background-color,translate] duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue lg:flex-none ${toggleSize} ${insideBar}`}
                 title="Return to standard search"
                 aria-label="Return to standard search"
             >

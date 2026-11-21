@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
+import { cardLiftClass, photoZoomClass } from "@/app/_components/ui";
 import { hotelLocation } from "@/lib/comparison";
 
 export type PriceStatus = "checking" | "needs-dates" | "sold-out" | "unavailable";
@@ -101,7 +102,7 @@ export function SearchResultCard({
       alt={`${stay.name ?? "Stay"} photo`}
       loading={eager ? "eager" : "lazy"}
       decoding="async"
-      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]"
+      className={`absolute inset-0 h-full w-full object-cover ${photoZoomClass}`}
     />
   ) : (
       <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_30%_30%,rgba(68,115,181,0.22),transparent_38%),linear-gradient(145deg,rgba(68,115,181,0.12),rgba(68,115,181,0.03))]">
@@ -110,7 +111,7 @@ export function SearchResultCard({
   );
 
   return (
-      <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface shadow-[0_18px_45px_-34px_rgba(7,13,47,0.45)] transition-transform duration-200 hover:-translate-y-0.5">
+      <article className={`group relative flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface shadow-[0_18px_45px_-34px_rgba(7,13,47,0.45)] ${cardLiftClass}`}>
         <div className="relative aspect-[16/10] overflow-hidden bg-blue/10">
           {href ? (
               <Link href={href} tabIndex={-1} aria-hidden className="relative block h-full w-full">
