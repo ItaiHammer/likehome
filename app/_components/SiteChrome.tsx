@@ -4,13 +4,15 @@ import { DesktopNav, MobileNav } from "./SiteNav";
 import { ThemeToggle } from "./ThemeToggle";
 import { AuthButton } from "@/components/auth-button";
 import { SignOutButton } from "@/components/sign-out-button";
-import { accountMenuLinkFor, navItemsFor } from "@/lib/account/nav";
+import { accountMenuItemsFor, accountMenuLinkFor, navItemsFor } from "@/lib/account/nav";
 import { accountLabel } from "@/lib/account/role";
 import { bellSummary, type BellSummary } from "@/lib/messages";
 import { getInbox } from "@/utils/inbox";
+import { getPointsBalance } from "@/utils/points";
 import { getViewer } from "@/utils/viewer";
 import { AccountMenu } from "./AccountMenu";
 import { MessagesBell } from "./MessagesBell";
+import { PointsPill } from "./PointsPill";
 
 function Logo() {
   return (
@@ -39,7 +41,13 @@ export async function SiteHeader() {
   const label = accountLabel(viewer.role);
   const menuLink = accountMenuLinkFor(viewer.role);
   const bellRole = viewer.role === "personal" || viewer.role === "business" ? viewer.role : null;
-  const bell = viewer.role === "personal" ? await loadBell() : bellSummary([]);
+  // Rewards are for personal accounts (they live under /MyBookings); both reads run together
+  const [bell, pointsRead] = await Promise.all([
+    viewer.role === "personal" ? loadBell() : bellSummary([]),
+    viewer.role === "personal" && viewer.userId ? getPointsBalance(viewer.userId) : null,
+  ]);
+  // A failed read hides the pill rather than showing 0 pts
+  const points = pointsRead && !pointsRead.error ? pointsRead.balance : null;
   return (
     <header className="relative border-b border-edge bg-surface">
       {/* With the bell, the controls only fit beside the logo at 360px with tighter gaps on phones */}
@@ -51,9 +59,15 @@ export async function SiteHeader() {
         <div className={`flex items-center ${bellRole ? "gap-1 sm:gap-2" : "gap-2"}`}>
           {bellRole && <MessagesBell role={bellRole} unread={bell.unread} messages={bell.latest} />}
           <ThemeToggle />
+          {points !== null && <PointsPill points={points} />}
           <AuthButton signedIn={viewer.role !== "signed-out"}>
             {menuLink ? (
-              <AccountMenu name={viewer.name} email={viewer.email} accountLabel={label} link={menuLink} />
+              <AccountMenu
+                name={viewer.name}
+                email={viewer.email}
+                accountLabel={label}
+                items={accountMenuItemsFor(viewer.role)}
+              />
             ) : (
               <SignOutButton inHeader />
             )}

@@ -118,11 +118,11 @@ async function Points({ accountId }: { accountId: string }) {
   const { value, line } = pointsSummary(balance);
 
   return (
-    <Link href={PAGE_ROUTES.MY_BOOKINGS_ACCOUNT} className={`${tintLink} flex flex-col p-5 sm:px-[22px]`}>
+    <Link href={PAGE_ROUTES.REWARDS} className={`${tintLink} flex flex-col p-5 sm:px-[22px]`}>
       <h3 className={cardLabel}>Your points</h3>
       {value !== null && <p className="mt-1.5 font-serif text-[40px] leading-[44px] text-ink">{value}</p>}
       <p className="mt-1.5 text-[15px] leading-6 text-slate">{line}</p>
-      <CardAction>See points in My Bookings</CardAction>
+      <CardAction>See your rewards</CardAction>
     </Link>
   );
 }

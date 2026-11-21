@@ -18,6 +18,8 @@ export const PAGE_ROUTES = {
     MY_BOOKINGS: '/MyBookings',
     MY_BOOKINGS_SAVED: '/MyBookings?tab=saved',
     MY_BOOKINGS_ACCOUNT: '/MyBookings?tab=account',
+    REWARDS: '/MyBookings/rewards',
+    REWARDS_HISTORY: '/MyBookings/rewards/history',
     ACCOUNT_TYPE: '/account-type',
     MESSAGES: '/messages',
     OWNER_MESSAGES: '/property-dashboard/messages',

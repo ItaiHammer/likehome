@@ -1,7 +1,9 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { createClient } from "@/utils/supabase/server";
 
-export async function getPointsBalance(accountId: string) {
+/** Read once per request: the header and the page both need it */
+export const getPointsBalance = cache(async (accountId: string) => {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const { data, error } = await supabase
@@ -11,7 +13,7 @@ export async function getPointsBalance(accountId: string) {
     .maybeSingle();
   // no row yet = never earned anything
   return { balance: data?.balance ?? 0, error };
-}
+});
 
 export async function getPointsHistory(accountId: string) {
   const cookieStore = await cookies();

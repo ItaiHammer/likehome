@@ -6,6 +6,10 @@ type CheckoutStay = {
   adults: number;
   children: number;
   timeZone?: string;
+  /** The chosen reward (lib/rewards STAY_DISCOUNTS id); /api/checkout prices its points from its own total */
+  rewardId?: string;
+  /** The stay total the guest saw, so /api/checkout can refuse a reward when its price differs */
+  expectedTotal?: number;
 };
 
 export type CheckoutForm = CheckoutStay & (
@@ -35,6 +39,7 @@ export function checkoutRequest(form: CheckoutForm) {
     adults: form.adults,
     children: form.children,
     time_zone: form.timeZone,
+    ...(form.rewardId ? { reward_id: form.rewardId, expected_total: Math.round((form.expectedTotal ?? 0) * 100) / 100 } : {}),
   };
 
   if (form.savedPaymentMethodId) {

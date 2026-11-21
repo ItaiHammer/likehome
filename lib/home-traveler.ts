@@ -2,6 +2,7 @@
 // The personal homepage's summary cards: next trip, points and unread messages.
 import { groupBookings, money, type Booking } from './bookings.ts'
 import { countNights } from '../utils/reservation-logic.ts'
+import { pointsNumber, pointsToDollars } from './rewards.ts'
 
 // The soonest stay My Bookings lists as upcoming (a stay under way counts), if it's confirmed
 export function nextTrip(bookings: Booking[], today: string): Booking | null {
@@ -14,15 +15,12 @@ export function tripLabel(checkIn: string, today: string): string {
   return `Next trip · ${days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days} days`}`
 }
 
-// The database's rule (points_to_dollars in supabase/migrations): 100 points = $1
-export const POINTS_PER_DOLLAR = 100
-
 /** `balance` is null when the read failed */
 export function pointsSummary(balance: number | null): { value: string | null; line: string } {
   if (balance === null) return { value: null, line: 'We couldn’t load your points just now.' }
   const points = Number.isFinite(balance) ? Math.max(0, Math.floor(balance)) : 0
   if (points === 0) return { value: '0', line: 'Earn points on every night you book.' }
-  return { value: points.toLocaleString('en-US'), line: `Worth ${money(points / POINTS_PER_DOLLAR)} toward a stay` }
+  return { value: pointsNumber(points), line: `Worth ${money(pointsToDollars(points))} toward a stay` }
 }
 
 /** `unread` is null when the inbox read failed */

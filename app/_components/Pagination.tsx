@@ -1,18 +1,5 @@
 import Link from "next/link";
-
-type RawParams = Record<string, string | string[] | undefined>;
-
-function pageHref(params: RawParams, page: number) {
-  const query = new URLSearchParams();
-  for (const [key, raw] of Object.entries(params)) {
-    if (key === "page" || raw === undefined || raw === "") continue;
-    const values = Array.isArray(raw) ? raw : [raw];
-    values.forEach((value) => query.append(key, value));
-  }
-  if (page > 1) query.set("page", String(page));
-  const suffix = query.toString();
-  return suffix ? `/search?${suffix}` : "/search";
-}
+import { visiblePages } from "@/lib/pagination";
 
 // At either end Previous/Next aren't links, so they drop out of the tab order
 function StepLink({ href, disabled, children }: { href: string; disabled: boolean; children: React.ReactNode }) {
@@ -31,24 +18,26 @@ function StepLink({ href, disabled, children }: { href: string; disabled: boolea
   );
 }
 
+/** Previous 1 … 4 [5] 6 … 20 Next, as plain links so it works without JavaScript */
 export function Pagination({
-  currentPage,
-  totalPages,
-  params,
+  current,
+  pages,
+  href,
+  label,
 }: {
-  currentPage: number;
-  totalPages: number;
-  params: RawParams;
+  current: number;
+  pages: number;
+  href: (page: number) => string;
+  /** The nav's accessible name, e.g. "Search result pages" */
+  label: string;
 }) {
-  if (totalPages <= 1) return null;
+  if (pages <= 1) return null;
 
-  const visible = Array.from(new Set([1, currentPage - 1, currentPage, currentPage + 1, totalPages]))
-    .filter((page) => page >= 1 && page <= totalPages)
-    .sort((a, b) => a - b);
+  const visible = visiblePages(current, pages);
 
   return (
-    <nav aria-label="Search result pages" className="mt-10 flex flex-wrap items-center justify-center gap-2">
-      <StepLink href={pageHref(params, Math.max(1, currentPage - 1))} disabled={currentPage === 1}>
+    <nav aria-label={label} className="mt-10 flex flex-wrap items-center justify-center gap-2">
+      <StepLink href={href(Math.max(1, current - 1))} disabled={current === 1}>
         Previous
       </StepLink>
 
@@ -58,10 +47,10 @@ export function Pagination({
           <span key={page} className="contents">
             {previous && page - previous > 1 && <span className="px-1 text-slate">…</span>}
             <Link
-              href={pageHref(params, page)}
-              aria-current={page === currentPage ? "page" : undefined}
+              href={href(page)}
+              aria-current={page === current ? "page" : undefined}
               className={`flex h-10 min-w-10 items-center justify-center rounded-xl border px-2 text-sm font-semibold transition-colors ${
-                page === currentPage
+                page === current
                   ? "border-blue bg-blue text-on-blue"
                   : "border-edge bg-surface text-ink hover:border-blue hover:text-blue"
               }`}
@@ -72,7 +61,7 @@ export function Pagination({
         );
       })}
 
-      <StepLink href={pageHref(params, Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>
+      <StepLink href={href(Math.min(pages, current + 1))} disabled={current === pages}>
         Next
       </StepLink>
     </nav>

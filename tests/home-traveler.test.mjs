@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-const { nextTrip, tripLabel, pointsSummary, inboxHint, POINTS_PER_DOLLAR } = await import('../lib/home-traveler.ts')
+const { nextTrip, tripLabel, pointsSummary, inboxHint } = await import('../lib/home-traveler.ts')
 
 const TODAY = '2026-11-20'
 const booking = (id, checkIn, checkOut, status = 'confirmed') => ({
@@ -44,7 +44,6 @@ test('trip label: a stay that has started', () => {
 })
 
 test('points: worth a dollar per hundred, as the database redeems them', () => {
-  assert.equal(POINTS_PER_DOLLAR, 100)
   assert.deepEqual(pointsSummary(1240), { value: '1,240', line: 'Worth $12.40 toward a stay' })
   assert.deepEqual(pointsSummary(500), { value: '500', line: 'Worth $5 toward a stay' })
   assert.deepEqual(pointsSummary(7), { value: '7', line: 'Worth $0.07 toward a stay' })
