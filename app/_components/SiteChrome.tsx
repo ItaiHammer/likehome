@@ -57,8 +57,11 @@ export async function SiteHeader() {
           <DesktopNav items={items} />
         </nav>
         <div className={`flex items-center ${bellRole ? "gap-1 sm:gap-2" : "gap-2"}`}>
-          {bellRole && <MessagesBell role={bellRole} unread={bell.unread} messages={bell.latest} />}
-          <ThemeToggle />
+          {/* 8px apart, so the two buttons' 44px tap areas meet without overlapping */}
+          <div className="flex items-center gap-2">
+            {bellRole && <MessagesBell role={bellRole} unread={bell.unread} messages={bell.latest} />}
+            <ThemeToggle />
+          </div>
           {points !== null && <PointsPill points={points} />}
           <AuthButton signedIn={viewer.role !== "signed-out"}>
             {menuLink ? (

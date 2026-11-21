@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 const {
   RECENT_SEARCHES_KEY,
   addRecentSearch,
+  clearRecentSearches,
   datesLabel,
   loadRecentSearches,
   parseRecentSearches,
@@ -14,7 +15,9 @@ const {
 } = await import('../lib/recent-searches.ts')
 
 const TODAY = '2026-11-20'
+const ME = 'user-1'
 const form = (fields) => new URLSearchParams(fields)
+const stored = (searches, owner = ME) => JSON.stringify({ owner, searches })
 
 function memoryStorage(initial) {
   const data = new Map(initial === undefined ? [] : [[RECENT_SEARCHES_KEY, initial]])
@@ -22,6 +25,7 @@ function memoryStorage(initial) {
     data,
     getItem: (key) => data.get(key) ?? null,
     setItem: (key, value) => data.set(key, String(value)),
+    removeItem: (key) => data.delete(key),
   }
 }
 
@@ -119,39 +123,39 @@ test('addRecentSearch: a lone check-in is kept as a place without dates', () => 
 })
 
 test('parseRecentSearches: dates already in the past are dropped, the place is kept', () => {
-  const raw = JSON.stringify([
+  const raw = stored([
     { where: 'San Diego', checkIn: '2026-11-10', checkOut: '2026-11-12', adults: 2, children: 0 },
     { where: 'Paris', checkIn: TODAY, checkOut: '2026-11-22', adults: 2, children: 0 },
   ])
-  assert.deepEqual(parseRecentSearches(raw, TODAY), [
+  assert.deepEqual(parseRecentSearches(raw, TODAY, ME), [
     { where: 'San Diego', adults: 2, children: 0 },
     { where: 'Paris', checkIn: TODAY, checkOut: '2026-11-22', adults: 2, children: 0 },
   ])
 })
 
 test('parseRecentSearches: searches that only differed by their past dates become one', () => {
-  const raw = JSON.stringify([
+  const raw = stored([
     { where: 'Rome', checkIn: '2026-10-01', checkOut: '2026-10-03', adults: 2, children: 0 },
     { where: 'Rome', checkIn: '2026-11-01', checkOut: '2026-11-03', adults: 2, children: 0 },
     { where: 'Oslo', adults: 2, children: 0 },
   ])
   assert.deepEqual(
-    parseRecentSearches(raw, TODAY).map((s) => s.where),
+    parseRecentSearches(raw, TODAY, ME).map((s) => s.where),
     ['Rome', 'Oslo'],
   )
 })
 
 test('parseRecentSearches: junk reads as nothing, bad entries are skipped', () => {
-  for (const raw of [null, '', 'not json', '{}', '"Paris"', '42']) assert.deepEqual(parseRecentSearches(raw, TODAY), [], String(raw))
-  const raw = JSON.stringify([null, 'Paris', { where: '' }, { where: 7 }, { where: 'Oslo', adults: 'lots', place: 9 }])
-  assert.deepEqual(parseRecentSearches(raw, TODAY), [{ where: 'Oslo', adults: 2, children: 0 }])
+  for (const raw of [null, '', 'not json', '{}', '"Paris"', '42', stored('Paris')]) assert.deepEqual(parseRecentSearches(raw, TODAY, ME), [], String(raw))
+  const raw = stored([null, 'Paris', { where: '' }, { where: 7 }, { where: 'Oslo', adults: 'lots', place: 9 }])
+  assert.deepEqual(parseRecentSearches(raw, TODAY, ME), [{ where: 'Oslo', adults: 2, children: 0 }])
 })
 
 test('save then load: the form round-trips through storage', () => {
   const storage = memoryStorage()
-  saveRecentSearch(readSearchFields(form({ where: 'Kyoto', place: 'p1', checkIn: '2026-12-03', checkOut: '2026-12-06', adults: '2', children: '1' })), TODAY, storage)
-  saveRecentSearch(readSearchFields(form({ where: 'Banff' })), TODAY, storage)
-  assert.deepEqual(loadRecentSearches(TODAY, storage), [
+  saveRecentSearch(readSearchFields(form({ where: 'Kyoto', place: 'p1', checkIn: '2026-12-03', checkOut: '2026-12-06', adults: '2', children: '1' })), TODAY, ME, storage)
+  saveRecentSearch(readSearchFields(form({ where: 'Banff' })), TODAY, ME, storage)
+  assert.deepEqual(loadRecentSearches(TODAY, ME, storage), [
     { where: 'Banff', adults: 2, children: 0 },
     { where: 'Kyoto', place: 'p1', checkIn: '2026-12-03', checkOut: '2026-12-06', adults: 2, children: 1 },
   ])
@@ -159,7 +163,7 @@ test('save then load: the form round-trips through storage', () => {
 
 test('save: a search with no place leaves storage untouched', () => {
   const storage = memoryStorage()
-  saveRecentSearch(readSearchFields(form({ where: '' })), TODAY, storage)
+  saveRecentSearch(readSearchFields(form({ where: '' })), TODAY, ME, storage)
   assert.equal(storage.data.size, 0)
 })
 
@@ -171,9 +175,59 @@ test('storage errors are swallowed', () => {
     setItem: () => {
       throw new Error('QuotaExceededError')
     },
+    removeItem: () => {
+      throw new Error('SecurityError')
+    },
   }
-  assert.deepEqual(loadRecentSearches(TODAY, broken), [])
-  assert.doesNotThrow(() => saveRecentSearch(readSearchFields(form({ where: 'Paris' })), TODAY, broken))
-  assert.deepEqual(loadRecentSearches(TODAY, null), [])
-  assert.doesNotThrow(() => saveRecentSearch(readSearchFields(form({ where: 'Paris' })), TODAY, null))
+  assert.deepEqual(loadRecentSearches(TODAY, ME, broken), [])
+  assert.doesNotThrow(() => saveRecentSearch(readSearchFields(form({ where: 'Paris' })), TODAY, ME, broken))
+  assert.doesNotThrow(() => clearRecentSearches(broken))
+  assert.deepEqual(loadRecentSearches(TODAY, ME, null), [])
+  assert.doesNotThrow(() => saveRecentSearch(readSearchFields(form({ where: 'Paris' })), TODAY, ME, null))
+  assert.doesNotThrow(() => clearRecentSearches(null))
+})
+
+test('owner: another account, or signed out, sees none of this account’s searches', () => {
+  const storage = memoryStorage()
+  saveRecentSearch(readSearchFields(form({ where: 'Kyoto' })), TODAY, ME, storage)
+  assert.deepEqual(loadRecentSearches(TODAY, 'user-2', storage), [])
+  assert.deepEqual(loadRecentSearches(TODAY, null, storage), [])
+  assert.equal(loadRecentSearches(TODAY, ME, storage).length, 1)
+})
+
+test('owner: signed-out searches stay signed-out', () => {
+  const storage = memoryStorage()
+  saveRecentSearch(readSearchFields(form({ where: 'Lima' })), TODAY, null, storage)
+  assert.deepEqual(loadRecentSearches(TODAY, null, storage).map((s) => s.where), ['Lima'])
+  assert.deepEqual(loadRecentSearches(TODAY, ME, storage), [])
+})
+
+test('owner: saving for a new account replaces the old account’s list', () => {
+  const storage = memoryStorage()
+  saveRecentSearch(readSearchFields(form({ where: 'Kyoto' })), TODAY, ME, storage)
+  saveRecentSearch(readSearchFields(form({ where: 'Banff' })), TODAY, 'user-2', storage)
+  assert.deepEqual(loadRecentSearches(TODAY, 'user-2', storage).map((s) => s.where), ['Banff'])
+  assert.deepEqual(loadRecentSearches(TODAY, ME, storage), [])
+})
+
+test('owner: while the account is not known yet nothing is read or saved', () => {
+  const storage = memoryStorage(stored([{ where: 'Oslo', adults: 2, children: 0 }], null))
+  assert.deepEqual(loadRecentSearches(TODAY, undefined, storage), [])
+  saveRecentSearch(readSearchFields(form({ where: 'Paris' })), TODAY, undefined, storage)
+  assert.deepEqual(loadRecentSearches(TODAY, null, storage).map((s) => s.where), ['Oslo'])
+})
+
+test('owner: a list saved before searches had an owner is shown to no one', () => {
+  const storage = memoryStorage(JSON.stringify([{ where: 'Oslo', adults: 2, children: 0 }]))
+  assert.deepEqual(loadRecentSearches(TODAY, ME, storage), [])
+  assert.deepEqual(loadRecentSearches(TODAY, null, storage), [])
+  saveRecentSearch(readSearchFields(form({ where: 'Paris' })), TODAY, ME, storage)
+  assert.deepEqual(loadRecentSearches(TODAY, ME, storage).map((s) => s.where), ['Paris'])
+})
+
+test('clearRecentSearches: forgets the list', () => {
+  const storage = memoryStorage()
+  saveRecentSearch(readSearchFields(form({ where: 'Kyoto' })), TODAY, ME, storage)
+  clearRecentSearches(storage)
+  assert.equal(storage.data.size, 0)
 })

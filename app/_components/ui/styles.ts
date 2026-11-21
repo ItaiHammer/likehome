@@ -54,6 +54,10 @@ export const authLinkClass =
 // Tighter on phones so "Sign out" stays on one line beside the Menu button at 360px
 export const headerAuthLinkClass = `${authLinkClass} whitespace-nowrap px-2 sm:px-3`;
 
+/** The header's plain 36px icon buttons (theme, messages bell); after: gives each a 44px tap area */
+export const headerIconButtonClass =
+  "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-ink transition-colors after:absolute after:-inset-1 hover:bg-ink/5 hover:text-blue-dark focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-blue dark:hover:bg-white/10";
+
 // A section heading's "see more" link (pair it with an ArrowIcon in arrowSlideClass); 44px tall on phones
 export const sectionLinkClass =
   "group inline-flex shrink-0 items-center gap-1.5 rounded-control text-base font-semibold text-blue hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue max-sm:min-h-11";

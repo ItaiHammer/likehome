@@ -4,7 +4,16 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
-import { readSearchFields, saveRecentSearch, searchDetails, type RecentSearch, type SearchFields } from "@/lib/recent-searches";
+import {
+  clearRecentSearches,
+  readSearchFields,
+  saveRecentSearch,
+  searchDetails,
+  type RecentSearch,
+  type SearchFields,
+  type SearchOwner,
+} from "@/lib/recent-searches";
+import { onAccountChange, whenAccountKnown } from "./accountChange";
 import { MAX_PROMPT_CHARS, readAiAnswer } from "./aiSearch";
 import { browserTimeZone, todayISO } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
@@ -45,9 +54,10 @@ const initialFields = (values: SearchInitialValues): SearchFields =>
 // Phones: the search bar's fields drop down from a one-line summary. From sm up the panel is
 // display: contents, so its rows sit in the form exactly as before; the overrides undo .dropdown's
 // hidden state there (it's plain CSS, so they need !important). Its clip-path is dropped while open
-// so the fields' own popovers can reach past the panel.
+// so the fields' own popovers can reach past the panel. Opening it moves focus to the panel, not to Where, so
+// the phone keyboard and the place list don't cover the other fields; keyboard users see the ring around it.
 const phonePanel =
-  "dropdown max-sm:absolute max-sm:inset-x-0 max-sm:top-full max-sm:z-30 max-sm:mt-2.5 max-sm:flex max-sm:flex-col max-sm:gap-3 max-sm:outline-none data-[open=true]:[clip-path:none]! sm:contents sm:visible! sm:pointer-events-auto!";
+  "dropdown max-sm:absolute max-sm:inset-x-0 max-sm:top-full max-sm:z-30 max-sm:mt-2.5 max-sm:flex max-sm:flex-col max-sm:gap-3 max-sm:rounded-2xl max-sm:outline-hidden max-sm:focus-visible:outline-solid max-sm:focus-visible:outline-2 max-sm:focus-visible:outline-offset-4 max-sm:focus-visible:outline-blue data-[open=true]:[clip-path:none]! sm:contents sm:visible! sm:pointer-events-auto!";
 const phonePanelRow = "cascade sm:opacity-100! sm:transform-none!";
 // Phones: the filters control shrinks to its icon (and count) beside Where. This reaches into
 // SearchFiltersPicker's trigger, which puts the icon first and its text after it.
@@ -140,6 +150,26 @@ export function SearchExperience({
   const toggleRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
 
+  // Recent searches belong to the signed-in account (or to signed-out browsing) and are forgotten when it changes.
+  // The ref is for the AI search's finish callback, which may hold an older render's values.
+  const [searchOwner, setSearchOwner] = useState<SearchOwner>(undefined);
+  const searchOwnerRef = useRef<SearchOwner>(undefined);
+  useEffect(() => {
+    const own = (accountId: string | null) => {
+      searchOwnerRef.current = accountId;
+      setSearchOwner(accountId);
+    };
+    const stopKnown = whenAccountKnown(own);
+    const stopChange = onAccountChange((accountId) => {
+      clearRecentSearches();
+      own(accountId);
+    });
+    return () => {
+      stopKnown();
+      stopChange();
+    };
+  }, []);
+
   useEffect(() => {
     if (!expanded) return;
     panelRef.current?.focus();
@@ -194,7 +224,7 @@ export function SearchExperience({
       const answer = readAiAnswer(text, promptRef.current);
       if (!answer) setAiError("Sorry, that didn't come through. Try asking again.");
       else if (answer.query) {
-        saveRecentSearch(readSearchFields(answer.query), todayISO());
+        saveRecentSearch(readSearchFields(answer.query), todayISO(), searchOwnerRef.current);
         // Same as the standard search bar: send the time zone so date checks use the guest's today
         const tz = browserTimeZone();
         if (tz) answer.query.set("tz", tz);
@@ -246,7 +276,7 @@ export function SearchExperience({
 
   // The form still submits as normal (including Apply filters' requestSubmit)
   const rememberSearch = (event: FormEvent<HTMLFormElement>) =>
-    saveRecentSearch(readSearchFields(new FormData(event.currentTarget)), todayISO());
+    saveRecentSearch(readSearchFields(new FormData(event.currentTarget)), todayISO(), searchOwnerRef.current);
 
   const fillFromRecent = (search: RecentSearch) =>
     setFieldStart((s) => ({
@@ -332,6 +362,7 @@ export function SearchExperience({
                 initialPlace={initialValues.place ?? ""}
                 autoFocusFrom={switchedBy === "keyboard" ? "keyboard" : undefined}
                 onPickRecent={fillFromRecent}
+                recentsOwner={searchOwner}
               />
               <DatesField
                 key={`dates-${fieldStart.n}`}

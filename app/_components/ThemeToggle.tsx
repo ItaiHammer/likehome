@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { headerIconButtonClass } from "./ui";
 
 let fadeTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -42,8 +43,7 @@ export function ThemeToggle() {
       aria-label="Dark mode"
       aria-pressed={dark}
       title={dark ? "Switch to light mode" : "Switch to dark mode"}
-      // after: gives the 36px button a 44px tap area
-      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-ink transition-colors after:absolute after:-inset-[5px] hover:bg-ink/5 hover:text-blue-dark focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-blue dark:hover:bg-white/10"
+      className={headerIconButtonClass}
     >
       {/* Sun (shown in light mode) */}
       <svg viewBox="0 0 24 24" className="h-[22px] w-[22px] dark:hidden" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>

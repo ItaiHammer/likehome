@@ -1,5 +1,5 @@
 // The search bar's fields as one search: read from the form (or a /search query), summed up in a
-// line, and the last few kept in the browser as recent searches.
+// line, and the last few kept in the browser as recent searches, each list tagged with the account it belongs to.
 // No Supabase / Next.js imports here so it can be unit tested with `npm test`.
 import { formatRange, formatShort } from '../app/_components/dates.ts'
 import { parseDate } from '../utils/reservation-logic.ts'
@@ -28,7 +28,10 @@ export type RecentSearch = SearchFields
 /** FormData, URLSearchParams, or a lookup into a plain object */
 type FieldSource = { get(name: string): unknown }
 
-type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
+type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
+
+/** The account the searches belong to: its id, null when signed out, undefined while not known yet */
+export type SearchOwner = string | null | undefined
 
 const isDate = (value: unknown): value is string => parseDate(value) !== null
 
@@ -95,16 +98,19 @@ export function addRecentSearch(list: RecentSearch[], search: SearchFields, toda
   return recent ? distinct([recent, ...list]) : list
 }
 
-/** The stored list, trusting nothing in it */
-export function parseRecentSearches(raw: string | null, today: string): RecentSearch[] {
+/** The stored list when it belongs to `owner`, trusting nothing in it. Lists saved before searches had an owner are dropped. */
+export function parseRecentSearches(raw: string | null, today: string, owner: SearchOwner): RecentSearch[] {
+  if (owner === undefined) return []
   let stored: unknown
   try {
-    stored = JSON.parse(raw ?? '[]')
+    stored = JSON.parse(raw ?? 'null')
   } catch {
     return []
   }
-  if (!Array.isArray(stored)) return []
-  const list = stored.flatMap((entry) => {
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return []
+  const { owner: storedOwner, searches } = stored as { owner?: unknown; searches?: unknown }
+  if (storedOwner !== owner || !Array.isArray(searches)) return []
+  const list = searches.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return []
     const recent = asRecent(readSearchFields({ get: (name) => (entry as Record<string, unknown>)[name] }), today)
     return recent ? [recent] : []
@@ -121,18 +127,26 @@ function browserStorage(): StorageLike | null {
 }
 
 /** Never throws: storage that's blocked, full or holding junk reads as no recent searches */
-export function loadRecentSearches(today: string, storage: StorageLike | null = browserStorage()): RecentSearch[] {
+export function loadRecentSearches(today: string, owner: SearchOwner, storage: StorageLike | null = browserStorage()): RecentSearch[] {
   try {
-    return parseRecentSearches(storage?.getItem(RECENT_SEARCHES_KEY) ?? null, today)
+    return parseRecentSearches(storage?.getItem(RECENT_SEARCHES_KEY) ?? null, today, owner)
   } catch {
     return []
   }
 }
 
-/** Remembers a submitted search; one without a place isn't kept. Never throws. */
-export function saveRecentSearch(search: SearchFields, today: string, storage: StorageLike | null = browserStorage()) {
-  if (!storage || !search.where) return
+/** Remembers a submitted search for `owner`, replacing another account's list; one without a place isn't kept. Never throws. */
+export function saveRecentSearch(search: SearchFields, today: string, owner: SearchOwner, storage: StorageLike | null = browserStorage()) {
+  if (!storage || !search.where || owner === undefined) return
   try {
-    storage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(addRecentSearch(loadRecentSearches(today, storage), search, today)))
+    const searches = addRecentSearch(loadRecentSearches(today, owner, storage), search, today)
+    storage.setItem(RECENT_SEARCHES_KEY, JSON.stringify({ owner, searches }))
+  } catch {}
+}
+
+/** Forgets the recent searches, for when the account changes. Never throws. */
+export function clearRecentSearches(storage: StorageLike | null = browserStorage()) {
+  try {
+    storage?.removeItem(RECENT_SEARCHES_KEY)
   } catch {}
 }

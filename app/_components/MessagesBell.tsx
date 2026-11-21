@@ -5,11 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { API_ROUTES, PAGE_ROUTES } from "@/constants/routes";
 import { badgeLabel, bellSummary, relativeTime, toInboxMessages, type BellSummary, type InboxMessage } from "@/lib/messages";
+import { headerIconButtonClass as bellClass } from "./ui";
 import { Popover } from "./ui";
-
-// Same look as ThemeToggle, which it sits beside. after: gives the 36px button a 44px tap area.
-const bellClass =
-  "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-ink transition-colors after:absolute after:-inset-[5px] hover:bg-ink/5 hover:text-blue-dark focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-blue dark:hover:bg-white/10";
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue";
 

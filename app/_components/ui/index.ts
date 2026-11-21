@@ -12,6 +12,7 @@ export {
   buttonPrimary,
   buttonSecondary,
   headerAuthLinkClass,
+  headerIconButtonClass,
   iconButton,
   iconButtonClass,
   inputClass,

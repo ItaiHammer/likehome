@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { loadRecentSearches, searchDetails, type RecentSearch } from "@/lib/recent-searches";
+import { loadRecentSearches, searchDetails, type RecentSearch, type SearchOwner } from "@/lib/recent-searches";
 import { DESTINATIONS } from "../_data/destinations";
 import { todayISO } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
@@ -97,9 +97,11 @@ function ClockIcon({ className }: { className: string }) {
   );
 }
 
+const NO_RECENTS: RecentSearch[] = [];
+
 // Destination field: instant suggestions from a bundled list, then LiteAPI's places (any town, airport or landmark)
 // after a typing pause. Picking one of LiteAPI's sends its place id with the search. With `onPickRecent`, the
-// guest's recent searches (kept in this browser) come first; picking one fills this field and hands the
+// recent searches of `recentsOwner` (kept in this browser) come first; picking one fills this field and hands the
 // search over so the bar can fill its dates and guests.
 export function DestinationInput({
   className = "",
@@ -107,6 +109,7 @@ export function DestinationInput({
   initialPlace = "",
   autoFocusFrom,
   onPickRecent,
+  recentsOwner,
 }: {
   className?: string;
   initialValue?: string;
@@ -114,6 +117,7 @@ export function DestinationInput({
   /** Focus the field when it mounts, e.g. back from AI search; "pointer" keeps the keyboard ring off */
   autoFocusFrom?: "keyboard" | "pointer";
   onPickRecent?: (search: RecentSearch) => void;
+  recentsOwner?: SearchOwner;
 }) {
   const listId = useId();
   const [query, setQuery] = useState(initialValue);
@@ -124,8 +128,13 @@ export function DestinationInput({
   // LiteAPI's id for the picked place; typing anything else clears it
   const [placeId, setPlaceId] = useState(initialPlace);
   const [remote, setRemote] = useState<{ query: string; places: RemotePlace[] }>({ query: "", places: [] });
-  // Read from the browser each time the list opens, never while rendering, so the server's HTML always matches
-  const [recents, setRecents] = useState<RecentSearch[]>([]);
+  // Read from the browser while the field is focused (never on the server, where it isn't), again each time
+  // it's focused and whenever the account changes, so another account's searches never show
+  const wantsRecents = Boolean(onPickRecent);
+  const recents = useMemo(
+    () => (focused && wantsRecents ? loadRecentSearches(todayISO(), recentsOwner) : NO_RECENTS),
+    [focused, wantsRecents, recentsOwner],
+  );
   // Text fields match :focus-visible even when clicked, so the search bar's
   // keyboard focus ring is turned off while the field was focused by mouse or touch
   const [pointerFocus, setPointerFocus] = useState(autoFocusFrom === "pointer");
@@ -174,7 +183,6 @@ export function DestinationInput({
 
   function openList() {
     setFocused(true);
-    if (onPickRecent) setRecents(loadRecentSearches(todayISO()));
   }
 
   function choose(item: Item) {
