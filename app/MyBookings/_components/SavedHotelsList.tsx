@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Button } from "@/app/_components/ui";
+import { Button, Card } from "@/app/_components/ui";
 import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
 import { useSavedHotels } from "@/app/_components/savedHotelsStore";
+import { useAccountChanged } from "@/app/_components/useAccountChanged";
 
 export interface SavedHotel {
     id: string;
@@ -17,11 +18,33 @@ export interface SavedHotel {
     tags?: string[] | null;
 }
 
-// `hotels` is the account's saved list from the server, newest first. A heart cleared on this page hides its card.
+function ListNotice({ title, body, children }: { title: string; body: string; children?: React.ReactNode }) {
+    return (
+        <Card className="sm:p-8">
+            <p className="text-lg font-semibold text-ink">{title}</p>
+            <p className="mt-1 text-slate">{body}</p>
+            {children}
+        </Card>
+    );
+}
+
+// `hotels` is the account's saved list from the server, newest first. A heart cleared on this page hides its card;
+// the store's list can be older than the server's, so it hides nothing else.
 export function SavedHotelsList({ hotels }: { hotels: SavedHotel[] }) {
     const [sortBy, setSortBy] = useState<"recent" | "name_asc" | "name_desc">("recent");
     const saved = useSavedHotels();
-    const kept = saved.status === "signed-in" ? hotels.filter((h) => saved.ids.has(h.id)) : hotels;
+    const accountChanged = useAccountChanged();
+
+    if (accountChanged) {
+        return (
+            <ListNotice
+                title="You signed out or switched accounts"
+                body="Reload the page to see saved hotels for the account signed in now."
+            />
+        );
+    }
+
+    const kept = hotels.filter((h) => !(saved.known.has(h.id) && !saved.ids.has(h.id)));
 
     const savedHotels = [...kept].sort((a, b) => {
         if (sortBy === "name_asc") {
@@ -35,13 +58,11 @@ export function SavedHotelsList({ hotels }: { hotels: SavedHotel[] }) {
 
     if (savedHotels.length === 0) {
         return (
-            <div className="rounded-lg border border-edge bg-surface p-6 sm:p-8">
-                <p className="text-lg font-semibold text-ink">No saved hotels yet</p>
-                <p className="mt-1 text-slate">Click the heart icon on any hotel card to save it here.</p>
+            <ListNotice title="No saved hotels yet" body="Click the heart icon on any hotel card to save it here.">
                 <Button href="/search" className="mt-5">
                     Explore stays
                 </Button>
-            </div>
+            </ListNotice>
         );
     }
 
