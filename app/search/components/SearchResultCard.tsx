@@ -124,6 +124,7 @@ export function SearchResultCard({
           {stay.id && (
               <SaveHotelButton
                   hotelId={stay.id}
+                  hotelName={stay.name}
                   className="absolute top-3 right-3 z-10"
               />
           )}

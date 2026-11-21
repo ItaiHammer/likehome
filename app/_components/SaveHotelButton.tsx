@@ -1,25 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { isHotelId } from "@/lib/saved-hotels";
+import { isHotelId, shownSaved } from "@/lib/saved-hotels";
 import { toggleSavedHotel, useSaveFailure, useSavedHotels } from "./savedHotelsStore";
 
 interface SaveHotelButtonProps {
     /** A hotels.id; sample stays and unsaved LiteAPI hotels have none and get no heart */
     hotelId: string;
-    /** Known saved state from the server render, shown until the saved list has loaded */
+    /** Named in the button's label, so each heart on a page says which hotel it saves */
+    hotelName: string | null | undefined;
+    /** Known saved state from the server render, shown until the store knows this hotel */
     saved?: boolean;
     className?: string;
 }
 
-export function SaveHotelButton({ hotelId, saved, className = "" }: SaveHotelButtonProps) {
+// Whether the viewer can have hearts (travelers, and signed-out visitors who are sent to sign in), known
+// from the server render so business and unchosen accounts never see one
+const HeartsAllowed = createContext(true);
+
+export function HeartsAccess({ allowed, children }: { allowed: boolean; children: React.ReactNode }) {
+    return <HeartsAllowed.Provider value={allowed}>{children}</HeartsAllowed.Provider>;
+}
+
+export function SaveHotelButton({ hotelId, hotelName, saved, className = "" }: SaveHotelButtonProps) {
     const router = useRouter();
-    const { status, ids } = useSavedHotels();
+    const allowed = useContext(HeartsAllowed);
+    const hearts = useSavedHotels();
+    const { status } = hearts;
     const [pending, setPending] = useState(false);
-    // The server's answer only stands in while the list loads; signed out, nothing is saved
-    const isSaved = status === "signed-in" ? ids.has(hotelId) : status !== "signed-out" && (saved ?? false);
+    const isSaved = shownSaved(hearts, hotelId, saved);
+    const name = hotelName?.trim() || "this hotel";
+    // The label stays put and aria-pressed says whether it's saved, as toggle buttons should
+    const label = status === "signed-out" ? `Sign in to save ${name}` : `Save ${name}`;
 
     const signIn = () => {
         const back = `${window.location.pathname}${window.location.search}`;
@@ -38,13 +52,14 @@ export function SaveHotelButton({ hotelId, saved, className = "" }: SaveHotelBut
         if (result === "signed-out") signIn();
     };
 
-    if (!isHotelId(hotelId)) return null;
+    // Only personal accounts save hotels
+    if (!allowed || !isHotelId(hotelId) || status === "unavailable") return null;
 
     return (
         <button
             type="button"
             onClick={toggleSave}
-            aria-label={status === "signed-out" ? "Sign in to save this hotel" : "Save hotel"}
+            aria-label={label}
             aria-pressed={isSaved}
             aria-busy={pending || undefined}
             className={`group/heart block rounded-full focus-visible:outline-none ${className}`}

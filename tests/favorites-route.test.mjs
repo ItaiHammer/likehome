@@ -6,13 +6,14 @@ const HOTEL = '6f1c2b0e-3a4d-4e5f-8a9b-0c1d2e3f4a5b'
 const OTHER = 'a0b1c2d3-e4f5-4a6b-8c7d-9e0f1a2b3c4d'
 
 let userId
+let role
 let calls
 let addResult
 let removeResult
 let listResult
 
-mock.module('../utils/user.ts', {
-  namedExports: { getUserId: async () => ({ userId }) },
+mock.module('../utils/viewer.ts', {
+  namedExports: { getViewer: async () => ({ userId, role: userId ? role : 'signed-out' }) },
 })
 
 mock.module('../utils/favorite-hotels.ts', {
@@ -44,6 +45,7 @@ const send = (method, body) =>
 
 beforeEach(() => {
   userId = 'user-1'
+  role = 'personal'
   calls = []
   addResult = { data: [{ id: 'fav-1' }], error: null }
   removeResult = { error: null }
@@ -55,6 +57,16 @@ test('every method answers 401 when signed out, without touching the database', 
   for (const res of [await GET(), await POST(send('POST', { hotelId: HOTEL })), await DELETE(send('DELETE', { hotelId: HOTEL }))]) {
     assert.equal(res.status, 401)
     assert.equal((await res.json()).error, 'You must be logged in to save hotels.')
+  }
+  assert.deepEqual(calls, [])
+})
+
+test('every method answers 403 for an account that is not personal, without touching the database', async () => {
+  for (role of ['business', 'unchosen', 'unknown']) {
+    for (const res of [await GET(), await POST(send('POST', { hotelId: HOTEL })), await DELETE(send('DELETE', { hotelId: HOTEL }))]) {
+      assert.equal(res.status, 403)
+      assert.equal((await res.json()).error, 'Only personal accounts can save hotels.')
+    }
   }
   assert.deepEqual(calls, [])
 })
@@ -124,4 +136,5 @@ test('legacyCopyFinished keeps the old list only when a copy could still succeed
   assert.equal(legacyCopyFinished([200, 0]), false)
   assert.equal(legacyCopyFinished([500]), false)
   assert.equal(legacyCopyFinished([401]), false)
+  assert.equal(legacyCopyFinished([200, 403]), false)
 })
