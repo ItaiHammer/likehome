@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useMediaQuery } from "./useMediaQuery";
 import {
   bedSizes,
   propertyAmenities,
@@ -33,11 +34,6 @@ type PriceField = "min" | "max";
 
 // Tailwind's sm breakpoint, where the dropdown takes over
 const PHONE_QUERY = "(width < 40rem)";
-const subscribeToPhone = (onChange: () => void) => {
-  const query = matchMedia(PHONE_QUERY);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-};
 
 const isWholeNumber = (value: string) => /^\d+$/.test(value);
 
@@ -124,7 +120,7 @@ export function SearchFiltersPicker({
   const minRef = useRef<HTMLInputElement>(null);
   const maxRef = useRef<HTMLInputElement>(null);
   const errorId = useId();
-  const isPhone = useSyncExternalStore(subscribeToPhone, () => matchMedia(PHONE_QUERY).matches, () => false);
+  const isPhone = useMediaQuery(PHONE_QUERY);
 
   const minInvalid = minPrice !== "" && !isWholeNumber(minPrice);
   const maxInvalid = maxPrice !== "" && !isWholeNumber(maxPrice);

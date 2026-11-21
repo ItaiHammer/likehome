@@ -7,7 +7,7 @@ import { CardAction, MembersLabel } from "./ShortcutTile";
 
 const TITLE_ID = "join-title";
 
-const perks = ["Member prices on every stay", "Rewards on every night you book", "Change your dates or room online"];
+const perks = ["Earn points on every night you book", "Use points for up to a free stay", "Change your dates or room online"];
 
 // Both go to sign-in: the account type is chosen after it
 const pitches = [
@@ -18,8 +18,8 @@ const pitches = [
 const features = [
   {
     title: "Stay more, save more",
-    body: "Members get instant discounts and rewards.",
-    link: "See member perks",
+    body: "Members earn points on every stay and can use them for up to a free stay.",
+    link: "Join to start earning",
     href: PAGE_ROUTES.LOGIN,
     icon: <path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.4l-5.2 2.8 1-5.9L3.5 9.2l5.9-.8z" strokeLinejoin="round" />,
   },

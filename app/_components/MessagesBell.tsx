@@ -80,13 +80,14 @@ function InboxBell({ unread, messages }: BellData) {
   }
 
   return (
-    // display: contents, so the wrapper adds no box to the header row
-    <div className="contents" onClickCapture={onClickCapture}>
+    // display: contents, so the wrapper adds no box to the header row. On phones the Popover's root
+    // is made static so the panel hangs from the header (which is relative) and scrolls away with it.
+    <div className="contents max-sm:[&>div]:static" onClickCapture={onClickCapture}>
       <Popover
         label="Messages"
         align="right"
         // Phones: the bell sits mid-header, so a panel hung from it would run off the left edge
-        panelClassName="w-[min(22rem,calc(100vw-2rem))] max-sm:fixed max-sm:inset-x-4 max-sm:top-16 max-sm:max-h-[calc(100dvh-5rem)] max-sm:w-auto max-sm:overflow-y-auto"
+        panelClassName="w-[min(22rem,calc(100vw-2rem))] max-sm:inset-x-4 max-sm:max-h-[calc(100dvh-5rem)] max-sm:w-auto max-sm:overflow-y-auto"
         // The last rule hides the chevron Popover adds to every trigger
         triggerClassName={`${bellClass} aria-expanded:bg-ink/5 dark:aria-expanded:bg-white/10 [&>svg:last-child]:hidden`}
         trigger={

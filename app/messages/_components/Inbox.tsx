@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { flushSync } from "react-dom";
 import { Button } from "@/app/_components/ui";
+import { useMediaQuery } from "@/app/_components/useMediaQuery";
 import { API_ROUTES, PAGE_ROUTES } from "@/constants/routes";
 import { markRead, preview, relativeTime, unreadCount, type InboxMessage } from "@/lib/messages";
 
@@ -63,6 +64,7 @@ export function Inbox({ messages, initialId }: { messages: InboxMessage[]; initi
   const ids = useId();
   const nowMs = useSyncExternalStore(subscribeClock, readClock, serverClock);
   const now = nowMs ? new Date(nowMs) : null;
+  const sideBySide = useMediaQuery(SIDE_BY_SIDE);
 
   const [selectedId, setSelectedId] = useState(initialId);
   const [seenInitialId, setSeenInitialId] = useState(initialId);
@@ -152,7 +154,7 @@ export function Inbox({ messages, initialId }: { messages: InboxMessage[]; initi
     if (message.id !== selectedId) navigate(`${PAGE_ROUTES.MESSAGES}?m=${encodeURIComponent(message.id)}`);
     // On phones the reader takes the list's place, so focus goes with it. Side by side, focus stays
     // in the list for arrow-key browsing and the opened message is announced instead.
-    if (!window.matchMedia(SIDE_BY_SIDE).matches) readerHeading.current?.focus();
+    if (!matchMedia(SIDE_BY_SIDE).matches) readerHeading.current?.focus();
     else if (message.id !== selectedId) setOpened({ id: message.id, subject: message.subject });
   }
 
@@ -260,10 +262,10 @@ export function Inbox({ messages, initialId }: { messages: InboxMessage[]; initi
 
         <section
           // Keyed so a newly opened message starts at the top. Side by side it scrolls on its own
-          // while stuck, so it takes focus for keyboard scrolling.
+          // while stuck, so it takes focus for keyboard scrolling; stacked on phones it never scrolls.
           key={selected?.id}
           aria-label="Message"
-          tabIndex={selected ? 0 : undefined}
+          tabIndex={selected && sideBySide ? 0 : undefined}
           className={`rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue md:sticky md:top-6 md:max-h-[calc(100dvh-3rem)] md:overflow-y-auto md:overscroll-contain ${selected ? "" : "hidden md:block"}`}
         >
           {selected ? (
