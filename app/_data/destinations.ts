@@ -1,3 +1,29 @@
+import type { StaticImageData } from "next/image";
+import monterey from "@/app/_assets/destinations/monterey.webp";
+import lakeTahoe from "@/app/_assets/destinations/lake-tahoe.webp";
+import santaCruz from "@/app/_assets/destinations/santa-cruz.webp";
+import bigSur from "@/app/_assets/destinations/big-sur.webp";
+import sanFrancisco from "@/app/_assets/destinations/san-francisco.webp";
+import carmelByTheSea from "@/app/_assets/destinations/carmel-by-the-sea.webp";
+import yosemite from "@/app/_assets/destinations/yosemite.webp";
+import mendocino from "@/app/_assets/destinations/mendocino.webp";
+import newYork from "@/app/_assets/destinations/new-york.webp";
+import honolulu from "@/app/_assets/destinations/honolulu.webp";
+import aspen from "@/app/_assets/destinations/aspen.webp";
+import seattle from "@/app/_assets/destinations/seattle.webp";
+import lakePlacid from "@/app/_assets/destinations/lake-placid.webp";
+import miami from "@/app/_assets/destinations/miami.webp";
+import sedona from "@/app/_assets/destinations/sedona.webp";
+import chicago from "@/app/_assets/destinations/chicago.webp";
+import positano from "@/app/_assets/destinations/positano.webp";
+import kyoto from "@/app/_assets/destinations/kyoto.webp";
+import reykjavik from "@/app/_assets/destinations/reykjavik.webp";
+import santorini from "@/app/_assets/destinations/santorini.webp";
+import lucerne from "@/app/_assets/destinations/lucerne.webp";
+import lisbon from "@/app/_assets/destinations/lisbon.webp";
+import bali from "@/app/_assets/destinations/bali.webp";
+import banff from "@/app/_assets/destinations/banff.webp";
+
 // Popular destinations for the search autocomplete, as [place, region/country].
 // Roughly ordered by popularity: earlier entries win ties in search results,
 // and the first few are shown as suggestions before the user types.
@@ -291,11 +317,10 @@ export const DESTINATIONS: readonly (readonly [string, string])[] = [
   ["Tahiti", "French Polynesia"],
 ];
 
-// Homepage "Popular destinations": eight ranked places per tab, each with the
-// little scene its tile draws and a pastel gradient. "Near you" is a fixed
-// California list until the site knows where the guest is.
-export type DestinationScene = "coast" | "lake" | "beach" | "mountain" | "city";
-export type PopularDestination = { name: string; region: string; scene: DestinationScene; colors: [string, string] };
+// Homepage "Find your next escape": eight ranked places per tab, each with its photo (sources in
+// app/_assets/destinations/CREDITS.md). "Near you" is a fixed California list until the site knows
+// where the guest is.
+export type PopularDestination = { name: string; region: string; photo: StaticImageData };
 export type DestinationTab = "near" | "national" | "international";
 
 export const POPULAR_TABS: { id: DestinationTab; label: string }[] = [
@@ -306,33 +331,33 @@ export const POPULAR_TABS: { id: DestinationTab; label: string }[] = [
 
 export const POPULAR_DESTINATIONS: Record<DestinationTab, PopularDestination[]> = {
   near: [
-    { name: "Monterey", region: "California, United States", scene: "coast", colors: ["#86ade6", "#cfe0f7"] },
-    { name: "Lake Tahoe", region: "California, United States", scene: "lake", colors: ["#8cc3cc", "#d3ecee"] },
-    { name: "Santa Cruz", region: "California, United States", scene: "beach", colors: ["#f0b39e", "#fbe1d0"] },
-    { name: "Big Sur", region: "California, United States", scene: "mountain", colors: ["#a9a0e2", "#dcd6f6"] },
-    { name: "San Francisco", region: "California, United States", scene: "city", colors: ["#eeaec3", "#f9dde6"] },
-    { name: "Carmel-by-the-Sea", region: "California, United States", scene: "beach", colors: ["#86c2d8", "#d2ebf3"] },
-    { name: "Yosemite", region: "California, United States", scene: "mountain", colors: ["#8fb4e8", "#d5e4f8"] },
-    { name: "Mendocino", region: "California, United States", scene: "coast", colors: ["#f2bda6", "#fbe5d6"] },
+    { name: "Monterey", region: "California, United States", photo: monterey },
+    { name: "Lake Tahoe", region: "California, United States", photo: lakeTahoe },
+    { name: "Santa Cruz", region: "California, United States", photo: santaCruz },
+    { name: "Big Sur", region: "California, United States", photo: bigSur },
+    { name: "San Francisco", region: "California, United States", photo: sanFrancisco },
+    { name: "Carmel-by-the-Sea", region: "California, United States", photo: carmelByTheSea },
+    { name: "Yosemite", region: "California, United States", photo: yosemite },
+    { name: "Mendocino", region: "California, United States", photo: mendocino },
   ],
   national: [
-    { name: "New York", region: "New York, United States", scene: "city", colors: ["#a3a8e6", "#d8daf7"] },
-    { name: "Honolulu", region: "Hawaii, United States", scene: "beach", colors: ["#86c2d8", "#d2ebf3"] },
-    { name: "Aspen", region: "Colorado, United States", scene: "mountain", colors: ["#8fb4e8", "#d5e4f8"] },
-    { name: "Seattle", region: "Washington, United States", scene: "coast", colors: ["#b5a4e0", "#e2d9f5"] },
-    { name: "Lake Placid", region: "New York, United States", scene: "lake", colors: ["#f2bda6", "#fbe5d6"] },
-    { name: "Miami", region: "Florida, United States", scene: "beach", colors: ["#eeaec3", "#f9dde6"] },
-    { name: "Sedona", region: "Arizona, United States", scene: "mountain", colors: ["#f0b39e", "#fbe1d0"] },
-    { name: "Chicago", region: "Illinois, United States", scene: "city", colors: ["#8cc3cc", "#d3ecee"] },
+    { name: "New York", region: "New York, United States", photo: newYork },
+    { name: "Honolulu", region: "Hawaii, United States", photo: honolulu },
+    { name: "Aspen", region: "Colorado, United States", photo: aspen },
+    { name: "Seattle", region: "Washington, United States", photo: seattle },
+    { name: "Lake Placid", region: "New York, United States", photo: lakePlacid },
+    { name: "Miami", region: "Florida, United States", photo: miami },
+    { name: "Sedona", region: "Arizona, United States", photo: sedona },
+    { name: "Chicago", region: "Illinois, United States", photo: chicago },
   ],
   international: [
-    { name: "Positano", region: "Italy", scene: "coast", colors: ["#f0b39e", "#fbe1d0"] },
-    { name: "Kyoto", region: "Japan", scene: "city", colors: ["#eeaec3", "#f9dde6"] },
-    { name: "Reykjavík", region: "Iceland", scene: "mountain", colors: ["#8cc3cc", "#d3ecee"] },
-    { name: "Santorini", region: "Greece", scene: "beach", colors: ["#86ade6", "#cfe0f7"] },
-    { name: "Lucerne", region: "Switzerland", scene: "lake", colors: ["#a9a0e2", "#dcd6f6"] },
-    { name: "Lisbon", region: "Portugal", scene: "city", colors: ["#a3a8e6", "#d8daf7"] },
-    { name: "Bali", region: "Indonesia", scene: "beach", colors: ["#86c2d8", "#d2ebf3"] },
-    { name: "Banff", region: "Alberta, Canada", scene: "mountain", colors: ["#8fb4e8", "#d5e4f8"] },
+    { name: "Positano", region: "Italy", photo: positano },
+    { name: "Kyoto", region: "Japan", photo: kyoto },
+    { name: "Reykjavík", region: "Iceland", photo: reykjavik },
+    { name: "Santorini", region: "Greece", photo: santorini },
+    { name: "Lucerne", region: "Switzerland", photo: lucerne },
+    { name: "Lisbon", region: "Portugal", photo: lisbon },
+    { name: "Bali", region: "Indonesia", photo: bali },
+    { name: "Banff", region: "Alberta, Canada", photo: banff },
   ],
 };

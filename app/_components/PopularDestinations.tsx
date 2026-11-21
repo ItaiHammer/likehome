@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { POPULAR_DESTINATIONS, POPULAR_TABS, type DestinationScene, type DestinationTab } from "../_data/destinations";
+import { POPULAR_DESTINATIONS, POPULAR_TABS, type DestinationTab } from "../_data/destinations";
 import { browserTimeZone } from "./dates";
 import { isMotionReduced, useReducedMotion } from "./motion";
 import { buttonPrimary, buttonSecondary, iconButton, SectionHeading } from "./ui";
@@ -34,7 +35,7 @@ function searchHref(where: string, tz: string) {
 
 /*
  * "Find your next escape": tabs for near / national / international, each a
- * swipeable carousel of ranked, illustrated tiles.
+ * swipeable carousel of ranked photo tiles.
  *
  * Autoplay: every STEP_MS it moves one tile along; once it reaches the end it
  * switches to the next tab. It pauses while hovered or off screen, stops for
@@ -434,19 +435,21 @@ export function PopularDestinations() {
                     dragging ? "cursor-grabbing" : "cursor-grab"
                   }`}
                 >
-                  <div
-                    className="absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-                    style={{ background: `linear-gradient(160deg, ${d.colors[0]}, ${d.colors[1]})` }}
-                  >
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.45),transparent_55%)]" />
-                    <Scene kind={d.scene} />
-                  </div>
+                  <Image
+                    src={d.photo}
+                    alt=""
+                    fill
+                    sizes="(min-width: 1024px) 31vw, (min-width: 640px) 46vw, 80vw"
+                    placeholder="blur"
+                    draggable={false}
+                    className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+                  />
                   {/* Night: the tile dims with the theme */}
-                  <div className="absolute inset-0 bg-[#141a45]/45 opacity-0 dark:opacity-100" />
+                  <div className="absolute inset-0 bg-[#141a45]/30 opacity-0 dark:opacity-100" />
                   {/* Ink fade behind the caption: it eases in across the 112px top padding,
                       then stays at 58%+ under every line of text (however many lines the
                       name wraps to), so the white text clears 4.5:1 even if the
-                      illustration under it were pure white. Hover or keyboard focus
+                      photo under it were pure white. Hover or keyboard focus
                       deepens it to about 70%. */}
                   <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(to_bottom,rgb(7_13_47/0)_0,rgb(7_13_47/0.09)_28px,rgb(7_13_47/0.29)_56px,rgb(7_13_47/0.49)_84px,rgb(7_13_47/0.58)_112px,rgb(7_13_47/0.6))] p-5 pt-28 sm:p-6 sm:pt-28">
                     <div
@@ -524,73 +527,5 @@ export function PopularDestinations() {
         {status}
       </p>
     </section>
-  );
-}
-
-// Soft translucent landscape along the bottom of a tile; works over any tile color.
-function Scene({ kind }: { kind: DestinationScene }) {
-  const light = "rgba(255,255,255,0.4)";
-  const faint = "rgba(255,255,255,0.25)";
-  const shade = "rgba(34,44,100,0.2)";
-  return (
-    <svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMax slice" className="absolute inset-x-0 bottom-0 h-[70%] w-full" aria-hidden>
-      {kind === "coast" && (
-        <>
-          <rect x="0" y="120" width="400" height="80" fill={faint} />
-          <path d="M40 142 h36 M150 158 h44 M250 138 h30" stroke={light} strokeWidth="3" strokeLinecap="round" />
-          <path d="M270 200 V96 Q300 70 340 84 L400 76 V200 Z" fill={shade} />
-          <rect x="318" y="70" width="18" height="14" fill={light} />
-          <path d="M314 72 L327 62 L340 72 Z" fill={light} />
-        </>
-      )}
-      {kind === "lake" && (
-        <>
-          <path d="M0 120 L70 64 L130 104 L200 50 L280 110 L340 76 L400 112 V200 H0 Z" fill={shade} />
-          <path d="M0 132 Q200 118 400 132 V200 H0 Z" fill={faint} />
-          <path d="M60 150 h60 M220 160 h70" stroke={light} strokeWidth="3" strokeLinecap="round" />
-          {[24, 48, 352, 376].map((x, i) => (
-            <path key={x} d={`M${x} ${i % 2 ? 190 : 184} l14 -48 l14 48 z`} fill="rgba(34,44,100,0.28)" />
-          ))}
-        </>
-      )}
-      {kind === "beach" && (
-        <>
-          <circle cx="300" cy="70" r="26" fill="rgba(255,255,255,0.55)" />
-          <rect x="0" y="112" width="400" height="50" fill={faint} />
-          <path d="M0 150 Q120 138 240 150 T400 146 V200 H0 Z" fill="rgba(255,255,255,0.45)" />
-          <path d="M92 174 Q96 132 104 112" stroke="rgba(34,44,100,0.3)" strokeWidth="5" fill="none" strokeLinecap="round" />
-          <path d="M104 112 q-22 -4 -34 8 M104 112 q20 -8 34 4 M104 112 q-8 -18 -24 -20 M104 112 q10 -16 26 -16" stroke="rgba(34,44,100,0.3)" strokeWidth="4" fill="none" strokeLinecap="round" />
-        </>
-      )}
-      {kind === "mountain" && (
-        <>
-          <path d="M0 150 L110 44 L170 104 L250 30 L400 150 V200 H0 Z" fill={shade} />
-          <path d="M110 44 L90 64 L106 58 L118 68 L128 62 Z M250 30 L226 54 L244 48 L258 60 L272 50 Z" fill="rgba(255,255,255,0.7)" />
-          <path d="M0 160 Q140 128 280 150 T400 144 V200 H0 Z" fill={faint} />
-        </>
-      )}
-      {kind === "city" && (
-        <>
-          {[
-            [16, 96, 40],
-            [62, 64, 34],
-            [102, 110, 46],
-            [154, 44, 30],
-            [190, 84, 44],
-            [240, 58, 36],
-            [282, 100, 48],
-            [336, 72, 44],
-          ].map(([x, y, w]) => (
-            <g key={x}>
-              <rect x={x} y={y} width={w} height={200 - y} fill={shade} />
-              {[0, 1, 2].map((r) => (
-                <rect key={r} x={x + 8} y={y + 12 + r * 22} width={w - 16} height="6" fill={faint} />
-              ))}
-            </g>
-          ))}
-          <rect x="0" y="176" width="400" height="24" fill={faint} />
-        </>
-      )}
-    </svg>
   );
 }
