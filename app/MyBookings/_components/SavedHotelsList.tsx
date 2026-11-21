@@ -97,7 +97,7 @@ export function SavedHotelsList({ hotels }: { hotels: SavedHotel[] }) {
                                     </div>
                                 )}
 
-                                <SaveHotelButton hotelId={hotel.id} className="absolute top-3 right-3 z-10" />
+                                <SaveHotelButton hotelId={hotel.id} saved className="absolute top-3 right-3 z-10" />
                             </div>
 
                             {/* Card Details */}

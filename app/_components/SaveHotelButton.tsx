@@ -9,14 +9,16 @@ import { toggleSavedHotel, useSaveFailure, useSavedHotels } from "./savedHotelsS
 interface SaveHotelButtonProps {
     /** A hotels.id; sample stays and unsaved LiteAPI hotels have none and get no heart */
     hotelId: string;
+    /** Known saved state from the server render, shown until the saved list has loaded */
+    saved?: boolean;
     className?: string;
 }
 
-export function SaveHotelButton({ hotelId, className = "" }: SaveHotelButtonProps) {
+export function SaveHotelButton({ hotelId, saved, className = "" }: SaveHotelButtonProps) {
     const router = useRouter();
     const { status, ids } = useSavedHotels();
     const [pending, setPending] = useState(false);
-    const isSaved = ids.has(hotelId);
+    const isSaved = status === "signed-in" ? ids.has(hotelId) : (saved ?? false);
 
     const signIn = () => {
         const back = `${window.location.pathname}${window.location.search}`;
@@ -30,7 +32,7 @@ export function SaveHotelButton({ hotelId, className = "" }: SaveHotelButtonProp
         if (status === "signed-out") return signIn();
 
         setPending(true);
-        const result = await toggleSavedHotel(hotelId);
+        const result = await toggleSavedHotel(hotelId, isSaved);
         setPending(false);
         if (result === "signed-out") signIn();
     };

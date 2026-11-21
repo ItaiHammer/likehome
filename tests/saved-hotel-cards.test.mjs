@@ -30,10 +30,10 @@ test('gone and delisted hotels are skipped and not counted', () => {
   assert.deepEqual(toSavedHotelCards(rows), { cards: toSavedHotelCards([favorite(hotel('a')), favorite(hotel('b'))]).cards, total: 2 })
 })
 
-test('a long list keeps a few spare cards and counts the rest', () => {
+test('a long list keeps every card, newest first, so un-hearting always refills the row', () => {
   const saved = toSavedHotelCards(favorites(20))
   assert.equal(saved.total, 20)
-  assert.equal(saved.cards.length, SAVED_HOTEL_CARDS * 3)
+  assert.equal(saved.cards.length, 20)
   assert.deepEqual(ids(saved.cards.slice(0, 3)), ['h0', 'h1', 'h2'])
 })
 

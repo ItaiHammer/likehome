@@ -110,9 +110,10 @@ function load(key: string) {
 export type ToggleResult = "saved" | "removed" | "signed-out" | "failed" | "busy";
 
 /** Flips the heart at once and puts it back if the server says no. A second tap while the first is on its way is ignored ("busy"). */
-export async function toggleSavedHotel(hotelId: string): Promise<ToggleResult> {
+// `current` is what the heart shows, which before the list loads can come from the server render
+export async function toggleSavedHotel(hotelId: string, current = state.ids.has(hotelId)): Promise<ToggleResult> {
   if (inFlight.has(hotelId)) return "busy";
-  const save = !state.ids.has(hotelId);
+  const save = !current;
   inFlight.set(hotelId, save);
   setState({ ...state, ids: withId(state.ids, hotelId, save) });
   const fail = () => {

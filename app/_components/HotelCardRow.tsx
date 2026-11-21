@@ -38,7 +38,7 @@ export function HotelCardRow({
               </div>
             </Card>
             {/* Beside the link, not in it: a button can't sit inside a link */}
-            {saveable && <SaveHotelButton hotelId={hotel.id} className="absolute right-3 top-3 z-10" />}
+            {saveable && <SaveHotelButton hotelId={hotel.id} saved className="absolute right-3 top-3 z-10" />}
           </li>
         ))}
         {more && (
