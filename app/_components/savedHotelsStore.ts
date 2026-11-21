@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { API_ROUTES } from "@/constants/routes";
 import { isHotelId, LEGACY_SAVED_KEY, legacyCopyFinished, legacySavedIds } from "@/lib/saved-hotels";
+import { createClient } from "@/utils/supabase/client";
 
 // One shared copy of the signed-in user's saved hotels, so a page of hearts reads the list once.
 // "loading" until the first answer; "error" keeps the last known ids.
@@ -13,7 +14,13 @@ export type SavedHotels = {
 const INITIAL: SavedHotels = { status: "loading", ids: new Set() };
 let state = INITIAL;
 let loadedFor: string | null = null;
+let lastPage: string | null = null;
 let legacyCopied = false;
+// The account the list belongs to; undefined until the first auth event
+let accountId: string | null | undefined;
+let watchingAuth = false;
+// Bumped on every account change, so answers to the old account's requests are dropped
+let generation = 0;
 // The saved state each toggle wants, laid over a list that loads meanwhile: toggles still waiting on the
 // server, and ones that went through after that read started (its answer may predate them)
 const inFlight = new Map<string, boolean>();
@@ -84,17 +91,42 @@ async function copyLegacyFavorites(saved: string[]) {
   }
 }
 
+// Signing out, or into another account (here or in another tab), drops the old list at once and reads it again
+function watchAuth() {
+  if (watchingAuth) return;
+  watchingAuth = true;
+  createClient().auth.onAuthStateChange((_event, session) => {
+    const next = session?.user.id ?? null;
+    if (accountId === undefined || next === accountId) {
+      accountId = next;
+      return;
+    }
+    accountId = next;
+    generation++;
+    loadedFor = null;
+    doneSinceLoad.clear();
+    inFlight.clear();
+    legacyCopied = false;
+    setState(next ? { status: "loading", ids: new Set() } : { status: "signed-out", ids: new Set() });
+    if (next && lastPage) load(lastPage);
+  });
+}
+
 // Once per page: the list is read again after a navigation, so a heart changed elsewhere shows here
 function load(key: string) {
+  lastPage = key;
   if (loadedFor === key) return;
   loadedFor = key;
   doneSinceLoad.clear();
+  const gen = generation;
+  const stillWanted = () => gen === generation && loadedFor === key;
   fetch(API_ROUTES.FAVORITES, { cache: "no-store" })
     .then(async (res) => {
-      if (loadedFor !== key) return;
+      if (!stillWanted()) return;
       if (res.status === 401) return setState({ status: "signed-out", ids: new Set() });
       if (!res.ok) return setState({ ...state, status: "error" });
       const body: unknown = await res.json();
+      if (!stillWanted()) return;
       const data = typeof body === "object" && body !== null ? (body as { data?: unknown }).data : null;
       const ids = Array.isArray(data) ? data.filter(isHotelId) : [];
       let merged: ReadonlySet<string> = new Set(ids);
@@ -103,7 +135,7 @@ function load(key: string) {
       void copyLegacyFavorites(ids);
     })
     .catch(() => {
-      if (loadedFor === key) setState({ ...state, status: "error" });
+      if (stillWanted()) setState({ ...state, status: "error" });
     });
 }
 
@@ -114,9 +146,13 @@ export type ToggleResult = "saved" | "removed" | "signed-out" | "failed" | "busy
 export async function toggleSavedHotel(hotelId: string, current = state.ids.has(hotelId)): Promise<ToggleResult> {
   if (inFlight.has(hotelId)) return "busy";
   const save = !current;
+  // A toggle that finishes after the account changed leaves the new account's list alone
+  const gen = generation;
+  const sameAccount = () => gen === generation;
   inFlight.set(hotelId, save);
   setState({ ...state, ids: withId(state.ids, hotelId, save) });
   const fail = () => {
+    if (!sameAccount()) return "failed" as const;
     setState({ ...state, ids: withId(state.ids, hotelId, !save) });
     announceFailure(save ? "Couldn't save this hotel. Try again." : "Couldn't remove this hotel from your saved hotels. Try again.");
     return "failed" as const;
@@ -124,24 +160,27 @@ export async function toggleSavedHotel(hotelId: string, current = state.ids.has(
   try {
     const res = await send(save ? "POST" : "DELETE", hotelId);
     if (res.ok) {
-      doneSinceLoad.set(hotelId, save);
+      if (sameAccount()) doneSinceLoad.set(hotelId, save);
       return save ? "saved" : "removed";
     }
     if (res.status === 401) {
-      setState({ status: "signed-out", ids: new Set() });
+      if (sameAccount()) setState({ status: "signed-out", ids: new Set() });
       return "signed-out";
     }
     return fail();
   } catch {
     return fail();
   } finally {
-    inFlight.delete(hotelId);
+    if (sameAccount()) inFlight.delete(hotelId);
   }
 }
 
 export function useSavedHotels(): SavedHotels {
   const pathname = usePathname();
-  useEffect(() => load(pathname), [pathname]);
+  useEffect(() => {
+    watchAuth();
+    load(pathname);
+  }, [pathname]);
   return useSyncExternalStore(subscribe, () => state, () => INITIAL);
 }
 

@@ -18,7 +18,8 @@ export function SaveHotelButton({ hotelId, saved, className = "" }: SaveHotelBut
     const router = useRouter();
     const { status, ids } = useSavedHotels();
     const [pending, setPending] = useState(false);
-    const isSaved = status === "signed-in" ? ids.has(hotelId) : (saved ?? false);
+    // The server's answer only stands in while the list loads; signed out, nothing is saved
+    const isSaved = status === "signed-in" ? ids.has(hotelId) : status !== "signed-out" && (saved ?? false);
 
     const signIn = () => {
         const back = `${window.location.pathname}${window.location.search}`;
