@@ -72,7 +72,7 @@ export function ConfirmDialog({
               {request.cancelLabel}
             </Button>
             <Button
-              className={request.destructive ? "!bg-danger !text-white hover:!opacity-90" : ""}
+              className={request.destructive ? "!bg-danger !text-on-blue hover:!opacity-90" : ""}
               onClick={() => {
                 request.onConfirm();
                 onDone();

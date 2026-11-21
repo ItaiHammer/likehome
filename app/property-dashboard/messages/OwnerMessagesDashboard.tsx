@@ -89,9 +89,10 @@ function shortTime(value: string, now: number) {
     const days = Math.floor(hours / 24);
 
     if (days < 7) return `${days}d`;
-    if (days < 28) return `${Math.floor(days / 7)}w`;
+    if (days < 30) return `${Math.floor(days / 7)}w`;
+    if (days < 365) return `${Math.floor(days / 30)}mo`;
 
-    return `${Math.floor(days / 30)}mo`;
+    return `${Math.floor(days / 365)}y`;
 }
 
 function pageItems(
@@ -595,13 +596,31 @@ export function OwnerMessagesDashboard({
         setError("");
         setToast(null);
 
+        // A guest with stays at several properties gets one message,
+        // sent from the property of their latest check-in.
+        const latest = new Map<string, RecipientRow>();
+
+        for (const row of selectedRows) {
+            const current = latest.get(row.person.account_id);
+
+            if (
+                !current ||
+                (Date.parse(row.person.last_check_in ?? "") || 0) >
+                (Date.parse(current.person.last_check_in ?? "") || 0)
+            ) {
+                latest.set(row.person.account_id, row);
+            }
+        }
+
+        const sendRows = [...latest.values()];
+
         // The API supports one property per request.
         const groups = new Map<
             string,
             RecipientRow[]
         >();
 
-        for (const row of selectedRows) {
+        for (const row of sendRows) {
             groups.set(row.hotelId, [
                 ...(groups.get(row.hotelId) ?? []),
                 row,
@@ -617,7 +636,7 @@ export function OwnerMessagesDashboard({
                 const createdAt = new Date().toISOString();
 
                 const created: Message[] =
-                    selectedRows.map((row, index) => ({
+                    sendRows.map((row, index) => ({
                         id: `mock-new-${Date.now()}-${index}`,
                         hotel_id: row.hotelId,
                         recipient_id: row.person.account_id,
@@ -635,7 +654,7 @@ export function OwnerMessagesDashboard({
                     ...old,
                 ]);
 
-                successful = selectedRows.length;
+                successful = sendRows.length;
 
                 successfulKeys.push(
                     ...selectedRows.map((row) => row.key)
@@ -664,7 +683,15 @@ export function OwnerMessagesDashboard({
                         successful += rows.length;
 
                         successfulKeys.push(
-                            ...rows.map((row) => row.key)
+                            ...selectedRows
+                                .filter((row) =>
+                                    rows.some(
+                                        (sentRow) =>
+                                            sentRow.person.account_id ===
+                                            row.person.account_id
+                                    )
+                                )
+                                .map((row) => row.key)
                         );
                     } catch {
                         failedHotels.push(
