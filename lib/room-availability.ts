@@ -4,7 +4,8 @@
 // is free for the guest's nights. Nights are YYYY-MM-DD; a stay covers check-in up to, not
 // including, check-out (the check-out day is free for the next guest).
 
-import { addDays } from '../app/_components/dates.ts';
+import { addDays, nightsBetween } from '../app/_components/dates.ts';
+import { roomFits } from './stay-filters.ts';
 
 export type RoomUnit = { id: string; bookedNights: string[] };
 type WithUnits = { id: string; units?: RoomUnit[] };
@@ -121,6 +122,23 @@ export function blockedNights(fittingRooms: WithUnits[], otherStays: { checkIn: 
     for (let night = stay.checkIn; night < stay.checkOut; night = addDays(night, 1)) nights.add(night);
   }
   return [...nights].filter((night) => night >= from).sort();
+}
+
+/**
+ * The calendar's crossed-out nights as days from `today`, for the rooms that fit the party.
+ * `today` is "" while rendering on the server, which gives none.
+ */
+export function blockedOffsets(
+  rooms: (WithUnits & Parameters<typeof roomFits>[0])[],
+  party: { adults: number; children: number },
+  otherStays: { checkIn: string; checkOut: string }[],
+  today: string,
+  { moreRoomsMayAppear = false }: { moreRoomsMayAppear?: boolean } = {},
+): number[] {
+  if (!today) return [];
+  const { adults, children } = party;
+  const fitting = moreRoomsMayAppear ? [] : rooms.filter((r) => roomFits(r, adults + children, adults, children));
+  return blockedNights(fitting, otherStays, today).map((night) => nightsBetween(today, night));
 }
 
 export const BLOCKED_NOTE = 'Struck-through dates have no room free for your party, or overlap another stay of yours.';

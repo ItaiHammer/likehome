@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
+import { hotelLocation } from "@/lib/comparison";
 
 export type PriceStatus = "checking" | "needs-dates" | "sold-out" | "unavailable";
 
@@ -58,8 +59,7 @@ function UsersIcon() {
 }
 
 function formatLocation(stay: HotelSearchResult) {
-  const pieces = [stay.city, stay.region, stay.country].filter(Boolean);
-  return pieces.length ? pieces.join(", ") : stay.address || "Location available at booking";
+  return hotelLocation(stay) || stay.address || "Location available at booking";
 }
 
 function asNumber(value: HotelSearchResult["min_price"]) {

@@ -1,6 +1,7 @@
 // No Supabase / Next.js imports here so it can be unit tested with `npm test`.
 import { propertyAmenities, roomAmenities } from '../app/search/types.ts'
 import { stayOffers } from './stay-filters.ts'
+import { isUuid } from './ids.ts'
 
 export type AmenityStatus = 'available' | 'some-rooms' | 'not-offered'
 
@@ -39,10 +40,8 @@ export type ComparisonHotelRow = {
 // The current stay plus up to 2 recently viewed ones
 export const MAX_COMPARED = 3
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 // "City, Region, Country", blank parts left out
-export function hotelLocation(hotel: Pick<ComparisonHotelRow, 'city' | 'region' | 'country'>): string {
+export function hotelLocation(hotel: Partial<Pick<ComparisonHotelRow, 'city' | 'region' | 'country'>>): string {
   return [hotel.city, hotel.region, hotel.country].filter(Boolean).join(', ')
 }
 
@@ -78,7 +77,7 @@ export function toComparisonListing(hotel: ComparisonHotelRow | null, viewedAt: 
 }
 
 export function comparisonIds(ids: string[]): string[] {
-  const valid = ids.filter((id) => UUID.test(id)).map((id) => id.toLowerCase())
+  const valid = ids.filter(isUuid).map((id) => id.toLowerCase())
   return [...new Set(valid)].slice(0, MAX_COMPARED)
 }
 

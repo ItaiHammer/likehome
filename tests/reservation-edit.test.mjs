@@ -34,11 +34,14 @@ mock.module('../utils/user.ts', {
           }
           return {}
         },
-        rpc: async () => mockBookedNights,
       },
       userId: mockAuthUser ? mockAuthUser.id : null,
     }),
   },
+})
+
+mock.module('../utils/rooms.ts', {
+  namedExports: { getBookedNights: async () => ({ data: mockBookedNights.data ?? [], error: mockBookedNights.error }) },
 })
 
 mock.module('../utils/reservations.ts', {

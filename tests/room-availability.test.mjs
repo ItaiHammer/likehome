@@ -1,7 +1,7 @@
 // Audit F9 (stay page picks a room that's free for the dates) and F3 (photo upload rules)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { blockedNights, freeUnitId, markBookedRooms, nightsByRoom, roomProblem, roomTaken, soldOutNights } from '../lib/room-availability.ts'
+import { blockedNights, blockedOffsets, freeUnitId, markBookedRooms, nightsByRoom, roomProblem, roomTaken, soldOutNights } from '../lib/room-availability.ts'
 import { matchingRoom } from '../lib/stay-filters.ts'
 import { photoProblem } from '../lib/listing-photos.ts'
 
@@ -164,6 +164,16 @@ test('nights at another hotel are crossed out too, up to but not including its c
   // No room details, or a LiteAPI hotel (no rooms passed): only the other stays
   assert.deepEqual(blockedNights([{ id: 'villa' }], other, '2026-11-21'), ['2026-11-21'])
   assert.deepEqual(blockedNights([], other, '2026-11-01'), ['2026-11-20', '2026-11-21'])
+})
+
+test('the calendar offsets count only rooms that fit the party, and none on the server', () => {
+  const big = { id: 'b1', nightly: 300, sleeps: 4, maxAdults: 4, units: [{ id: 'b1', bookedNights: ['2026-11-05'] }] }
+  const small = { id: 's1', nightly: 100, sleeps: 2, maxAdults: 2, units: [{ id: 's1', bookedNights: [] }] }
+  const other = [{ checkIn: '2026-11-10', checkOut: '2026-11-11' }]
+  assert.deepEqual(blockedOffsets([big, small], { adults: 2, children: 0 }, other, '2026-11-01'), [9])
+  assert.deepEqual(blockedOffsets([big, small], { adults: 3, children: 0 }, other, '2026-11-01'), [4, 9])
+  assert.deepEqual(blockedOffsets([big, small], { adults: 3, children: 0 }, other, '2026-11-01', { moreRoomsMayAppear: true }), [9])
+  assert.deepEqual(blockedOffsets([big], { adults: 3, children: 0 }, other, ''), [])
 })
 
 test('a booked or sold-out room is refused in the same words on both pages', () => {

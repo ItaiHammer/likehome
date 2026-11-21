@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExter
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
-import { blockedNights, BLOCKED_NOTE, freeUnitId, markBookedRooms, mergeBookedNights, roomProblem } from "@/lib/room-availability";
+import { blockedOffsets as calendarBlockedOffsets, BLOCKED_NOTE, freeUnitId, markBookedRooms, mergeBookedNights, roomProblem } from "@/lib/room-availability";
 import { matchingRoom, roomFits } from "@/lib/stay-filters";
 import { cardBrandLabel, cardErrors, typedCardBrand, type CardBrandLabel } from "@/lib/card";
 import { PRICE_CHANGED_ERROR, discountPoints, findDiscount, formatPoints, pointsToDollars } from "@/lib/rewards";
@@ -195,9 +195,8 @@ export function StayReservation({
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
   // Nights the calendar crosses out, as days from today: no room that fits the party is free, or the
   // guest is at another hotel. Derived from `today` (empty on the server), so it fills in once in the browser.
-  const fittingRooms = stay.liteapiId ? [] : rooms.filter((r) => roomFits(r, guests, adults, children));
   const blockedOffsets = [
-    ...new Set([...stay.blockedNights, ...(today ? blockedNights(fittingRooms, otherStays, today).map((night) => nightsBetween(today, night)) : [])]),
+    ...new Set([...stay.blockedNights, ...calendarBlockedOffsets(rooms, { adults, children }, otherStays, today, { moreRoomsMayAppear: !!stay.liteapiId })]),
   ];
 
   useEffect(() => {

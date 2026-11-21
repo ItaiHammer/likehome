@@ -14,8 +14,7 @@ import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
 import { guestLabel } from "../../reserve/[slug]/GuestsField";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
 import { useBookedNightsLookup } from "../../reserve/[slug]/useBookedNightsLookup";
-import { blockedNights, BLOCKED_NOTE, freeUnitId, markBookedRooms, mergeBookedNights, roomProblem, withoutStay, type BookedWindow } from "@/lib/room-availability";
-import { roomFits } from "@/lib/stay-filters";
+import { blockedOffsets as calendarBlockedOffsets, BLOCKED_NOTE, freeUnitId, markBookedRooms, mergeBookedNights, roomProblem, withoutStay, type BookedWindow } from "@/lib/room-availability";
 import { HotelPhoto } from "../_components/HotelPhoto";
 
 export type BookingToChange = {
@@ -126,8 +125,7 @@ export function ChangeBooking({
   // Empty on the server, like the stay page's calendar
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
   // The same nights the stay page crosses out, with this booking's own nights left open
-  const fittingRooms = booking.livePrices ? [] : rooms.filter((r) => roomFits(r, guests, adults, children));
-  const blockedOffsets = today ? blockedNights(fittingRooms, otherStays, today).map((night) => nightsBetween(today, night)) : [];
+  const blockedOffsets = calendarBlockedOffsets(rooms, { adults, children }, otherStays, today, { moreRoomsMayAppear: booking.livePrices });
   const currentRoom = rooms.find((r) => r.id === current.roomId);
   const changed = checkIn !== current.checkIn || checkOut !== current.checkOut || !sameGuests || roomId !== current.roomId;
   // Any change is repriced at today's nightly price (the API does the same), so until something

@@ -1,11 +1,11 @@
+import { isUuid } from "./ids.ts";
+
 // Before favorites were stored on the account, the heart kept hotel ids in this browser key
 export const LEGACY_SAVED_KEY = "likehome_saved_hotels";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** favorite_hotels.hotel_id references hotels.id, so only a hotels uuid can be saved (not a sample stay's slug). */
 export function isHotelId(value: unknown): value is string {
-  return typeof value === "string" && UUID.test(value);
+  return isUuid(value);
 }
 
 /** The hotel ids in the old browser list that the account doesn't have yet. Sample stay slugs and junk are dropped. */

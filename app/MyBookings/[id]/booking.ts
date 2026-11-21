@@ -1,12 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { changeBlocker } from "@/lib/bookings";
+import { isUuid } from "@/lib/ids";
 import { getReservation } from "@/utils/reservations";
 import { getUserId } from "@/utils/user";
 import type { Stay } from "../../_data/stays";
 import type { BookingToChange } from "./ChangeBooking";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type ReservationRow = {
   id: string;
@@ -26,7 +25,7 @@ export type ReservationRow = {
 export async function loadReservation(id: string, path: string) {
   const { userId } = await getUserId();
   if (!userId) redirect(`${PAGE_ROUTES.LOGIN}?next=${encodeURIComponent(path)}`);
-  if (!UUID.test(id)) notFound();
+  if (!isUuid(id)) notFound();
 
   const { data, error } = await getReservation(id);
   const r = data as ReservationRow | null;
