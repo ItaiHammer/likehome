@@ -4,6 +4,7 @@ import { getViewer } from "@/utils/viewer";
 import { AccountTypeRetryNotice } from "./_components/AccountTypeRetry";
 import { ChoiceGate } from "./_components/ChoiceGate";
 import { DevRoleSwitch } from "./_components/DevRoleSwitch";
+import { SaveFailureAnnouncer } from "./_components/SaveHotelButton";
 import { SiteFooter, SiteHeader } from "./_components/SiteChrome";
 import { TimeZoneCookie } from "./_components/TimeZoneCookie";
 import { buttonClass } from "./_components/ui";
@@ -62,6 +63,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           {viewer.role === "unchosen" ? <ChoiceGate>{children}</ChoiceGate> : children}
         </div>
         <SiteFooter />
+        <SaveFailureAnnouncer />
         {process.env.NODE_ENV === "development" && (
           <DevRoleSwitch devRole={viewer.devRole} realType={viewer.realType} readFailed={viewer.readFailed} signedIn={viewer.role !== "signed-out"} />
         )}

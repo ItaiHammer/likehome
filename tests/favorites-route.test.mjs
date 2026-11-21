@@ -25,7 +25,7 @@ mock.module('../utils/favorite-hotels.ts', {
       calls.push(['remove', accountId, hotelId])
       return removeResult
     },
-    getFavoriteHotels: async (accountId) => {
+    getFavoriteHotelIds: async (accountId) => {
       calls.push(['list', accountId])
       return listResult
     },
@@ -47,7 +47,7 @@ beforeEach(() => {
   calls = []
   addResult = { data: [{ id: 'fav-1' }], error: null }
   removeResult = { error: null }
-  listResult = { data: [{ created_at: '2026-11-02', hotels: { id: OTHER } }, { created_at: '2026-11-01', hotels: { id: HOTEL } }], error: null }
+  listResult = { data: [{ hotel_id: OTHER }, { hotel_id: HOTEL }], error: null }
 })
 
 test('every method answers 401 when signed out, without touching the database', async () => {
@@ -90,8 +90,8 @@ test('DELETE removes the hotel for the signed-in user', async () => {
   assert.equal((await DELETE(send('DELETE', { hotelId: HOTEL }))).status, 500)
 })
 
-test('GET lists the saved hotel ids newest first, skipping rows whose hotel is gone', async () => {
-  listResult.data.push({ created_at: '2026-10-01', hotels: null })
+test('GET lists the saved hotel ids newest first, skipping anything that is not a hotel id', async () => {
+  listResult.data.push({ hotel_id: null }, { hotel_id: 'sunset-cabin' })
   const res = await GET()
   assert.equal(res.status, 200)
   assert.deepEqual(await res.json(), { data: [OTHER, HOTEL], error: null })

@@ -14,11 +14,27 @@ const INITIAL: SavedHotels = { status: "loading", ids: new Set() };
 let state = INITIAL;
 let loadedFor: string | null = null;
 let legacyCopied = false;
+// The saved state each toggle wants, laid over a list that loads meanwhile: toggles still waiting on the
+// server, and ones that went through after that read started (its answer may predate them)
+const inFlight = new Map<string, boolean>();
+const doneSinceLoad = new Map<string, boolean>();
+// The last toggle that failed, for the one live region on the page; n changes so the same message is read again
+export type SaveFailure = { message: string; n: number };
+let failure: SaveFailure | null = null;
 const listeners = new Set<() => void>();
+
+function notify() {
+  for (const listener of listeners) listener();
+}
 
 function setState(next: SavedHotels) {
   state = next;
-  for (const listener of listeners) listener();
+  notify();
+}
+
+function announceFailure(message: string) {
+  failure = { message, n: (failure?.n ?? 0) + 1 };
+  notify();
 }
 
 function subscribe(listener: () => void) {
@@ -72,6 +88,7 @@ async function copyLegacyFavorites(saved: string[]) {
 function load(key: string) {
   if (loadedFor === key) return;
   loadedFor = key;
+  doneSinceLoad.clear();
   fetch(API_ROUTES.FAVORITES, { cache: "no-store" })
     .then(async (res) => {
       if (loadedFor !== key) return;
@@ -80,7 +97,9 @@ function load(key: string) {
       const body: unknown = await res.json();
       const data = typeof body === "object" && body !== null ? (body as { data?: unknown }).data : null;
       const ids = Array.isArray(data) ? data.filter(isHotelId) : [];
-      setState({ status: "signed-in", ids: new Set(ids) });
+      let merged: ReadonlySet<string> = new Set(ids);
+      for (const [id, saved] of [...doneSinceLoad, ...inFlight]) merged = withId(merged, id, saved);
+      setState({ status: "signed-in", ids: merged });
       void copyLegacyFavorites(ids);
     })
     .catch(() => {
@@ -88,25 +107,34 @@ function load(key: string) {
     });
 }
 
-export type ToggleResult = "saved" | "removed" | "signed-out" | "failed";
+export type ToggleResult = "saved" | "removed" | "signed-out" | "failed" | "busy";
 
-/** Flips the heart at once and puts it back if the server says no. */
+/** Flips the heart at once and puts it back if the server says no. A second tap while the first is on its way is ignored ("busy"). */
 export async function toggleSavedHotel(hotelId: string): Promise<ToggleResult> {
+  if (inFlight.has(hotelId)) return "busy";
   const save = !state.ids.has(hotelId);
+  inFlight.set(hotelId, save);
   setState({ ...state, ids: withId(state.ids, hotelId, save) });
-  const rollback = () => setState({ ...state, ids: withId(state.ids, hotelId, !save) });
+  const fail = () => {
+    setState({ ...state, ids: withId(state.ids, hotelId, !save) });
+    announceFailure(save ? "Couldn't save this hotel. Try again." : "Couldn't remove this hotel from your saved hotels. Try again.");
+    return "failed" as const;
+  };
   try {
     const res = await send(save ? "POST" : "DELETE", hotelId);
-    if (res.ok) return save ? "saved" : "removed";
-    rollback();
+    if (res.ok) {
+      doneSinceLoad.set(hotelId, save);
+      return save ? "saved" : "removed";
+    }
     if (res.status === 401) {
       setState({ status: "signed-out", ids: new Set() });
       return "signed-out";
     }
-    return "failed";
+    return fail();
   } catch {
-    rollback();
-    return "failed";
+    return fail();
+  } finally {
+    inFlight.delete(hotelId);
   }
 }
 
@@ -114,4 +142,9 @@ export function useSavedHotels(): SavedHotels {
   const pathname = usePathname();
   useEffect(() => load(pathname), [pathname]);
   return useSyncExternalStore(subscribe, () => state, () => INITIAL);
+}
+
+/** The last failed save or removal, without reading the list (for the page's live region). */
+export function useSaveFailure(): SaveFailure | null {
+  return useSyncExternalStore(subscribe, () => failure, () => null);
 }

@@ -3,7 +3,7 @@
 // DELETE /api/favorites { hotelId } -> unsave a hotel
 
 import { getUserId } from '../../../utils/user.ts'
-import { addFavoriteHotel, getFavoriteHotels, removeFavoriteHotel } from '../../../utils/favorite-hotels.ts'
+import { addFavoriteHotel, getFavoriteHotelIds, removeFavoriteHotel } from '../../../utils/favorite-hotels.ts'
 import { isHotelId } from '../../../lib/saved-hotels.ts'
 
 const FOREIGN_KEY_VIOLATION = '23503'
@@ -26,15 +26,10 @@ export async function GET() {
   const { userId } = await getUserId()
   if (!userId) return signedOut()
 
-  const { data, error } = await getFavoriteHotels(userId)
+  const { data, error } = await getFavoriteHotelIds(userId)
   if (error) return Response.json({ data: null, error: 'Failed to get saved hotels.' }, { status: 500 })
 
-  const ids = (data ?? [])
-    .map((row) => {
-      const hotel = (row as { hotels?: { id?: unknown } | { id?: unknown }[] | null }).hotels
-      return Array.isArray(hotel) ? hotel[0]?.id : hotel?.id
-    })
-    .filter(isHotelId)
+  const ids = (data ?? []).map((row) => (row as { hotel_id?: unknown }).hotel_id).filter(isHotelId)
   return Response.json({ data: ids, error: null }, { status: 200 })
 }
 
