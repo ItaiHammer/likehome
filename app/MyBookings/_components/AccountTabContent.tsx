@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { Button } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { cardErrors } from "@/lib/card";
+import { cardBrandLabel, cardErrors, typedCardBrand, type CardBrandLabel } from "@/lib/card";
 import { pointsNumber } from "@/lib/rewards";
 
 export interface PaymentMethod {
     id: string;
-    brand: "Visa" | "Mastercard" | "Amex" | "Discover" | "Card";
+    brand: CardBrandLabel;
     last4: string;
     expMonth: string;
     expYear: string;
@@ -60,6 +61,13 @@ export function AccountTabContent({
     const [expiry, setExpiry] = useState("");
     const [cvc, setCvc] = useState("");
     const [cardError, setCardError] = useState("");
+    const [savingCard, setSavingCard] = useState(false);
+    const [listError, setListError] = useState("");
+    const [removing, setRemoving] = useState<PaymentMethod | null>(null);
+    const [removePending, setRemovePending] = useState(false);
+    const [removeError, setRemoveError] = useState("");
+    const removeDialogRef = useRef<HTMLDialogElement>(null);
+    const removeTitleId = useId();
 
     // Transaction history modal
     const [showAllTransactions, setShowAllTransactions] = useState(false);
@@ -85,14 +93,7 @@ export function AccountTabContent({
                         exp_year: number;
                     }) => ({
                         id: pm.id,
-                        brand:
-                            pm.brand === "visa"
-                                ? "Visa"
-                                : pm.brand === "mastercard"
-                                    ? "Mastercard"
-                                    : pm.brand === "amex"
-                                        ? "Amex"
-                                        : "Discover",
+                        brand: cardBrandLabel(pm.brand),
                         last4: pm.last4,
                         expMonth: String(pm.exp_month).padStart(2, "0"),
                         expYear: String(pm.exp_year),
@@ -100,8 +101,9 @@ export function AccountTabContent({
                 );
 
                 setPaymentMethods(cards);
-            } catch (error) {
-                console.error("Failed to load payment methods:", error);
+                setListError("");
+            } catch {
+                setListError("We couldn’t load your saved cards. Refresh the page to try again.");
             } finally {
                 setLoading(false);
             }
@@ -110,20 +112,11 @@ export function AccountTabContent({
         loadAccountData();
     }, []);
 
-    const getCardBrand = (num: string): PaymentMethod["brand"] => {
-        const clean = num.replace(/\D/g, "");
-        if (/^4/.test(clean)) return "Visa";
-        if (/^(5[1-5]|2[2-7])/.test(clean)) return "Mastercard";
-        if (/^3[47]/.test(clean)) return "Amex";
-        if (/^(6011|65|64[4-9])/.test(clean)) return "Discover";
-        return "Card";
-    };
-
-    const detectedBrand = getCardBrand(cardNumber);
+    const detectedBrand = typedCardBrand(cardNumber);
 
     const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const digits = e.target.value.replace(/\D/g, "");
-        const brand = getCardBrand(digits);
+        const brand = typedCardBrand(digits);
         const maxDigits = brand === "Amex" ? 15 : 16;
         const truncated = digits.slice(0, maxDigits);
 
@@ -158,6 +151,7 @@ export function AccountTabContent({
 
     const handleAddCardSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (savingCard) return;
 
         const validation = cardErrors(cardNumber, expiry, cvc);
         const validationMessage =
@@ -169,48 +163,79 @@ export function AccountTabContent({
         }
 
         const rawDigits = cardNumber.replace(/\D/g, "");
-        const brand = getCardBrand(rawDigits);
         const [monthStr = "", yearStr = ""] = expiry.split("/");
-        const month = Number(monthStr);
 
-        const response = await fetch("/api/saved-payment", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                card_number: rawDigits,
-                exp_month: month,
-                exp_year: 2000 + Number(yearStr),
-                cvc,
-                name_on_card: name ?? "Cardholder",
-                time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            }),
-        });
+        setSavingCard(true);
+        try {
+            const response = await fetch("/api/saved-payment", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    card_number: rawDigits,
+                    exp_month: Number(monthStr),
+                    exp_year: 2000 + Number(yearStr),
+                    cvc,
+                    name_on_card: name ?? "Cardholder",
+                    time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                }),
+            });
+            const result = await response.json().catch(() => ({}));
 
-        const result = await response.json();
+            if (!response.ok || !result.paymentMethod) {
+                setCardError(result.error ?? "Could not save payment method.");
+                return;
+            }
 
-        if (!response.ok) {
-            setCardError(result.error ?? "Could not save payment method.");
-            return;
+            const saved = result.paymentMethod;
+            setPaymentMethods((cards) => [
+                ...cards,
+                {
+                    id: saved.id,
+                    brand: cardBrandLabel(saved.brand),
+                    last4: saved.last4,
+                    expMonth: String(saved.exp_month).padStart(2, "0"),
+                    expYear: String(saved.exp_year),
+                },
+            ]);
+            setCardNumber("");
+            setExpiry("");
+            setCvc("");
+            setCardError("");
+            setIsAddingCard(false);
+        } catch {
+            setCardError("We couldn’t reach LikeHome. Check your connection and try again.");
+        } finally {
+            setSavingCard(false);
         }
+    };
 
-        const saved = result.paymentMethod;
+    const openRemoveDialog = (pm: PaymentMethod) => {
+        setRemoving(pm);
+        setRemoveError("");
+        removeDialogRef.current?.showModal();
+    };
 
-        const newCardObj: PaymentMethod = {
-            id: saved.id,
-            brand,
-            last4: saved.last4,
-            expMonth: String(saved.exp_month).padStart(2, "0"),
-            expYear: String(saved.exp_year),
-        };
-
-        setPaymentMethods([...paymentMethods, newCardObj]);
-        setCardNumber("");
-        setExpiry("");
-        setCvc("");
-        setCardError("");
-        setIsAddingCard(false);
+    const handleRemoveCard = async () => {
+        if (!removing || removePending) return;
+        setRemovePending(true);
+        setRemoveError("");
+        try {
+            const response = await fetch(`/api/saved-payment/${encodeURIComponent(removing.id)}`, { method: "DELETE" });
+            // 404: already gone, so it leaves the list either way
+            if (!response.ok && response.status !== 404) {
+                const result = await response.json().catch(() => ({}));
+                setRemoveError(result.error ?? "Could not remove this card.");
+                return;
+            }
+            setPaymentMethods((cards) => cards.filter((card) => card.id !== removing.id));
+            removeDialogRef.current?.close();
+        } catch {
+            setRemoveError("We couldn’t reach LikeHome. Check your connection and try again.");
+        } finally {
+            setRemovePending(false);
+        }
     };
 
     const handleSaveAccountDetails = async (e: React.FormEvent) => {
@@ -472,9 +497,10 @@ export function AccountTabContent({
                             <div className="flex items-center gap-2 pt-1">
                                 <button
                                     type="submit"
-                                    className="rounded-md bg-blue px-3 py-1 text-xs font-semibold text-white hover:bg-blue-dark"
+                                    disabled={savingCard}
+                                    className="rounded-md bg-blue px-3 py-1 text-xs font-semibold text-white hover:bg-blue-dark disabled:cursor-not-allowed disabled:opacity-60"
                                 >
-                                    Save Card
+                                    {savingCard ? "Saving…" : "Save Card"}
                                 </button>
                                 <button
                                     type="button"
@@ -492,6 +518,8 @@ export function AccountTabContent({
                         <div className="space-y-3">
                             {loading ? (
                                 <p className="text-xs text-slate py-2">Loading payment methods...</p>
+                            ) : listError ? (
+                                <p role="alert" className="text-[11px] text-red-500 font-medium py-2">{listError}</p>
                             ) : paymentMethods.length > 0 ? (
                                 paymentMethods.map((pm) => (
                                     <div
@@ -509,6 +537,14 @@ export function AccountTabContent({
                                                 </p>
                                             </div>
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => openRemoveDialog(pm)}
+                                            aria-label={`Remove ${pm.brand} ending in ${pm.last4}`}
+                                            className="text-xs font-semibold text-blue hover:text-blue-dark transition-colors"
+                                        >
+                                            Remove
+                                        </button>
                                     </div>
                                 ))
                             ) : (
@@ -533,6 +569,28 @@ export function AccountTabContent({
                     </div>
                 )}
             </div>
+
+            {/* A native <dialog> opened with showModal(), like the cancel booking dialog */}
+            <dialog
+                ref={removeDialogRef}
+                aria-labelledby={removeTitleId}
+                onClose={() => setRemoving(null)}
+                className="m-auto w-[min(30rem,calc(100%-2rem))] rounded-lg border border-edge bg-surface p-6 text-ink shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop:bg-disabled/90 dark:backdrop:bg-black/60"
+            >
+                <h2 id={removeTitleId} className="text-xl font-semibold">Remove this card?</h2>
+                <p className="mt-2 text-slate">
+                    {removing ? `${removing.brand} ending in ${removing.last4} won’t be offered at checkout anymore.` : ""}
+                </p>
+                {removeError && <p role="alert" className="mt-3 text-sm font-medium text-red-500">{removeError}</p>}
+                <div className="mt-6 flex flex-wrap gap-3">
+                    <Button onClick={() => removeDialogRef.current?.close()} aria-disabled={removePending || undefined}>
+                        Keep card
+                    </Button>
+                    <Button variant="secondary" onClick={handleRemoveCard} loading={removePending}>
+                        Remove card
+                    </Button>
+                </div>
+            </dialog>
 
             {/* 4. Transaction History Card */}
             <div className="flex flex-col justify-between rounded-2xl border border-edge bg-surface p-6 shadow-sm">

@@ -3,12 +3,16 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   authorizeMockPayment,
+  authorizeSavedPayment,
+  cardExpired,
+  declinedTestCard,
   detectCardBrand,
   luhnValid,
   validatePaymentInput,
 } from '../utils/payment-logic.ts'
+import { todayInTimeZone } from '../utils/reservation-logic.ts'
 
-const NOW = new Date('2026-10-09T12:00:00Z')
+const NOW = '2026-10-09'
 const valid = {
   card_number: '4242 4242 4242 4242',
   exp_month: 12,
@@ -153,8 +157,8 @@ test('card number formats: dashes and spaces ok, anything else rejected', () => 
 })
 
 test('expiry across a year boundary', () => {
-  const dec = new Date('2026-12-15T00:00:00Z')
-  const jan = new Date('2027-01-01T00:00:00Z')
+  const dec = '2026-12-15'
+  const jan = '2027-01-01'
   assert.equal(validatePaymentInput({ ...valid, exp_month: 12, exp_year: 2026 }, dec).ok, true)
   assert.equal(validatePaymentInput({ ...valid, exp_month: 11, exp_year: 2026 }, dec).ok, false)
   assert.equal(validatePaymentInput({ ...valid, exp_month: 12, exp_year: 2026 }, jan).ok, false)
@@ -187,4 +191,37 @@ test('authorizeMockPayment ignores inherited object keys', () => {
 
 test('declines a non-numeric amount', () => {
   assert.equal(authorizeMockPayment('4242424242424242', NaN).approved, false)
+})
+
+test('cardExpired: a card is good through the last day of its month', () => {
+  assert.equal(cardExpired(10, 2026, '2026-10-31'), false)
+  assert.equal(cardExpired(10, 2026, '2026-11-01'), true)
+  assert.equal(cardExpired(12, 2026, '2027-01-01'), true)
+  assert.equal(cardExpired(1, 2027, '2026-12-31'), false)
+})
+
+test("cardExpired across a month boundary uses the guest's day, ahead of UTC", () => {
+  // 4pm UTC on Oct 31 is already 1am Nov 1 in Tokyo
+  const now = new Date('2026-10-31T16:00:00Z')
+  assert.equal(todayInTimeZone('Asia/Tokyo', now), '2026-11-01')
+  assert.equal(cardExpired(10, 2026, todayInTimeZone('Asia/Tokyo', now)), true)
+  assert.equal(cardExpired(10, 2026, todayInTimeZone('UTC', now)), false)
+  assert.equal(validatePaymentInput({ ...valid, exp_month: 10, exp_year: 2026 }, todayInTimeZone('Asia/Tokyo', now)).ok, false)
+})
+
+test('declinedTestCard names the demo decline cards only', () => {
+  assert.equal(declinedTestCard('4000000000000002'), 'Your card was declined.')
+  assert.equal(declinedTestCard('4000000000009995'), 'Insufficient funds.')
+  assert.equal(declinedTestCard('4242424242424242'), null)
+  assert.equal(declinedTestCard('toString'), null)
+})
+
+test('authorizeSavedPayment declines a missing or expired card and a non-positive amount', () => {
+  const card = { expMonth: 10, expYear: 2026 }
+  assert.deepEqual(authorizeSavedPayment(card, 300, '2026-10-31'), { approved: true })
+  assert.equal(authorizeSavedPayment(card, 300, '2026-11-01').approved, false)
+  assert.equal(authorizeSavedPayment(null, 300, '2026-10-01').approved, false)
+  assert.equal(authorizeSavedPayment(undefined, 300, '2026-10-01').approved, false)
+  assert.equal(authorizeSavedPayment(card, 0, '2026-10-01').approved, false)
+  assert.equal(authorizeSavedPayment(card, -5, '2026-10-01').approved, false)
 })

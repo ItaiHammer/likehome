@@ -51,8 +51,14 @@ function toInt(value: unknown): number | null {
   return null
 }
 
+/** Whether a card expiring at the end of expMonth/expYear has expired on `today` (YYYY-MM-DD, the guest's calendar day). */
+export function cardExpired(expMonth: number, expYear: number, today: string): boolean {
+  const [year, month] = today.split('-').map(Number)
+  return expYear * 12 + (expMonth - 1) < year * 12 + (month - 1)
+}
+
 /** Validates the `payment` part of a checkout request. The CVC and name are checked but never returned. */
-export function validatePaymentInput(body: unknown, now: Date = new Date(), today?: string): PaymentValidationResult {
+export function validatePaymentInput(body: unknown, today: string): PaymentValidationResult {
   if (!body || typeof body !== 'object') {
     return { ok: false, error: 'Payment details are required.' }
   }
@@ -73,13 +79,7 @@ export function validatePaymentInput(body: unknown, now: Date = new Date(), toda
     return { ok: false, error: 'Enter a valid expiry date.' }
   }
   if (expYear < 100) expYear += 2000
-
-  const [currentYear, currentMonth] = today
-    ? today.split("-").map(Number)
-    : [now.getUTCFullYear(), now.getUTCMonth() + 1];
-
-  const thisMonth = currentYear * 12 + (currentMonth - 1);
-  if (expYear * 12 + (expMonth - 1) < thisMonth) {
+  if (cardExpired(expMonth, expYear, today)) {
     return { ok: false, error: 'This card has expired.' }
   }
 
@@ -98,17 +98,32 @@ export function validatePaymentInput(body: unknown, now: Date = new Date(), toda
   }
 }
 
+/** Why a demo card always declines, or null for one that is approved. */
+export function declinedTestCard(cardNumber: string): string | null {
+  return Object.hasOwn(DECLINED_TEST_CARDS, cardNumber) ? DECLINED_TEST_CARDS[cardNumber] : null
+}
+
 /** Stand-in for a payment provider: decides approve/decline from the card number alone. */
 export function authorizeMockPayment(cardNumber: string, amount: number): AuthorizationResult {
   if (!(amount > 0)) return { approved: false, reason: 'Invalid payment amount.' }
-  if (Object.hasOwn(DECLINED_TEST_CARDS, cardNumber)) {
-    return { approved: false, reason: DECLINED_TEST_CARDS[cardNumber] }
-  }
+  const declined = declinedTestCard(cardNumber)
+  if (declined) return { approved: false, reason: declined }
   return { approved: true }
 }
 
-/** Saved cards contain no full number or CVC, so the mock treats them as already authorized. */
-export function authorizeSavedPayment(amount: number): AuthorizationResult {
+/**
+ * The mock charge for a saved card, which has no full number to check. `card` is the row already
+ * loaded for the signed-in account; a decline card can't be saved, so any current card is approved.
+ */
+export function authorizeSavedPayment(
+  card: { expMonth: number; expYear: number } | null | undefined,
+  amount: number,
+  today: string
+): AuthorizationResult {
   if (!(amount > 0)) return { approved: false, reason: 'Invalid payment amount.' }
+  if (!card) return { approved: false, reason: 'Saved card not found.' }
+  if (cardExpired(card.expMonth, card.expYear, today)) {
+    return { approved: false, reason: 'This saved card has expired.' }
+  }
   return { approved: true }
 }
