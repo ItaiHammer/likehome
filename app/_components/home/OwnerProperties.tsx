@@ -46,7 +46,7 @@ export async function OwnerProperties({ ownerId }: { ownerId: string }) {
         // [&>li]:grid lets each card fill its row, so the two side by side end level
         <ul className="mt-6 grid gap-4 lg:grid-cols-2 [&>li]:grid">
           {shown.map((listing, i) => (
-            <ListingRow key={listing.id} listing={listing} index={i} />
+            <ListingRow key={listing.id} listing={listing} index={i} headingLevel="h3" />
           ))}
         </ul>
       ) : (

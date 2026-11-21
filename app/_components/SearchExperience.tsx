@@ -52,7 +52,14 @@ const phonePanelRow = "cascade sm:opacity-100! sm:transform-none!";
 // Phones: the filters control shrinks to its icon (and count) beside Where. This reaches into
 // SearchFiltersPicker's trigger, which puts the icon first and its text after it.
 const filtersBesideWhere =
-  "max-sm:col-start-2 max-sm:row-start-1 max-sm:m-1 max-sm:size-11 max-sm:self-center max-sm:justify-center max-sm:rounded-control max-sm:border max-sm:border-edge max-sm:p-0 max-sm:[&_[data-trigger]]:justify-center max-sm:[&_[data-trigger]>:not(:first-child)]:hidden max-sm:[&_[data-trigger]>:first-child>span]:flex";
+  "max-sm:col-start-3 max-sm:row-start-1 max-sm:m-1 max-sm:size-11 max-sm:self-center max-sm:justify-center max-sm:rounded-control max-sm:border max-sm:border-edge max-sm:p-0 max-sm:[&_[data-trigger]]:justify-center max-sm:[&_[data-trigger]>:not(:first-child)]:hidden max-sm:[&_[data-trigger]>:first-child>span]:flex";
+// Phones: Where and the filters icon fill the first row, Dates and Guests split the second in half (the 50% column,
+// then the rest). Each half's popover reaches across the other half, so it opens at the panel's full width. Guests'
+// divider is a pseudo-element, not a border, so both halves stay exactly 50% wide for that reach.
+const phoneFieldsGrid = "max-sm:grid-cols-[50%_minmax(0,1fr)_auto]";
+const datesHalf = "max-sm:col-start-1 max-sm:[&>[role=dialog]]:-right-full";
+const guestsHalf =
+  "max-sm:col-span-2 max-sm:before:absolute max-sm:before:inset-y-0 max-sm:before:left-0 max-sm:before:w-px max-sm:before:bg-edge/60 max-sm:[&>[role=dialog]]:-left-full";
 
 function SearchIcon({ className = "h-6 w-6" }: { className?: string }) {
   return (
@@ -314,11 +321,13 @@ export function SearchExperience({
             <div
               style={{ "--i": 0 } as React.CSSProperties}
               className={`grid min-w-0 flex-1 grid-cols-1 divide-y divide-edge/60 rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md sm:grid-cols-2 sm:divide-y-0 md:flex md:flex-row ${barPadding} ${
-                collapsible ? `${phonePanelRow} max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:divide-y-0 max-sm:bg-surface` : ""
+                collapsible ? `${phonePanelRow} ${phoneFieldsGrid} max-sm:divide-y-0 max-sm:bg-surface` : ""
               }`}
             >
               <DestinationInput
-                className={`${field} sm:col-span-1 sm:border-b sm:border-r sm:border-edge/60 md:flex-[1.45] md:border-0 lg:flex-[1.6]`}
+                className={`${field} sm:col-span-1 sm:border-b sm:border-r sm:border-edge/60 md:flex-[1.45] md:border-0 lg:flex-[1.6] ${
+                  collapsible ? "max-sm:col-span-2" : ""
+                }`}
                 initialValue={initialValues.where ?? ""}
                 initialPlace={initialValues.place ?? ""}
                 autoFocusFrom={switchedBy === "keyboard" ? "keyboard" : undefined}
@@ -327,7 +336,7 @@ export function SearchExperience({
               <DatesField
                 key={`dates-${fieldStart.n}`}
                 className={`${field} ${divider} sm:col-span-1 sm:border-b sm:border-edge/60 md:flex-[1.15] md:border-0 ${
-                  collapsible ? "max-sm:col-span-2 max-sm:border-t max-sm:border-edge/60" : ""
+                  collapsible ? `${datesHalf} max-sm:border-t max-sm:border-edge/60` : ""
                 }`}
                 initialCheckIn={fieldStart.checkIn}
                 initialCheckOut={fieldStart.checkOut}
@@ -335,7 +344,7 @@ export function SearchExperience({
               <GuestsPicker
                 key={`guests-${fieldStart.n}`}
                 className={`${field} ${divider} sm:border-r sm:border-edge/60 md:border-0 ${
-                  collapsible ? "max-sm:col-span-2 max-sm:border-t max-sm:border-edge/60" : ""
+                  collapsible ? `${guestsHalf} max-sm:border-t max-sm:border-edge/60` : ""
                 }`}
                 initialAdults={fieldStart.adults}
                 initialChildren={fieldStart.children}
