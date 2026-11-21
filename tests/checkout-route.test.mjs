@@ -48,6 +48,10 @@ mock.module('@/utils/reservations', {
   },
 })
 
+let pointsBalance
+const getPointsBalance = mock.fn(async () => pointsBalance)
+mock.module('@/utils/points', { namedExports: { getPointsBalance } })
+
 const liveRoomPrice = mock.fn(async () => ({ status: 'unavailable' }))
 mock.module('@/lib/liteapi/rates', { namedExports: { liveRoomPrice } })
 
@@ -96,9 +100,11 @@ const checkoutCalls = () => checkoutReservation.mock.callCount()
 beforeEach(() => {
   userId = 'user-1'
   roomResult = { data: { ...ROOM }, error: null }
+  pointsBalance = { balance: 100000, error: null }
 
   for (const fn of [
     checkoutReservation,
+    getPointsBalance,
     liveRoomPrice,
     consoleError,
   ]) {
@@ -579,6 +585,89 @@ describe('checkout points redemption', () => {
       assert.equal(r.status, 400)
       assert.equal(r.json.error, 'points must be an integer.')
     }
+    assert.equal(checkoutCalls(), 0)
+  })
+})
+
+// ROOM is 129.99 a night for 3 nights: 389.97
+describe('checkout rewards', () => {
+  const withReward = (reward_id, expected_total = 389.97, body = validBody()) => ({ ...body, reward_id, expected_total })
+
+  test('the reward is priced from the server total, not from points the browser sends', async () => {
+    const r = await post({ ...withReward('half-off'), points: 1 })
+    assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 19499)
+  })
+
+  test('a free stay spends the whole server total in points', async () => {
+    const r = await post(withReward('free-stay'))
+    assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 38997)
+  })
+
+  test('409 when the server price differs from the one the reward was chosen against', async () => {
+    liveRoomPrice.mock.mockImplementation(async () => ({ status: 'live', value: { perNight: 150 } }))
+    roomResult = { data: { ...ROOM, hotels: { liteapi_id: 'lp-1' } }, error: null }
+    const r = await post(withReward('free-stay'))
+    assert.deepEqual(r, { status: 409, json: { error: 'The price changed. Please review your booking.' } })
+    assert.equal(checkoutCalls(), 0)
+  })
+
+  test('a sub-cent difference is the same price', async () => {
+    const r = await post(withReward('free-stay', 389.975))
+    assert.equal(r.status, 201)
+  })
+
+  test('400 on an unknown reward id or a missing expected total, nothing written', async () => {
+    for (const id of ['ten-off', '', 5, null]) {
+      const r = await post(withReward(id))
+      assert.deepEqual(r, { status: 400, json: { error: 'Unknown reward.' } }, String(id))
+    }
+    const missing = withReward('half-off')
+    delete missing.expected_total
+    for (const body of [missing, withReward('half-off', null), withReward('half-off', '389.97')]) {
+      const r = await post(body)
+      assert.equal(r.status, 400)
+      assert.equal(r.json.error, 'expected_total must be a number.')
+    }
+    assert.equal(checkoutCalls(), 0)
+  })
+
+  test('no reward and no points: the balance is not read and nothing is spent', async () => {
+    const r = await post(validBody())
+    assert.equal(r.status, 201)
+    assert.equal(getPointsBalance.mock.callCount(), 0)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 0)
+  })
+
+  test('raw points are bounded to a Postgres integer', async () => {
+    const r = await post({ ...validBody(), points: Number.MAX_SAFE_INTEGER })
+    assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 2147483647)
+  })
+
+  test('a stay fully paid with points skips authorization, so a decline test card still books', async () => {
+    const r = await post(withReward('free-stay', 389.97, withCard('4000 0000 0000 0002')))
+    assert.equal(r.status, 201)
+    assert.equal(checkoutReservation.mock.calls[0].arguments[2].points, 38997)
+  })
+
+  test('the card is still authorized for what points leave', async () => {
+    const r = await post(withReward('half-off', 389.97, withCard('4000 0000 0000 0002')))
+    assert.deepEqual(r, { status: 402, json: { error: 'Your card was declined.' } })
+    assert.equal(checkoutCalls(), 0)
+  })
+
+  test('a balance too small to cover the stay leaves an amount to authorize', async () => {
+    pointsBalance = { balance: 1000, error: null }
+    const r = await post(withReward('free-stay', 389.97, withCard('4000 0000 0000 0002')))
+    assert.equal(r.status, 402)
+    assert.equal(checkoutCalls(), 0)
+  })
+
+  test('the card format is still checked when points cover everything', async () => {
+    const r = await post(withReward('free-stay', 389.97, withCard('1234')))
+    assert.equal(r.status, 400)
     assert.equal(checkoutCalls(), 0)
   })
 })
