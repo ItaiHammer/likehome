@@ -3,24 +3,37 @@ import { Suspense } from "react";
 import { formatShort } from "../_components/dates";
 import { SearchExperience } from "../_components/SearchExperience";
 import { SkyBackground } from "../_components/SkyBackground";
+import { Pagination } from "../_components/Pagination";
 import { Button } from "../_components/ui";
 import { search } from "./search";
 import { priceSearchResults, quotePage } from "./livePrices";
 import { mergeLiveResults, withoutDates } from "./liveSearch";
 import type { SearchRequest } from "./types";
-import { Pagination } from "./components/Pagination";
 import { searchQuery } from "@/lib/stay-filters";
 import { SearchResultCard, type HotelSearchResult } from "./components/SearchResultCard";
 import { SortSelect } from "./components/SortSelect";
 import { FilterSheetButton, FilterSidebar, type FilterValues } from "./components/FilterSidebar";
 import { catalogEnabled, facilityNames, findPlace, hotelsInPlace } from "@/lib/liteapi/catalog";
 import { savedLiteapiIds } from "@/utils/liteapi-hotels";
-import {parseDate, todayInTimeZone} from "@/utils/reservation-logic";
+import {countNights, MAX_NIGHTS, parseDate, todayInTimeZone} from "@/utils/reservation-logic";
+import { tags as filterTags } from "./types";
 
 type RawParams = Record<string, string | string[] | undefined>;
 type SortValue = "recommended" | "price-low" | "price-high";
 
 const PAGE_SIZE = 21;
+
+function pageHref(params: RawParams, page: number) {
+  const query = new URLSearchParams();
+  for (const [key, raw] of Object.entries(params)) {
+    if (key === "page" || raw === undefined || raw === "") continue;
+    const values = Array.isArray(raw) ? raw : [raw];
+    values.forEach((value) => query.append(key, value));
+  }
+  if (page > 1) query.set("page", String(page));
+  const suffix = query.toString();
+  return suffix ? `/search?${suffix}` : "/search";
+}
 // search_hotels caps p_limit at 100
 const LIVE_CANDIDATES = 100;
 // The bar and the AI's reply to it sit 84px inside the results on wide screens; lined up edge to edge,
@@ -259,7 +272,12 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                   ) : (
                     <ResultsGrid key={resultsKey} rows={data} search={stayLinkSearch} />
                   )}
-                  <Pagination currentPage={currentPage} totalPages={totalPages} params={navigationParams} />
+                  <Pagination
+                    current={currentPage}
+                    pages={totalPages}
+                    href={(page) => pageHref(navigationParams, page)}
+                    label="Search result pages"
+                  />
                 </>
               )}
             </div>
@@ -363,7 +381,8 @@ function getActiveFilterCount(params: SearchParams) {
         Number(hasPositiveNumber(params.minRating)) +
         Number(hasPositiveNumber(params.numBeds)) +
         Number(Boolean(params.bedSize?.trim())) +
-        params.tags.length
+        // Only tags the search knows: an unknown one (?tags=foo) filters nothing
+        params.tags.filter((tag) => (filterTags as readonly string[]).includes(tag)).length
     );
 }
 
@@ -387,23 +406,6 @@ function hasStructuredSearchCriteria(params: SearchParams) {
         params.numBeds ||
         params.bedSize ||
         params.tags.length,
-    );
-}
-
-// A standard search counts once something differs from the bar's defaults (2 adults, no children)
-function hasSearchCriteria(params: SearchParams) {
-    return Boolean(
-        params.where ||
-        params.checkIn ||
-        params.checkOut ||
-        params.minPrice ||
-        params.maxPrice ||
-        params.minRating ||
-        params.numBeds ||
-        params.bedSize ||
-        params.tags.length ||
-        (params.adults && params.adults !== "2") ||
-        (params.children && params.children !== "0"),
     );
 }
 
@@ -447,6 +449,11 @@ function getFrontendValidationError(params: SearchParams) {
 
         if (params.checkIn >= params.checkOut) {
             return "Check-out must be after check-in.";
+        }
+
+        // Same limit as the stay page and checkout, so the search doesn't list stays that can't be booked
+        if (countNights(params.checkIn, params.checkOut) > MAX_NIGHTS) {
+            return `Stays can be up to ${MAX_NIGHTS} nights.`;
         }
     }
 

@@ -10,7 +10,7 @@ export function toEditorTab(value: unknown): EditorTab {
 
 export const EMPTY_DRAFT: ListingDraft = {
   name: "",
-  propertyType: "hotel",
+  propertyType: "" as ListingDraft["propertyType"],
   streetAddress: "",
   city: "",
   region: "",
@@ -45,6 +45,7 @@ export type EditorAction =
   | { type: "openRoom"; room?: ListingRoom }
   | { type: "editRoom"; field: keyof RoomForm; value: string }
   | { type: "roomInvalid"; errors: RoomFormErrors }
+  | { type: "roomSaveInvalid"; errors: RoomFormErrors }
   | { type: "closeRoom" }
   | { type: "saveRoom"; room: ListingRoom } // adds it, or replaces the room with the same id
   | { type: "removeRoom"; id: string }
@@ -129,12 +130,21 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       if (!state.roomEditor) return state;
       const errors = { ...state.roomEditor.errors };
       delete errors[action.field];
-      return { ...state, roomEditor: { ...state.roomEditor, form: { ...state.roomEditor.form, [action.field]: action.value }, errors } };
+      const hasErrors = Object.values(errors).some(Boolean) || Object.values(state.errors).some(Boolean);
+      return {
+        ...state,
+        roomEditor: { ...state.roomEditor, form: { ...state.roomEditor.form, [action.field]: action.value }, errors },
+        problem: state.problem === "invalid" && !hasErrors ? "none" : state.problem,
+      };
     }
     case "roomInvalid":
       return state.roomEditor ? { ...state, roomEditor: { ...state.roomEditor, errors: action.errors } } : state;
+    case "roomSaveInvalid":
+      return state.roomEditor
+        ? { ...state, tab: "rooms", problem: "invalid", roomEditor: { ...state.roomEditor, errors: action.errors } }
+        : state;
     case "closeRoom":
-      return { ...state, roomEditor: null };
+      return { ...state, roomEditor: null, problem: state.problem === "invalid" && Object.keys(state.errors).length === 0 ? "none" : state.problem };
     case "saveRoom": {
       const exists = rooms.some((room) => room.id === action.room.id);
       return {
@@ -142,6 +152,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
           rooms: exists ? rooms.map((room) => (room.id === action.room.id ? action.room : room)) : [...rooms, action.room],
         }),
         roomEditor: null,
+        problem: "none",
       };
     }
     case "removeRoom":

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { draftFromListing, readListingDraft, validateHotelInfo, type HotelInfoErrors } from "@/lib/validation/listing";
+import { draftFromListing, publicationProblem, readListingDraft, validateHotelInfo, type HotelInfoErrors } from "@/lib/validation/listing";
 import type { ListingDraft } from "@/types/listing";
 import { getCurrentUser } from "@/utils/current-user";
 import { createListing, getListing, updateListing } from "@/utils/listings";
@@ -47,6 +47,8 @@ export async function createProperty(input: unknown): Promise<SaveResult> {
   if (!draft) return { status: "failed" }; // malformed rooms or photos: never sent by the real UI
   const errors = validateHotelInfo(draft);
   if (Object.keys(errors).length > 0) return { status: "invalid", errors };
+  const issue = publicationProblem(draft);
+  if (issue) return { status: "failed", message: issue.message };
 
   const { data, error } = await createListing(user.id, draft);
   if (error || !data) return failed(error);

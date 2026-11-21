@@ -315,6 +315,8 @@ export function PopularDestinations() {
   return (
     <section
       ref={sectionRef}
+      // isolate: a hovered tile's z-10 only lifts it above its neighbors, never above the page around the carousel
+      className="isolate"
       aria-labelledby={`${baseId}-title`}
       aria-roledescription="carousel"
       onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(true)}

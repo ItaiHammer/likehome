@@ -14,7 +14,7 @@ export default async function AuthError(props: PageProps<"/auth/error">) {
       <Card as="section" padding="lg" className="max-w-2xl">
         <p className="text-sm font-semibold text-blue">Sign in</p>
         <h1 className="mt-3 font-serif text-[40px] leading-[48px] text-ink">We couldn&apos;t sign you in.</h1>
-        <p className="mt-3 leading-7 text-slate">The Google sign-in was cancelled or didn&apos;t finish. Please try again.</p>
+        <p className="mt-3 leading-7 text-slate">The sign-in was cancelled or didn&apos;t finish. Please try again.</p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Button href={retry}>Try again</Button>
           <Button variant="secondary" href="/">

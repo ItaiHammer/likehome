@@ -1,13 +1,18 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import BlurText from "./_components/BlurText";
 import { PopularDestinations } from "./_components/PopularDestinations";
+import { RecommendedStays, RecommendedStaysSkeleton } from "./_components/RecommendedStays";
 import { SearchExperience } from "./_components/SearchExperience";
 import { ShinyLabel } from "./_components/ShinyLabel";
 import { SkyBackground } from "./_components/SkyBackground";
-import { Button, SectionHeading, Stars, Tag } from "./_components/ui";
-import { WindowScene } from "./_components/WindowScene";
-import { STAYS } from "./_data/stays";
+import { ArrowIcon, Button } from "./_components/ui";
+import { WelcomeBanner } from "./_components/WelcomeBanner";
+import { redirect } from "next/navigation";
+import { choicePathFor } from "@/lib/account/choice";
+import { homeContentFor } from "@/lib/account/home";
+import { getViewer } from "@/utils/viewer";
 import { PAGE_ROUTES } from "@/constants/routes";
 import coastalRoom from "./_assets/coastal-room.webp";
 
@@ -36,29 +41,29 @@ function Icon({ children, className = "h-5 w-5" }: { children: React.ReactNode; 
   );
 }
 
-function Arrow({ className }: { className?: string }) {
-  return (
-    <Icon className={className}>
-      <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-    </Icon>
-  );
-}
-
 const perks = ["Member prices on every stay", "Rewards on every night you book", "Change your dates or room online"];
 
-export default function Home() {
+export default async function Home() {
+  const viewer = await getViewer();
+  if (viewer.role === "unchosen") redirect(choicePathFor(null));
+  const { hero, welcome, signedOutSections } = homeContentFor(viewer.role);
+
   return (
     <main className="flex flex-1 flex-col">
-      {/* Hero: z-10 so the search bar's dropdowns open over the sections below */}
-      <section className="relative isolate z-10 px-4 pb-24 pt-14 sm:px-6 sm:pb-32 sm:pt-20">
+      {/* Hero: z-20 so the search bar's dropdowns open over the sections below. Popular
+          destinations is isolated too, so its hovered tile's z-10 stays inside the carousel */}
+      <section className="relative isolate z-20 px-4 pb-24 pt-14 sm:px-6 sm:pb-32 sm:pt-20">
         {/* The sky fades out toward the bottom, into the page background (either theme) */}
         <div className="absolute inset-0 -z-10 overflow-hidden [mask-image:linear-gradient(to_bottom,black_45%,transparent)]">
           <SkyBackground />
         </div>
         <div className="mx-auto max-w-5xl">
+          {hero.eyebrow && (
+            <p className="mb-3 text-center text-sm font-semibold uppercase tracking-[0.18em] text-ink/80">{hero.eyebrow}</p>
+          )}
           <BlurText
             as="h1"
-            text="Feel at home, anywhere."
+            text={hero.title}
             delay={120}
             stepDuration={1}
             // transform, not y: motion runs it as a browser animation, so it doesn't stutter while the page loads
@@ -67,9 +72,7 @@ export default function Home() {
             easing={[0.33, 1, 0.68, 1]}
             className="justify-center text-center font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px] lg:text-[72px] lg:leading-[80px]"
           />
-          <p className="mx-auto mt-3 max-w-xl text-center text-xl leading-7 text-ink">
-            A new favorite stay starts with a hello.
-          </p>
+          <p className="mx-auto mt-3 max-w-xl text-center text-xl leading-7 text-ink">{hero.line}</p>
 
           {/* Mykaela's search bar (fields, filters, AI mode): it sends people to /search */}
           <div className="mt-10">
@@ -79,7 +82,17 @@ export default function Home() {
       </section>
 
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-12 sm:px-6">
-        {/* Promo and feature cards sit close together, as one block */}
+        {welcome && (
+          <WelcomeBanner title={welcome.title} body={welcome.body}>
+            {welcome.actions.map((a) => (
+              <Button key={a.href} href={a.href} variant={a.variant}>
+                {a.label}
+              </Button>
+            ))}
+          </WelcomeBanner>
+        )}
+        {signedOutSections && (
+        /* Promo and feature cards sit close together, as one block */
         <div className="flex flex-col gap-4">
           {/* Promo: the "Come on in." card sets the row height; the illustration
               sits beside it in its own card, portrait-sized to that height */}
@@ -152,59 +165,20 @@ export default function Home() {
                 <p className="mt-2 flex-1 text-base leading-6 text-slate">{f.body}</p>
                 <span className="mt-6 inline-flex items-center gap-1.5 text-base font-semibold text-blue-dark">
                   {f.link}
-                  <Arrow className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                 </span>
               </Link>
             ))}
           </section>
         </div>
+        )}
 
         <PopularDestinations />
 
-        {/* Featured stays: picture, name and rating, amenity tags, then type and price.
-            One row of four from lg up. The row breaks out of the page column to use
-            more of a wide screen (up to 1400px, keeping 3rem clear at each edge);
-            max(100%, …) keeps it from ever getting narrower than the column. */}
-        <section id="stays" className="scroll-mt-6">
-          <SectionHeading title="Stays that feel like yours" subtitle="Handpicked places our guests keep coming back to." />
-          <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:mx-[calc((100%_-_max(100%,_min(100vw_-_6rem,_1400px)))_/_2)] lg:grid-cols-4">
-            {STAYS.map((s) => (
-              <li key={s.slug}>
-                <Link
-                  href={`/reserve/${s.slug}`}
-                  className="group flex h-full flex-col overflow-hidden rounded-lg border border-edge bg-surface focus-visible:border-blue focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue"
-                >
-                  <div className="aspect-[4/3] overflow-hidden border-b border-edge">
-                    <div className="h-full w-full transition-transform duration-500 ease-out group-hover:scale-[1.03]">
-                      <WindowScene variant={s.variant} id={`scene-${s.slug}`} />
-                    </div>
-                  </div>
-                  <div className="flex flex-1 flex-col p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-serif text-xl leading-7 text-ink">{s.name}</h3>
-                      <Stars rating={s.rating} />
-                    </div>
-                    <p className="text-sm text-slate">{s.location}</p>
-                    <ul className="mt-3 flex flex-1 flex-wrap content-start gap-1.5">
-                      {s.tags.map((t) => (
-                        <li key={t}>
-                          <Tag>{t}</Tag>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-4 flex items-center justify-between border-t border-edge pt-3 text-sm">
-                      <span className="text-slate">{s.type}</span>
-                      <span className="text-ink">
-                        <span className="font-semibold">From ${s.rooms[0].nightly}</span>
-                        <span className="text-slate"> / night</span>
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
+        {/* Recommended stays (US 3.3), for every role: streamed in, so the hero and banner don't wait for the search */}
+        <Suspense fallback={<RecommendedStaysSkeleton />}>
+          <RecommendedStays />
+        </Suspense>
       </div>
     </main>
   );

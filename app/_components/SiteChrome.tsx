@@ -2,8 +2,14 @@ import Link from "next/link";
 import { LogoMark } from "./LogoMark";
 import { DesktopNav, MobileNav } from "./SiteNav";
 import { ThemeToggle } from "./ThemeToggle";
-import { PAGE_ROUTES } from "@/constants/routes";
 import { AuthButton } from "@/components/auth-button";
+import { SignOutButton } from "@/components/sign-out-button";
+import { accountMenuItemsFor, accountMenuLinkFor, navItemsFor } from "@/lib/account/nav";
+import { accountLabel } from "@/lib/account/role";
+import { getPointsBalance } from "@/utils/points";
+import { getViewer } from "@/utils/viewer";
+import { AccountMenu } from "./AccountMenu";
+import { PointsPill } from "./PointsPill";
 
 function Logo() {
   return (
@@ -14,18 +20,38 @@ function Logo() {
   );
 }
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const viewer = await getViewer();
+  const items = navItemsFor(viewer.role);
+  const label = accountLabel(viewer.role);
+  const menuLink = accountMenuLinkFor(viewer.role);
+  // Rewards are for personal accounts (they live under /MyBookings)
+  const pointsRead = viewer.role === "personal" && viewer.userId ? await getPointsBalance(viewer.userId) : null;
+  // A failed read hides the pill rather than showing 0 pts
+  const points = pointsRead && !pointsRead.error ? pointsRead.balance : null;
   return (
     <header className="relative border-b border-edge bg-surface">
       <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
         <Logo />
         <nav aria-label="Main" className="hidden md:block">
-          <DesktopNav />
+          <DesktopNav items={items} />
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <AuthButton />
-          <MobileNav />
+          {points !== null && <PointsPill points={points} />}
+          <AuthButton signedIn={viewer.role !== "signed-out"}>
+            {menuLink ? (
+              <AccountMenu
+                name={viewer.name}
+                email={viewer.email}
+                accountLabel={label}
+                items={accountMenuItemsFor(viewer.role)}
+              />
+            ) : (
+              <SignOutButton inHeader />
+            )}
+          </AuthButton>
+          <MobileNav items={items} accountLabel={label} />
         </div>
       </div>
     </header>

@@ -173,10 +173,13 @@ export default async function MyBookingsPage({
   const first = firstName(name);
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
-      {showSample && (
-        <SampleNotice>Sample bookings, shown only on your local dev server. Take ?sample off the address to see your real bookings.</SampleNotice>
-      )}
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
+        {showSample && (
+          <SampleNotice>
+            Sample bookings, shown only on your local dev server.
+            Remove ?sample from the address to see your real bookings.
+          </SampleNotice>
+        )}
 
       {/* Ink, not blue or slate: lighter text on the sky strip is too faint to read */}
       <p className="text-sm font-semibold uppercase tracking-[0.08em] text-ink">Your account</p>
@@ -197,9 +200,15 @@ export default async function MyBookingsPage({
             : "Your upcoming and past reservations."}
       </p>
 
-      {/* Reservations come first in the DOM (and on phones); grid placement moves the sidebar left from lg */}
-      <div className="mt-10 grid gap-10 lg:grid-cols-[248px_minmax(0,1fr)] lg:items-start lg:gap-8">
-        <div className="space-y-10 lg:col-start-2 lg:row-start-1">
+      {/* Keep the compact account menu above the content on smaller screens. */}
+      <div className="mt-10 grid gap-6 lg:grid-cols-[248px_minmax(0,1fr)] lg:items-start lg:gap-8">
+        <AccountSidebar
+          name={name}
+          email={email}
+          activeTab={activeTab}
+          className="w-full lg:sticky lg:top-6"
+        />
+        <div className="min-w-0 space-y-10">
           {activeTab === "reservations" && (
             <>
           <section aria-labelledby="upcoming-heading">
@@ -247,9 +256,6 @@ export default async function MyBookingsPage({
                           <h2 id="cancelled-heading" className={sectionHeading}>
                             Cancelled reservations
                           </h2>
-                          <button type="button" className="text-xs font-semibold text-blue hover:text-blue-dark transition-colors">
-                            View all &rarr;
-                          </button>
                         </div>
 
                         <ul className="space-y-3">
@@ -275,18 +281,16 @@ export default async function MyBookingsPage({
             )}
           </div>
 
-          <AccountSidebar
-              name={name}
-              email={email}
-              activeTab={activeTab}
-              className="max-w-sm lg:col-start-1 lg:row-start-1"
-          />
         </div>
       </main>
   );
 }
 
-function NoUpcoming({ firstTrip }: { firstTrip: boolean }) {
+function NoUpcoming({
+                      firstTrip,
+                    }: {
+  firstTrip: boolean;
+}) {
   return (
       <div className="rounded-2xl border border-edge bg-surface p-6 sm:p-8 shadow-sm">
         <p className="text-lg font-semibold text-ink">{firstTrip ? "No bookings yet" : "No upcoming trips"}</p>

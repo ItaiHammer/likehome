@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { PAGE_ROUTES } from "@/constants/routes";
 import { cardErrors } from "@/lib/card";
+import { pointsNumber } from "@/lib/rewards";
 
 export interface PaymentMethod {
     id: string;
@@ -402,7 +405,7 @@ export function AccountTabContent({
 
                     <div className="pt-1">
                         <p className="font-serif text-[32px] leading-9 font-bold tracking-tight text-ink">
-                            {pointsBalance} <span className="font-sans text-lg font-semibold">points</span>
+                            {pointsNumber(pointsBalance)} <span className="font-sans text-lg font-semibold">points</span>
                         </p>
                         <p className="text-xs text-slate mt-1">available</p>
                     </div>
@@ -413,17 +416,17 @@ export function AccountTabContent({
                 </div>
 
                 <div className="pt-6">
-                    <button
-                        type="button"
+                    <Link
+                        href={PAGE_ROUTES.REWARDS}
                         className="text-xs font-semibold text-blue hover:text-blue-dark transition-colors inline-flex items-center gap-1"
                     >
                         View rewards &rarr;
-                    </button>
+                    </Link>
                 </div>
             </div>
 
             {/* 3. Payment Methods Card */}
-            <div className="flex flex-col justify-between rounded-2xl border border-edge bg-surface p-6 shadow-sm">
+            <div id="payment-methods" className="flex scroll-mt-6 flex-col justify-between rounded-2xl border border-edge bg-surface p-6 shadow-sm">
                 <div className="space-y-5">
                     <h2 className="font-serif text-[32px] leading-9 font-bold text-ink">Payment methods</h2>
 

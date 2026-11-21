@@ -31,6 +31,9 @@
   overflow: hidden;
   border-radius: 12px;
   background: var(--surface);
+  box-shadow:
+    0 40px 80px -32px rgba(7, 13, 47, 0.55),
+    0 18px 36px -18px rgba(7, 13, 47, 0.35);
 }
 
 .content {
@@ -61,6 +64,22 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.hint {
+  margin: 14px 0 0;
+  color: var(--slate);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* From 1024px the hint fits on one line and the content is shorter than the artwork, so
+   cancelling its top margin and line keeps it out of the centred block and the title and
+   buttons stay where the frame has them */
+@media (min-width: 1024px) {
+  .hint {
+    margin-bottom: -30px;
+  }
 }
 
 .providerButton {
