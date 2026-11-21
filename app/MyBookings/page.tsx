@@ -41,10 +41,14 @@ async function loadMyBookings() {
     getPointsBalance(userId),
   ]);
 
-  if (account.error) throw new Error(account.error.message);
+  if (account.error) {
+    throw new Error(account.error.message);
+  }
+
   if (bookingHistory.error) {
     throw new Error(bookingHistory.error.message);
   }
+
   if (transactionHistory.error) {
     throw new Error(transactionHistory.error.message);
   }

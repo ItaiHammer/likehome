@@ -1,8 +1,11 @@
 // Checkout API (US 5.1.3): mock payment, real database writes. Nothing is actually charged.
 //   POST /api/checkout -> validate, price on the server, run the mock charge, then save
 //                         the reservation, its payment (last 4 digits only) and the charge.
+//   A saved card (payment.saved_payment_method_id) is loaded for the signed-in account instead.
 // Never log the request body: it contains card details.
 import { getUserId } from '@/utils/user'
+import { guestTimeZone } from '@/utils/guest-today'
+import { getSavedPaymentMethod } from '@/utils/saved-payment-methods'
 import {
   bookingParty,
   calculateTotalPrice,
@@ -12,7 +15,13 @@ import {
   validateReservationInput,
   type RoomForBooking,
 } from '@/utils/reservation-logic'
-import { authorizeMockPayment, validatePaymentInput } from '@/utils/payment-logic'
+import {
+  authorizeMockPayment,
+  authorizeSavedPayment,
+  cardExpired,
+  validatePaymentInput,
+  type PaymentInput,
+} from '@/utils/payment-logic'
 import { partyOf } from '@/lib/liteapi/party'
 import { liveRoomPrice } from '@/lib/liteapi/rates'
 import { checkoutReservation, getCancelInsurancePremium } from '@/utils/reservations'
@@ -23,6 +32,12 @@ import { PRICE_CHANGED_ERROR, discountPoints, findDiscount, pointsCharge } from 
 const EXCLUSION_VIOLATION = '23P01'
 // checkout_reservation's p_points is a Postgres integer
 const MAX_POINTS = 2147483647
+
+function savedCardId(payment: unknown): string | null {
+  if (!payment || typeof payment !== 'object') return null
+  const id = (payment as Record<string, unknown>).saved_payment_method_id
+  return typeof id === 'string' && id.trim() !== '' ? id.trim() : null
+}
 
 export async function POST(request: Request) {
   const { supabase, userId } = await getUserId()
@@ -66,17 +81,36 @@ export async function POST(request: Request) {
     pointsToRedeem = Math.min(Math.max(0, inputBody.points), MAX_POINTS)
   }
 
-  const timeZone = typeof inputBody.time_zone === 'string' ? inputBody.time_zone : null
-  const stay = validateReservationInput(body, todayInTimeZone(timeZone))
+  const timeZone = await guestTimeZone(inputBody.time_zone)
+  const today = todayInTimeZone(timeZone)
+  const stay = validateReservationInput(body, today)
   if (!stay.ok) {
     return Response.json({ error: stay.error }, { status: 400 })
   }
-  const card = validatePaymentInput(inputBody.payment)
-  if (!card.ok) {
-    return Response.json({ error: card.error }, { status: 400 })
-  }
   const input = stay.value
-  const payment = card.value
+
+  // A saved card has no full number: it is charged as the stored row, never as anything the browser sent
+  let payment: Omit<PaymentInput, 'cardNumber'> & { cardNumber: string | null }
+  const savedId = savedCardId(inputBody.payment)
+  if (savedId) {
+    const { data: saved, error: savedError } = await getSavedPaymentMethod(savedId, userId)
+    // Another account's card reads as missing, so its existence isn't disclosed
+    if (savedError || !saved || saved.account_id !== userId) {
+      return Response.json({ error: 'Saved card not found.' }, { status: 404 })
+    }
+    const expMonth = Number(saved.exp_month)
+    const expYear = Number(saved.exp_year)
+    if (cardExpired(expMonth, expYear, today)) {
+      return Response.json({ error: 'This saved card has expired.' }, { status: 400 })
+    }
+    payment = { cardNumber: null, last4: saved.last4, brand: saved.brand, expMonth, expYear }
+  } else {
+    const card = validatePaymentInput(inputBody.payment, today)
+    if (!card.ok) {
+      return Response.json({ error: card.error }, { status: 400 })
+    }
+    payment = card.value
+  }
 
   // 2. Look up the room and check capacity. `*` rather than the LiteAPI columns by name, so booking
   //    keeps working (at stored prices) on a database without supabase/migrations/liteapi_hotels.sql.
@@ -137,7 +171,10 @@ export async function POST(request: Request) {
     if (!balanceError) cardCharge = pointsCharge(pointsToRedeem, balance, totalCharged)
   }
   if (cardCharge > 0) {
-    const authorization = authorizeMockPayment(payment.cardNumber, cardCharge)
+    const authorization =
+      payment.cardNumber === null
+        ? authorizeSavedPayment(payment, cardCharge, today)
+        : authorizeMockPayment(payment.cardNumber, cardCharge)
     if (!authorization.approved) {
       return Response.json({ error: authorization.reason }, { status: 402 })
     }
@@ -152,7 +189,6 @@ export async function POST(request: Request) {
       guests: input.guests,
       adults: input.adults,
       children: input.children,
-      status: inputBody.status as string
     },
     {
       total_price: totalPrice,

@@ -4,7 +4,7 @@ import { checkoutRequest } from '../app/reserve/[slug]/checkoutRequest.ts'
 import { validateReservationInput } from '../utils/reservation-logic.ts'
 import { validatePaymentInput } from '../utils/payment-logic.ts'
 
-const NOW = new Date('2026-10-11T12:00:00Z')
+const NOW = '2026-10-11'
 const TODAY = '2026-10-11'
 
 // The checkout form as a guest fills it in, typed formatting included

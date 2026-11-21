@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cardErrors } from '../lib/card.ts'
+import { cardBrandLabel, cardErrors, typedCardBrand } from '../lib/card.ts'
 
-const NOW = new Date('2026-10-11T12:00:00Z')
+const NOW = '2026-10-11'
 
 test('the test cards from /api/checkout pass the card checks', () => {
   assert.deepEqual(cardErrors('4242 4242 4242 4242', '12/30', '123', NOW), {})
@@ -29,4 +29,25 @@ test('security code is 4 digits for Amex and 3 for other cards', () => {
   assert.equal(cardErrors('3782 822463 10005', '12/30', '123', NOW).cvc, 'Enter the 4 digit security code.')
   assert.equal(cardErrors('4242424242424242', '12/30', '1234', NOW).cvc, 'Enter the 3 digit security code.')
   assert.equal(cardErrors('1234', '12/30', '12', NOW).cvc, 'Enter the 3 or 4 digit code.')
+})
+
+test('cardBrandLabel: stored brands by name, anything else a neutral "Card"', () => {
+  assert.equal(cardBrandLabel('visa'), 'Visa')
+  assert.equal(cardBrandLabel('mastercard'), 'Mastercard')
+  assert.equal(cardBrandLabel('amex'), 'Amex')
+  assert.equal(cardBrandLabel('discover'), 'Discover')
+  for (const brand of ['jcb', '', null, undefined, 'toString']) assert.equal(cardBrandLabel(brand), 'Card', String(brand))
+})
+
+test('typedCardBrand reads the brand from the first digits', () => {
+  assert.equal(typedCardBrand('4'), 'Visa')
+  assert.equal(typedCardBrand('37'), 'Amex')
+  assert.equal(typedCardBrand('5555'), 'Mastercard')
+  assert.equal(typedCardBrand('6011'), 'Discover')
+  assert.equal(typedCardBrand('9'), 'Card')
+})
+
+test('expiry is judged against the day passed in, the end of the card month inclusive', () => {
+  assert.equal(cardErrors('4242424242424242', '10/26', '123', '2026-10-31').expiry, undefined)
+  assert.equal(cardErrors('4242424242424242', '10/26', '123', '2026-11-01').expiry, 'This card has expired.')
 })

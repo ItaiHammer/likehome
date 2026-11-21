@@ -24,14 +24,15 @@ export async function createSavedPaymentMethod(method: {
   return { data, error };
 }
 
-export async function getSavedPaymentMethod(id: string) {
+export async function getSavedPaymentMethod(id: string, accountId: string) {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
   const { data, error } = await supabase
     .from("saved_payment_methods")
     .select("*")
     .eq("id", id)
-    .single();
+    .eq("account_id", accountId)
+    .maybeSingle();
   return { data, error };
 }
 
@@ -75,12 +76,15 @@ export async function setDefaultSavedPaymentMethod(id: string) {
   return { error };
 }
 
-export async function deleteSavedPaymentMethod(id: string) {
+/** Scoped to the account as well as RLS; `deleted` is false when no such card is theirs. */
+export async function deleteSavedPaymentMethod(id: string, accountId: string) {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("saved_payment_methods")
     .delete()
-    .eq("id", id);
-  return { error };
+    .eq("id", id)
+    .eq("account_id", accountId)
+    .select("id");
+  return { deleted: (data ?? []).length > 0, error };
 }
