@@ -19,8 +19,20 @@ const STORED_COUNTRY: Record<string, string> = {
   AU: 'Australia',
 }
 
-export function countryToStored(code: string): string {
-  return STORED_COUNTRY[code.trim().toUpperCase()] ?? code
+const REGION_NAMES = new Intl.DisplayNames(['en'], { type: 'region' })
+
+export function countryToStored(country: string): string {
+  const input = country.trim()
+  const lower = input.toLowerCase()
+  if (['us', 'usa', 'u.s.', 'u.s.a.', 'united states', 'united states of america'].includes(lower)) return 'USA'
+  if (['gb', 'uk', 'u.k.', 'united kingdom'].includes(lower)) return 'United Kingdom'
+  for (const [code, stored] of Object.entries(STORED_COUNTRY)) {
+    if (lower === code.toLowerCase() || lower === stored.toLowerCase()) return stored
+  }
+  // Valid ISO codes outside the original nine-country dropdown must not be saved
+  // literally as "DE"/"BR": searches use readable country names.
+  if (/^[a-z]{2}$/i.test(input)) return REGION_NAMES.of(input.toUpperCase()) ?? input
+  return input
 }
 
 // Back to the editor's ISO code. Also accepts rows saved before this fix (the bare ISO code)

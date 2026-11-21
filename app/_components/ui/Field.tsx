@@ -116,7 +116,7 @@ export function Select({
           {...select}
         >
           {options.map((o) => (
-            <option key={o.value} value={o.value}>
+            <option key={o.value} value={o.value} className="font-sans">
               {o.label}
             </option>
           ))}
