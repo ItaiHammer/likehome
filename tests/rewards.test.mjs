@@ -135,11 +135,12 @@ test('a shortfall is only reported when fewer points were spent than shown', () 
 
 test('the confirmation only says the card was charged when it was', () => {
   assert.match(shortfallNote(500, 12.5), /The difference was charged to your card\./)
-  for (const charged of [0, null]) {
-    const note = shortfallNote(500, charged)
-    assert.doesNotMatch(note, /charged/)
-    assert.match(note, /room price was lower, so fewer points were needed/)
-  }
+  const free = shortfallNote(500, 0)
+  assert.doesNotMatch(free, /charged/)
+  assert.match(free, /room price was lower, so fewer points were needed/)
+  // Payments couldn't be read: say what changed without guessing about the card
+  const unknown = shortfallNote(500, null)
+  assert.doesNotMatch(unknown, /charged|room price was lower/)
 })
 
 test('the card pays what points leave, with points capped at the balance and the total like checkout_reservation', () => {

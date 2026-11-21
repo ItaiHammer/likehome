@@ -58,7 +58,8 @@ export function pointsShortfall(shown: number | null, used: number): number {
 /** Why the confirmation used fewer points than checkout showed; `charged` is what the card paid */
 export function shortfallNote(shortfall: number, charged: number | null): string {
   const fewer = `We used ${formatPoints(shortfall)} fewer than checkout showed`
-  return charged !== null && charged > 0
+  if (charged === null) return `${fewer}, because your points balance or the room price changed.`
+  return charged > 0
     ? `${fewer}, because your points balance or the room price changed. The difference was charged to your card.`
     : `${fewer}, because the room price was lower, so fewer points were needed.`
 }

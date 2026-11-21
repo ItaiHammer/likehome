@@ -188,7 +188,8 @@ export function StayReservation({
   // A discount is a percent of that total; one whose points no longer fit the balance is dropped.
   const showRewards = Boolean(account) && stay.bookable;
   const chosenReward = showRewards ? findDiscount(rewardId) : null;
-  const rewardPoints = chosenReward ? discountPoints(chosenReward.percent, total) : 0;
+  // Cents, as the server rounds the total it prices the reward from
+  const rewardPoints = chosenReward ? discountPoints(chosenReward.percent, Math.round(total * 100) / 100) : 0;
   const reward =
     chosenReward && pointsBalance !== null && rewardPoints > 0 && rewardPoints <= pointsBalance
       ? { ...chosenReward, points: rewardPoints, dollars: pointsToDollars(rewardPoints) }
@@ -570,7 +571,11 @@ export function StayReservation({
         document.getElementById("cardNumber")?.focus();
         return;
       }
-      if (res.status === 409 && body.error === PRICE_CHANGED_ERROR) return fail(body.error);
+      if (res.status === 409 && body.error === PRICE_CHANGED_ERROR) {
+        // Reload the server price so the reward is re-priced before they try again
+        router.refresh();
+        return fail(body.error);
+      }
       if (res.status === 409) {
         setSubmitting(false);
         return showDatesHere(`${body.error ?? "Those dates were just booked."} Pick other dates.`);
