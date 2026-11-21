@@ -111,18 +111,19 @@ export function cardsForBooking<R extends WithUnits>(rooms: R[], unitId: string)
 }
 
 /**
- * Nights (from `from` on) a stay in this room can't cover, for the calendar to cross out: every one
- * of the card's identical rooms is booked, or the guest is staying at another hotel.
+ * Nights (from `from` on) the calendar crosses out: every room that fits the party is booked, or the
+ * guest is staying at another hotel. A night only the chosen room has taken stays open, so picking it
+ * moves the guest to a free room. Pass no rooms when more may turn up (LiteAPI hotels).
  */
-export function blockedNights(room: WithUnits | undefined, otherStays: { checkIn: string; checkOut: string }[], from: string): string[] {
-  const nights = new Set(room ? soldOutNights([room]) : []);
+export function blockedNights(fittingRooms: WithUnits[], otherStays: { checkIn: string; checkOut: string }[], from: string): string[] {
+  const nights = new Set(fittingRooms.length ? soldOutNights(fittingRooms) : []);
   for (const stay of otherStays) {
     for (let night = stay.checkIn; night < stay.checkOut; night = addDays(night, 1)) nights.add(night);
   }
   return [...nights].filter((night) => night >= from).sort();
 }
 
-export const BLOCKED_NOTE = 'Struck-through dates are booked for this room or overlap another stay of yours. Other rooms may be free.';
+export const BLOCKED_NOTE = 'Struck-through dates have no room free for your party, or overlap another stay of yours.';
 
 /** Why the chosen room can't be booked for the chosen dates, or null when it can. */
 export function roomProblem(room: { name: string; soldOut?: boolean; bookedForDates?: boolean }): string | null {

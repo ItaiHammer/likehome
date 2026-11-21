@@ -193,10 +193,11 @@ export function StayReservation({
   const dueAtProperty = nights ? (room.dueAtProperty ?? 0) : 0;
   // Today is "" while rendering on the server, so the server and the browser agree on first render
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
-  // Nights the calendar crosses out, as days from today: the selected room is booked, or the guest
-  // is at another hotel. Derived from `today` (empty on the server), so it fills in once in the browser.
+  // Nights the calendar crosses out, as days from today: no room that fits the party is free, or the
+  // guest is at another hotel. Derived from `today` (empty on the server), so it fills in once in the browser.
+  const fittingRooms = stay.liteapiId ? [] : rooms.filter((r) => roomFits(r, guests, adults, children));
   const blockedOffsets = [
-    ...new Set([...stay.blockedNights, ...(today ? blockedNights(room, otherStays, today).map((night) => nightsBetween(today, night)) : [])]),
+    ...new Set([...stay.blockedNights, ...(today ? blockedNights(fittingRooms, otherStays, today).map((night) => nightsBetween(today, night)) : [])]),
   ];
 
   useEffect(() => {
