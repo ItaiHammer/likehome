@@ -1,10 +1,9 @@
 "use client";
 
 import { Fragment } from "react";
-import { money } from "@/lib/bookings";
+import { guestLabel, money } from "@/lib/bookings";
 import { roomFits } from "@/lib/stay-filters";
 import type { Room } from "../../_data/stays";
-import { guestLabel } from "./GuestsField";
 
 // The room list as radio cards, shared by the stay page and the change-booking page.
 // Keep it inside a <fieldset> with the legend; `locked` greys out every room but the selected one.

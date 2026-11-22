@@ -49,14 +49,22 @@ export function BookingCalendar({
   stays,
   today,
   initialDate,
+  initialStay,
 }: {
   properties: CalendarProperty[];
   stays: CalendarStay[];
   today: string;
   initialDate: string;
+  /** A reservation listed on initialDate to open and highlight (the homepage's guest rows link here) */
+  initialStay: string | null;
 }) {
   const [month, setMonth] = useState<Month>(() => monthOf(initialDate));
   const [selected, setSelected] = useState(initialDate);
+  const [focusStay, setFocusStay] = useState(initialStay);
+  const selectDay = (date: string) => {
+    setSelected(date);
+    setFocusStay(null);
+  };
   const [propertyId, setPropertyId] = useState<string | null>(null);
 
   const shown = forProperty(properties, stays, propertyId);
@@ -111,7 +119,7 @@ export function BookingCalendar({
           <div role="group" aria-label={`Days in ${formatMonth(month)}`} className="grid grid-cols-7 gap-1 sm:gap-1.5">
             {cells.map((cell, i) =>
               cell ? (
-                <DayButton key={cell.date} day={cell} today={today} selected={cell.date === selected} colorOf={colorOf} onSelect={setSelected} />
+                <DayButton key={cell.date} day={cell} today={today} selected={cell.date === selected} colorOf={colorOf} onSelect={selectDay} />
               ) : (
                 <span key={`pad-${i}`} aria-hidden />
               ),
@@ -135,6 +143,7 @@ export function BookingCalendar({
           today={today}
           byId={byId}
           colorOf={colorOf}
+          focusStay={focusStay}
           action={
             dayGuests(day).length > 0 && (
               <Link href={PAGE_ROUTES.OWNER_MESSAGES} className={`${sectionLinkClass} text-sm`}>

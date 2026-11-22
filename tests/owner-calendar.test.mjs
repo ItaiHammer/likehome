@@ -150,4 +150,47 @@ test('date param and calendar link', () => {
   assert.equal(cal.calendarDateParam(undefined), null)
   assert.equal(cal.calendarHref('2026-12-04'), '/listings?date=2026-12-04#calendar')
   assert.equal(cal.calendarHref(), '/listings#calendar')
+  assert.equal(cal.calendarHref('2026-12-04', 'r1'), '/listings?date=2026-12-04&stay=r1#calendar')
+  assert.equal(cal.calendarHref(undefined, 'r1'), '/listings#calendar')
+})
+
+test('stays carry the booking details, and the panel lists them', () => {
+  const [stay] = cal.calendarStays([booking({ guests: 3, children: 1, amountPaid: 280.5, amountRefunded: 20 })])
+  assert.deepEqual(
+    { code: stay.code, nights: stay.nights, guests: stay.guests, children: stay.children, stage: stay.stage, paid: stay.paid, refunded: stay.refunded, bookedAt: stay.bookedAt },
+    { code: 'LH-R1', nights: 2, guests: 3, children: 1, stage: 'upcoming', paid: 280.5, refunded: 20, bookedAt: '2026-11-01T00:00:00Z' },
+  )
+  assert.deepEqual(cal.stayDetails(stay), [
+    { label: 'Reservation', value: 'LH-R1' },
+    { label: 'Dates', value: 'Dec 4 - Dec 6 · 2 nights' },
+    { label: 'Guests', value: '2 adults, 1 child' },
+    { label: 'Status', value: 'Upcoming' },
+    { label: 'Paid', value: '$280.50 · $20 refunded' },
+    { label: 'Booked', value: 'Nov 1' },
+  ])
+  const [past] = cal.calendarStays([booking({ stage: 'past', guests: null, nights: 1, checkOut: '2026-12-05' })])
+  const details = Object.fromEntries(cal.stayDetails(past).map((d) => [d.label, d.value]))
+  assert.equal(details.Guests, undefined)
+  assert.equal(details.Status, 'Checked out')
+  assert.equal(details.Paid, '$300')
+  assert.equal(details.Dates, 'Dec 4 - Dec 5 · 1 night')
+  assert.equal(cal.stayDetails(cal.calendarStays([booking({ stage: 'in-stay' })])[0])[3].value, 'Staying now')
+})
+
+test('stay param: only a reservation the panel lists on that date', () => {
+  const names = ['Jordan Diaz', 'Casey Lee', 'Sam Park', 'Riley Chen', 'Alex Kim', 'Morgan Wu']
+  const stays = cal.calendarStays([
+    ...names.map((guestName, i) => booking({ id: `s${i}`, guestId: `g${i}`, guestName, checkIn: '2026-11-21', checkOut: '2026-11-23' })),
+    booking({ id: 'left', checkIn: '2026-11-19', checkOut: '2026-11-22' }),
+    booking({ id: 'later', checkIn: '2026-11-25', checkOut: '2026-11-27' }),
+  ])
+  const day = cal.calendarDay('2026-11-22', stays, 8)
+  assert.equal(cal.reservationsLabel(day), '7 reservations')
+  assert.deepEqual(cal.dayGuests(day).map((s) => s.guest), ['Jordan D.', 'Casey L.', 'Sam P.', 'Riley C.', 'Alex K.', 'Morgan W.', 'Jordan D.'])
+  assert.equal(cal.calendarStayParam('s3', '2026-11-22', stays), 's3')
+  assert.equal(cal.calendarStayParam('left', '2026-11-22', stays), 'left')
+  assert.equal(cal.calendarStayParam('later', '2026-11-22', stays), null)
+  assert.equal(cal.calendarStayParam('nope', '2026-11-22', stays), null)
+  assert.equal(cal.calendarStayParam(['s3'], '2026-11-22', stays), null)
+  assert.equal(cal.calendarStayParam(undefined, '2026-11-22', stays), null)
 })

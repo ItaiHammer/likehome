@@ -4,14 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { bookingCode, changeBlocker, datesProblem, findOverlap, formatStayDates, money, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
+import { bookingCode, changeBlocker, datesProblem, findOverlap, formatStayDates, money, overlapMessage, partyLabel, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
 import { calculateTotalPrice, MAX_NIGHTS, todayInTimeZone } from "@/utils/reservation-logic";
 import { browserTimeZone, formatDate, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, FormError, Stepper } from "../../_components/ui";
 import type { Room } from "../../_data/stays";
 import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
-import { guestLabel } from "../../reserve/[slug]/GuestsField";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
 import { useBookedNightsLookup } from "../../reserve/[slug]/useBookedNightsLookup";
 import { blockedOffsets as calendarBlockedOffsets, BLOCKED_NOTE, freeUnitId, markBookedRooms, mergeBookedNights, roomProblem, withoutStay, type BookedWindow } from "@/lib/room-availability";
@@ -41,7 +40,6 @@ type Errors = { dates?: string; guests?: string; form?: string; signIn?: boolean
 
 const noSubscribe = () => () => {};
 const nightsLabel = (n: number) => `${n} ${n === 1 ? "night" : "nights"}`;
-const guestsLabel = (s: Pick<Stay, "guests" | "children">) => guestLabel(s.guests - s.children, s.children);
 
 // Change the dates, room or guests of a booking through PATCH /api/reservations/[id].
 // The API reprices the stay (nights × nightly price); no difference is charged or refunded yet.
@@ -323,7 +321,7 @@ export function ChangeBooking({
                     {formatStayDates(current.checkIn, current.checkOut)} · {nightsLabel(nightsBetween(current.checkIn, current.checkOut))}
                   </p>
                   <p>
-                    {currentRoom.name} · {guestsLabel(current)} · {money(current.total)}
+                    {currentRoom.name} · {partyLabel(current.guests, current.children)} · {money(current.total)}
                   </p>
                 </div>
               </div>
@@ -520,7 +518,7 @@ function StayDetails({ roomName, stay }: { roomName: string | null; stay: Stay }
     roomName && ["Room", roomName],
     ["Check-in", formatDate(stay.checkIn)],
     ["Check-out", formatDate(stay.checkOut)],
-    ["Guests", guestsLabel(stay)],
+    ["Guests", partyLabel(stay.guests, stay.children)],
     ["Total", money(stay.total)],
   ].filter(Boolean) as [string, string][];
   return (

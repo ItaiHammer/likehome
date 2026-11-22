@@ -21,14 +21,14 @@ import { ListingRow } from "./_components/ListingRow";
 export const metadata: Metadata = { title: "My listings - LikeHome" };
 
 type Props = {
-  searchParams: Promise<{ sample?: string; id?: string; created?: string; date?: string }>;
+  searchParams: Promise<{ sample?: string; id?: string; created?: string; date?: string; stay?: string }>;
 };
 
 export default async function MyListingsPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect(PAGE_ROUTES.LOGIN);
 
-  const { sample, id, created, date } = await searchParams;
+  const { sample, id, created, date, stay } = await searchParams;
   const isDevelopment = process.env.NODE_ENV === "development";
   const isSample = isDevelopment && (sample === "1" || sample === "preview");
 
@@ -74,7 +74,7 @@ export default async function MyListingsPage({ searchParams }: Props) {
     );
   }
 
-  // The calendar opens on ?date= (the homepage's day tiles link there), else the owner's today
+  // The calendar opens on ?date= (the homepage's day tiles link there), else the owner's today; ?stay= opens that guest
   const today = await guestToday();
   const calendarDate = calendarDateParam(date) ?? today;
 
@@ -104,7 +104,7 @@ export default async function MyListingsPage({ searchParams }: Props) {
           {listings.length > 0 && (
             <div id={CALENDAR_ANCHOR} className="scroll-mt-6">
               <Suspense fallback={<ListingsCalendarSkeleton />}>
-                <ListingsCalendar listings={listings} today={today} date={calendarDate} sample={isSample} />
+                <ListingsCalendar listings={listings} today={today} date={calendarDate} stay={stay} sample={isSample} />
               </Suspense>
             </div>
           )}

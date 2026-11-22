@@ -2,9 +2,10 @@
 // The owner's booking calendar (homepage "This week" card and the My Listings calendar): how many rooms
 // are booked each night, who arrives and leaves, and a colour per property.
 import { PAGE_ROUTES } from '../constants/routes.ts'
-import { addDays, formatShort, formatWeekday, monthCells, type Month } from '../app/_components/dates.ts'
+import { addDays, formatRange, formatShort, formatWeekday, monthCells, type Month } from '../app/_components/dates.ts'
+import { money, partyLabel } from './bookings.ts'
 import { shortGuestName } from './home-owner.ts'
-import type { HotelBooking } from './hotel-customers.ts'
+import type { BookingStage, HotelBooking } from './hotel-customers.ts'
 import { plural, totalRooms } from './listing-display.ts'
 import { coversNight } from './room-availability.ts'
 import { parseDate } from '../utils/reservation-logic.ts'
@@ -22,6 +23,14 @@ export type CalendarStay = {
   room: string | null
   checkIn: string
   checkOut: string
+  code: string
+  nights: number
+  guests: number | null
+  children: number
+  stage: Exclude<BookingStage, 'cancelled'>
+  paid: number
+  refunded: number
+  bookedAt: string
 }
 
 // 0 nothing booked, 1 some rooms, 2 busy, 3 every room
@@ -52,7 +61,7 @@ export const roomsAcross = (properties: CalendarProperty[]) => properties.reduce
 // Each booking holds one room; cancelled ones hold nothing
 export function calendarStays(bookings: HotelBooking[]): CalendarStay[] {
   return bookings
-    .filter((b) => b.stage !== 'cancelled')
+    .filter((b): b is HotelBooking & { stage: CalendarStay['stage'] } => b.stage !== 'cancelled')
     .map((b) => ({
       id: b.id,
       hotelId: b.hotelId,
@@ -61,6 +70,14 @@ export function calendarStays(bookings: HotelBooking[]): CalendarStay[] {
       room: b.roomType,
       checkIn: b.checkIn,
       checkOut: b.checkOut,
+      code: b.code,
+      nights: b.nights,
+      guests: b.guests,
+      children: b.children,
+      stage: b.stage,
+      paid: b.amountPaid,
+      refunded: b.amountRefunded,
+      bookedAt: b.bookedAt,
     }))
     .sort((a, b) => a.checkIn.localeCompare(b.checkIn) || a.checkOut.localeCompare(b.checkOut) || a.id.localeCompare(b.id))
 }
@@ -141,10 +158,35 @@ export const roomsBookedLabel = (day: CalendarDay) => `${day.booked} of ${plural
 export const stayPlace = (stay: CalendarStay, property?: CalendarProperty) =>
   [property?.name ?? stay.hotelName, stay.room].filter(Boolean).join(' · ')
 
+const STAGE_LABELS: Record<CalendarStay['stage'], string> = { upcoming: 'Upcoming', 'in-stay': 'Staying now', past: 'Checked out' }
+
+/** The reservation's details when its row in the day panel is opened */
+export function stayDetails(stay: CalendarStay): { label: string; value: string }[] {
+  const paid = stay.refunded > 0 ? `${money(stay.paid)} · ${money(stay.refunded)} refunded` : money(stay.paid)
+  return [
+    { label: 'Reservation', value: stay.code },
+    { label: 'Dates', value: `${formatRange(stay.checkIn, stay.checkOut)} · ${plural(stay.nights, 'night')}` },
+    ...(stay.guests ? [{ label: 'Guests', value: partyLabel(stay.guests, stay.children) }] : []),
+    { label: 'Status', value: STAGE_LABELS[stay.stage] },
+    { label: 'Paid', value: paid },
+    { label: 'Booked', value: formatShort(stay.bookedAt.slice(0, 10)) },
+  ]
+}
+
 /** A ?date= value the calendar can open on, or null */
 export const calendarDateParam = (value: unknown): string | null => (parseDate(value) ? (value as string) : null)
 
 export const CALENDAR_ANCHOR = 'calendar'
 
-/** My Listings with the calendar open on that date */
-export const calendarHref = (date?: string) => `${PAGE_ROUTES.LISTINGS}${date ? `?date=${date}` : ''}#${CALENDAR_ANCHOR}`
+/** A ?stay= value: the id of a reservation the panel lists on `date`, or null */
+export const calendarStayParam = (value: unknown, date: string, stays: CalendarStay[]): string | null =>
+  typeof value === 'string' && dayGuests(calendarDay(date, stays, 0)).some((s) => s.id === value) ? value : null
+
+/** My Listings with the calendar open on that date, and on that reservation's details when given */
+export function calendarHref(date?: string, stayId?: string) {
+  const query = new URLSearchParams()
+  if (date) query.set('date', date)
+  if (date && stayId) query.set('stay', stayId)
+  const search = query.toString()
+  return `${PAGE_ROUTES.LISTINGS}${search ? `?${search}` : ''}#${CALENDAR_ANCHOR}`
+}

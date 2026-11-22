@@ -21,6 +21,7 @@ import {
 } from "@/lib/owner-calendar";
 
 const DAYS = 7;
+const GUESTS_LISTED = 4;
 
 // The next seven nights; picking one shows its guests, with a link to that date in the full calendar
 export function WeekCard({ properties, stays, today }: { properties: CalendarProperty[]; stays: CalendarStay[]; today: string }) {
@@ -45,6 +46,8 @@ export function WeekCard({ properties, stays, today }: { properties: CalendarPro
         byId={byId}
         colorOf={(s) => byId.get(s.hotelId)?.color ?? 0}
         className="mt-5"
+        limit={GUESTS_LISTED}
+        guestHref={(s) => calendarHref(day.date, s.id)}
         action={
           <Link href={calendarHref(day.date)} className={`${sectionLinkClass} text-sm`}>
             {reservationsLabel(day)} · Open {formatShort(day.date)} in the calendar

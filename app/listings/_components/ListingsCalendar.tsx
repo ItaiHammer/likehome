@@ -1,7 +1,7 @@
 import { loadOwnerHistory } from "@/app/_components/home/owner-history";
 import { pulse } from "@/app/_components/home/styles";
 import { Card } from "@/app/_components/ui";
-import { calendarProperties, calendarStays } from "@/lib/owner-calendar";
+import { calendarProperties, calendarStayParam, calendarStays } from "@/lib/owner-calendar";
 import type { Listing } from "@/types/listing";
 import { BookingCalendar } from "./BookingCalendar";
 
@@ -12,11 +12,14 @@ export async function ListingsCalendar({
   listings,
   today,
   date,
+  stay,
   sample,
 }: {
   listings: Listing[];
   today: string;
   date: string;
+  /** The ?stay= value, used only when it names a reservation listed on `date` */
+  stay?: string;
   sample: boolean;
 }) {
   const history = sample ? null : await loadOwnerHistory();
@@ -28,13 +31,15 @@ export async function ListingsCalendar({
       </Card>
     );
   }
+  const stays = history ? calendarStays(history.bookings) : [];
   return (
     <Card as="section" padding="none" className={frame}>
       <BookingCalendar
         properties={calendarProperties(listings)}
-        stays={history ? calendarStays(history.bookings) : []}
+        stays={stays}
         today={today}
         initialDate={date}
+        initialStay={calendarStayParam(stay, date, stays)}
       />
     </Card>
   );
