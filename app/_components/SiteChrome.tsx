@@ -23,8 +23,8 @@ function Logo() {
   );
 }
 
-// A failed read leaves the bell empty instead of breaking the header
-async function loadBell(): Promise<BellSummary> {
+// A failed read is null, so the menu shows its error state instead of breaking the header
+async function loadBell(): Promise<BellSummary | null> {
   try {
     const { messages, error } = await getInbox();
     if (!error) return bellSummary(messages);
@@ -32,7 +32,7 @@ async function loadBell(): Promise<BellSummary> {
   } catch (error) {
     console.error("Inbox read failed:", error);
   }
-  return bellSummary([]);
+  return null;
 }
 
 export async function SiteHeader() {
@@ -40,10 +40,10 @@ export async function SiteHeader() {
   const items = navItemsFor(viewer.role);
   const label = accountLabel(viewer.role);
   const menuLink = accountMenuLinkFor(viewer.role);
-  const bellRole = viewer.role === "personal" || viewer.role === "business" ? viewer.role : null;
+  const hasBell = viewer.role === "personal";
   // Rewards are for personal accounts (they live under /MyBookings); both reads run together
   const [bell, pointsRead] = await Promise.all([
-    viewer.role === "personal" ? loadBell() : bellSummary([]),
+    hasBell ? loadBell() : null,
     viewer.role === "personal" && viewer.userId ? getPointsBalance(viewer.userId) : null,
   ]);
   // A failed read hides the pill rather than showing 0 pts
@@ -53,17 +53,17 @@ export async function SiteHeader() {
       {/* With the bell, the controls only fit beside the logo at 360px with tighter gaps on phones */}
       {/* From md the links sit in a middle column between two equal sides, so they stay centered on the page
           however wide the controls on the right get */}
-      <div className={`mx-auto flex h-16 max-w-[1400px] items-center justify-between px-4 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr] lg:px-10 ${bellRole ? "gap-2 sm:gap-4" : "gap-4"}`}>
+      <div className={`mx-auto flex h-16 max-w-[1400px] items-center justify-between px-4 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr] lg:px-10 ${hasBell ? "gap-2 sm:gap-4" : "gap-4"}`}>
         <div className="md:justify-self-start">
           <Logo />
         </div>
         <nav aria-label="Main" className="hidden md:block">
           <DesktopNav items={items} />
         </nav>
-        <div className={`flex items-center md:justify-self-end ${bellRole ? "gap-1 sm:gap-2" : "gap-2"}`}>
+        <div className={`flex items-center md:justify-self-end ${hasBell ? "gap-1 sm:gap-2" : "gap-2"}`}>
           {/* 8px apart, so the two buttons' 44px tap areas meet without overlapping */}
           <div className="flex items-center gap-2">
-            {bellRole && <MessagesBell role={bellRole} unread={bell.unread} messages={bell.latest} />}
+            {hasBell && <MessagesBell summary={bell} />}
             <ThemeToggle />
           </div>
           {points !== null && <PointsPill points={points} />}

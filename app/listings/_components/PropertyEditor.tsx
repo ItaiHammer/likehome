@@ -16,7 +16,7 @@ import type { Listing } from "@/types/listing";
 import { uploadPhoto } from "@/utils/photo-upload";
 import { createProperty, saveListing, type SaveResult } from "../actions";
 import { AmenitiesForm } from "./AmenitiesForm";
-import { ConfirmDialog, type ConfirmRequest } from "./ConfirmDialog";
+import { ConfirmDialog, type ConfirmRequest } from "@/app/_components/ConfirmDialog";
 import {
   changedTabs,
   editorReducer,

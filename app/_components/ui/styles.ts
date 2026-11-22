@@ -77,6 +77,12 @@ export const tintBox =
 // The same box as a link. The hover stops at 14% blue, so blue-dark text keeps 4.5:1 on it.
 export const tintLink = `group ${tintBox} transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--blue)_12%,var(--surface))] focus-visible:border-blue focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-blue dark:hover:bg-blue/14`;
 
+// A filter link in a card's top bar (rewards history, Message Hub): 35px, solid blue when on; 44px tall on phones
+export const filterChipClass = (active: boolean) =>
+  `inline-flex h-[35px] min-w-[60px] items-center justify-center rounded-control px-4 text-base transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue max-sm:h-11 ${
+    active ? "bg-blue text-on-blue" : "border border-edge bg-surface text-ink hover:border-blue"
+  }`;
+
 export const labelClass = "mb-2 block text-base font-semibold leading-5 text-ink";
 
 // Phones (below sm): a list of cards as one sideways row running to the screen edge (cancelling the page's

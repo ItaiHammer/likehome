@@ -12,6 +12,8 @@ let mockRecipientsResult = { data: [{ account_id: 'acc-1', email: 'guest@example
 let mockBusinessMessagesResult = { data: [{ id: 'msg-biz-1' }], error: null }
 let mockPersonalMessagesResult = { data: [{ id: 'msg-per-1' }], error: null }
 let mockAccountTypeError = null
+let mockHideResult = { count: 1, error: null }
+let hideCalls = []
 
 // Register module mocks once
 mock.module('../utils/user.ts', {
@@ -39,12 +41,16 @@ mock.module('../utils/messages.ts', {
     createMessages: async (hotelId, recipientIds, subject, body) => mockCreateMessagesResult,
     markMessageRead: async (id) => mockMarkReadResult,
     getHotelRecipients: async (hotelId) => mockRecipientsResult,
+    hideMessage: async (id, recipientId) => {
+      hideCalls.push({ id, recipientId })
+      return mockHideResult
+    },
   },
 })
 
 // Import route handlers after mocks are established
 const { PATCH: patchRead } = await import('../app/api/messages/[id]/read/route.ts')
-const { GET: getSingleMessage } = await import('../app/api/messages/[id]/route.ts')
+const { GET: getSingleMessage, DELETE: deleteMessage } = await import('../app/api/messages/[id]/route.ts')
 const { GET: getRecipients } = await import('../app/api/messages/recipients/route.ts')
 const { POST: postMessages, GET: getMessages } = await import('../app/api/messages/route.ts')
 
@@ -58,6 +64,8 @@ beforeEach(() => {
   mockRecipientsResult = { data: [{ account_id: 'acc-1', email: 'guest@example.com', full_name: 'John Doe', last_check_in: null, last_status: null }], error: null }
   mockBusinessMessagesResult = { data: [{ id: 'msg-biz-1' }], error: null }
   mockPersonalMessagesResult = { data: [{ id: 'msg-per-1' }], error: null }
+  mockHideResult = { count: 1, error: null }
+  hideCalls = []
 })
 
 // ============================================================================
@@ -388,4 +396,54 @@ test('GET /api/messages - successfully returns sent messages for business accoun
   const json = await res.json()
   assert.equal(json.error, null)
   assert.ok(Array.isArray(json.data))
+})
+
+// ============================================================================
+// DELETE /api/messages/[id] -> hide a message from its recipient
+// ============================================================================
+const del = () => deleteMessage(new Request('http://localhost/api/messages/msg-1', { method: 'DELETE' }), { params: Promise.resolve({ id: 'msg-1' }) })
+
+test('DELETE /api/messages/[id] - returns 401 when unauthenticated', async () => {
+  mockAuthUser = null
+  const res = await del()
+  assert.equal(res.status, 401)
+  assert.equal(hideCalls.length, 0)
+})
+
+test('DELETE /api/messages/[id] - hides the message for the signed-in recipient only', async () => {
+  const res = await del()
+  assert.equal(res.status, 200)
+  assert.deepEqual(await res.json(), { data: { id: 'msg-1' }, error: null })
+  assert.deepEqual(hideCalls, [{ id: 'msg-1', recipientId: 'user-1' }])
+})
+
+test('DELETE /api/messages/[id] - returns 404 when no visible message of theirs has that id', async () => {
+  mockHideResult = { count: 0, error: null }
+  const res = await del()
+  assert.equal(res.status, 404)
+  assert.equal((await res.json()).error, 'Message not found')
+})
+
+test('DELETE /api/messages/[id] - returns 501 before the database has hidden_at (or its grant), never a fake success', async () => {
+  for (const code of ['42703', 'PGRST204', '42501']) {
+    mockHideResult = { count: null, error: { code, message: 'column "hidden_at" does not exist' } }
+    const res = await del()
+    assert.equal(res.status, 501)
+    const json = await res.json()
+    assert.equal(json.data, null)
+    assert.equal(json.error, 'Deleting messages isn’t available yet.')
+  }
+})
+
+test('DELETE /api/messages/[id] - returns 500 on any other database error', async () => {
+  mockHideResult = { count: null, error: { code: '08006', message: 'connection failure' } }
+  const res = await del()
+  assert.equal(res.status, 500)
+  assert.equal((await res.json()).error, 'Failed to delete message')
+})
+
+test('GET /api/messages/[id] - returns 404 for a message the recipient deleted', async () => {
+  mockMessageResult = { data: { ...mockMessageResult.data, hidden_at: new Date().toISOString() }, error: null }
+  const res = await getSingleMessage(new Request('http://localhost/api/messages/msg-1'), { params: Promise.resolve({ id: 'msg-1' }) })
+  assert.equal(res.status, 404)
 })

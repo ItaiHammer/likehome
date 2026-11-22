@@ -12,6 +12,7 @@ export {
   buttonPrimary,
   buttonSecondary,
   cardLiftClass,
+  filterChipClass,
   headerAuthLinkClass,
   headerIconButtonClass,
   iconButton,
