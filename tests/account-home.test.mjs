@@ -22,7 +22,7 @@ test("signed out keeps today's hero and opens with the sign-up card", () => {
     hero: { title: 'Feel at home, anywhere.', line: 'A new favorite stay starts with a hello.' },
     welcome: null,
     recommendedCards: RECOMMENDED_CARDS,
-    sections: ['join', 'destinations', 'recommended'],
+    sections: ['join', 'recommended', 'destinations'],
   })
 })
 
@@ -58,7 +58,7 @@ test('business: guests, properties and how they are doing, before the shared sec
       ],
     },
     recommendedCards: 3,
-    sections: ['owner-today', 'owner-week', 'owner-properties', 'owner-stats', 'destinations', 'recommended'],
+    sections: ['owner-today', 'owner-week', 'owner-properties', 'owner-stats', 'recommended', 'destinations'],
   })
 })
 
@@ -67,7 +67,7 @@ test('unknown (the account read failed): signed in, a neutral hero, no welcome b
     hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: null,
     recommendedCards: 3,
-    sections: ['destinations', 'recommended'],
+    sections: ['recommended', 'destinations'],
   })
 })
 

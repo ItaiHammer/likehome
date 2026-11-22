@@ -40,20 +40,21 @@ export type HomeContent = {
 export type HomeRole = Exclude<ViewerRole, 'unchosen'>
 
 const SIGNED_IN_CARDS = 3
-const DEFAULT_SECTIONS: HomeSection[] = ['destinations', 'recommended']
+// Shown to everyone, after the account's own sections
+export const SHARED_SECTIONS: HomeSection[] = ['recommended', 'destinations']
 
 const CONTENT: Record<HomeRole, HomeContent> = {
   'signed-out': {
     hero: { title: 'Feel at home, anywhere.', line: 'A new favorite stay starts with a hello.' },
     welcome: null,
     recommendedCards: RECOMMENDED_CARDS,
-    sections: ['join', ...DEFAULT_SECTIONS],
+    sections: ['join', ...SHARED_SECTIONS],
   },
   unknown: {
     hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: null,
     recommendedCards: SIGNED_IN_CARDS,
-    sections: DEFAULT_SECTIONS,
+    sections: SHARED_SECTIONS,
   },
   personal: {
     hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
@@ -68,7 +69,7 @@ const CONTENT: Record<HomeRole, HomeContent> = {
     },
     recommendedCards: SIGNED_IN_CARDS,
     // Their own history and saved hotels first; each row hides itself when it has nothing
-    sections: ['traveler-summary', 'recently-viewed', 'saved-hotels', 'recommended', 'destinations'],
+    sections: ['traveler-summary', 'recently-viewed', 'saved-hotels', ...SHARED_SECTIONS],
   },
   business: {
     hero: {
@@ -84,7 +85,7 @@ const CONTENT: Record<HomeRole, HomeContent> = {
       ],
     },
     recommendedCards: SIGNED_IN_CARDS,
-    sections: ['owner-today', 'owner-week', 'owner-properties', 'owner-stats', ...DEFAULT_SECTIONS],
+    sections: ['owner-today', 'owner-week', 'owner-properties', 'owner-stats', ...SHARED_SECTIONS],
   },
 }
 

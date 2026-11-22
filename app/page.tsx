@@ -14,7 +14,7 @@ import { SearchExperience } from "./_components/SearchExperience";
 import { SkyBackground } from "./_components/SkyBackground";
 import { redirect } from "next/navigation";
 import { choicePathFor } from "@/lib/account/choice";
-import { homeContentFor, type HomeSection } from "@/lib/account/home";
+import { homeContentFor, SHARED_SECTIONS, type HomeSection } from "@/lib/account/home";
 import { getViewer } from "@/utils/viewer";
 
 export default async function Home() {
@@ -98,8 +98,8 @@ export default async function Home() {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-12 sm:px-6">
         {sections.map((id, i) => (
           <Fragment key={id}>
-            {/* Browsing starts at the destinations: the viewer's own sections are above the line */}
-            {id === "destinations" && i > 0 && <hr className="border-0 border-t border-edge" />}
+            {/* The viewer's own sections are above the line, what everyone sees is below */}
+            {id === SHARED_SECTIONS[0] && i > 0 && <hr className="border-0 border-t border-edge" />}
             {sectionContent[id]}
           </Fragment>
         ))}
