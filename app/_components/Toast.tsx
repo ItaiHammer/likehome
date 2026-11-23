@@ -10,7 +10,7 @@ export type ToastMessage = { title: string; body?: string; tone?: "success" | "e
  *
  *   <Toast toast={{ title: "Message Deleted" }} onDismiss={() => setToast(null)} />
  */
-export function Toast({ toast, onDismiss }: { toast: ToastMessage | null; onDismiss?: () => void }) {
+export function Toast({ toast, onDismiss, messageKey }: { toast: ToastMessage | null; onDismiss?: () => void; messageKey?: string | number }) {
   const error = toast?.tone === "error";
   // A short success note is the Figma strip: 240 wide, centred, gone on its own
   const strip = !!toast && !error && !toast.body;
@@ -18,6 +18,7 @@ export function Toast({ toast, onDismiss }: { toast: ToastMessage | null; onDism
     <div role="status" aria-live="polite" className="pointer-events-none fixed bottom-6 right-0 z-[80] font-sans">
       {toast && (
         <div
+          key={messageKey}
           className={`pointer-events-auto flex min-h-[60px] w-[min(24rem,calc(100vw-1rem))] items-center gap-3 rounded-l-lg border-y border-l border-edge bg-surface py-3 pl-6 pr-4 text-ink shadow-lg step-in ${
             strip ? "justify-center sm:w-60" : "sm:w-auto sm:min-w-60 sm:max-w-sm"
           }`}

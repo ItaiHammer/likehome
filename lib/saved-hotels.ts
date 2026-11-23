@@ -103,6 +103,9 @@ type LegacyStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 export function createSavedHotelsStore(io: SavedHotelsIO) {
   let state = NO_SAVED_HOTELS;
   let failure: SaveFailure | null = null;
+  // Kept independently of failure so clearing a recovered error never reuses a dismissed toast's key.
+  let failureNumber = 0;
+  let failureTarget: { hotelId: string; saved: boolean } | null = null;
   let loadedFor: string | null = null;
   let lastPage: string | null = null;
   let legacyCopied = false;
@@ -130,8 +133,9 @@ export function createSavedHotelsStore(io: SavedHotelsIO) {
   const readFailed = () => {
     if (state.status !== "signed-out" && state.status !== "unavailable") setState({ ...state, status: "error" });
   };
-  const announceFailure = (message: string) => {
-    failure = { message, n: (failure?.n ?? 0) + 1 };
+  const announceFailure = (hotelId: string, saved: boolean, message: string) => {
+    failure = { message, n: ++failureNumber };
+    failureTarget = { hotelId, saved };
     notify();
   };
 
@@ -208,6 +212,8 @@ export function createSavedHotelsStore(io: SavedHotelsIO) {
     doneSinceLoad.clear();
     inFlight.clear();
     legacyCopied = false;
+    failure = null;
+    failureTarget = null;
     setState(blank(next ? "loading" : "signed-out"));
     if (next && lastPage) void load(lastPage);
   }
@@ -218,6 +224,7 @@ export function createSavedHotelsStore(io: SavedHotelsIO) {
     if (state.status === "unavailable") return "unavailable";
     if (inFlight.has(hotelId)) return "busy";
     const save = !current;
+    const retryingFailure = failure?.n;
     // A toggle that finishes after the account changed leaves the new account's list alone
     const gen = generation;
     const sameAccount = () => gen === generation;
@@ -226,13 +233,22 @@ export function createSavedHotelsStore(io: SavedHotelsIO) {
     const fail = () => {
       if (!sameAccount()) return "failed" as const;
       mark(hotelId, !save);
-      announceFailure(save ? "Couldn't save this hotel. Try again." : "Couldn't remove this hotel from your saved hotels. Try again.");
+      announceFailure(hotelId, save, save ? "Couldn't save this hotel. Try again." : "Couldn't remove this hotel from your saved hotels. Try again.");
       return "failed" as const;
     };
     try {
       const res = await io.send(save ? "POST" : "DELETE", hotelId);
       if (res.ok) {
-        if (sameAccount()) doneSinceLoad.set(hotelId, save);
+        if (sameAccount()) {
+          doneSinceLoad.set(hotelId, save);
+          // Only this failed action's acknowledged retry resolves its warning. A different
+          // hotel/action or a newer failure must not be cleared by an older request finishing.
+          if (failure && failure.n === retryingFailure && failureTarget?.hotelId === hotelId && failureTarget.saved === save) {
+            failure = null;
+            failureTarget = null;
+            notify();
+          }
+        }
         return save ? "saved" : "removed";
       }
       if (res.status === 401) {

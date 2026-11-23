@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { isHotelId, shownSaved } from "@/lib/saved-hotels";
 import { toggleSavedHotel, useSaveFailure, useSavedHotels } from "./savedHotelsStore";
+import { Toast } from "./Toast";
 
 interface SaveHotelButtonProps {
     /** A hotels.id; sample stays and unsaved LiteAPI hotels have none and get no heart */
@@ -88,9 +89,13 @@ export function SaveHotelButton({ hotelId, hotelName, saved, className = "" }: S
 // One per page, outside the cards: a card whose heart is cleared can leave the page before its save fails
 export function SaveFailureAnnouncer() {
     const failure = useSaveFailure();
+    const [dismissed, setDismissed] = useState<number | null>(null);
+    const shown = failure && failure.n !== dismissed ? failure : null;
     return (
-        <span role="status" className="sr-only">
-            {failure && <span key={failure.n}>{failure.message}</span>}
-        </span>
+        <Toast
+            messageKey={shown?.n}
+            toast={shown ? { title: shown.message, tone: "error" } : null}
+            onDismiss={() => setDismissed(failure?.n ?? null)}
+        />
     );
 }

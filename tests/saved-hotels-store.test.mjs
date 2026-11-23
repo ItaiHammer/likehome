@@ -113,6 +113,89 @@ test('a failed toggle puts the heart back and announces it', async () => {
   assert.equal(store.getFailure().n, 2)
 })
 
+test('a failed save clears its warning after the same save is acknowledged, and later errors get new keys', async () => {
+  const { store, sends } = fakeServer()
+  const failed = store.toggle(A, false)
+  sends[0].resolve(answer(500))
+  assert.equal(await failed, 'failed')
+  const firstKey = store.getFailure().n
+
+  const retry = store.toggle(A, false)
+  assert.equal(store.getFailure().n, firstKey) // Keep it while the retry is still pending.
+  sends[1].resolve(answer(200))
+  assert.equal(await retry, 'saved')
+  assert.equal(store.getFailure(), null)
+  assert.deepEqual(ids(store), [A])
+
+  const later = store.toggle(B, false)
+  sends[2].resolve(answer(500))
+  assert.equal(await later, 'failed')
+  assert.ok(store.getFailure().n > firstKey)
+})
+
+test('a failed removal clears its warning when the same removal succeeds', async () => {
+  const { store, sends } = fakeServer()
+  const failed = store.toggle(A, true)
+  sends[0].resolve(answer(500))
+  assert.equal(await failed, 'failed')
+  assert.match(store.getFailure().message, /remove/)
+  const retry = store.toggle(A, true)
+  sends[1].resolve(answer(200))
+  assert.equal(await retry, 'removed')
+  assert.equal(store.getFailure(), null)
+  assert.deepEqual(ids(store), [])
+})
+
+test('a successful action on another hotel or in the opposite direction does not clear the failed action', async () => {
+  const { store, sends } = fakeServer()
+  const failed = store.toggle(A, false)
+  sends[0].resolve(answer(500))
+  await failed
+  const warning = store.getFailure()
+  const other = store.toggle(B, false)
+  sends[1].resolve(answer(200))
+  await other
+  assert.equal(store.getFailure(), warning)
+  const opposite = store.toggle(A, true)
+  sends[2].resolve(answer(200))
+  await opposite
+  assert.equal(store.getFailure(), warning)
+})
+
+test('an older retry success does not erase a newer failure from another hotel', async () => {
+  const { store, sends } = fakeServer()
+  const failed = store.toggle(A, false)
+  sends[0].resolve(answer(500))
+  await failed
+  const retry = store.toggle(A, false)
+  const other = store.toggle(B, false)
+  sends[2].resolve(answer(500))
+  await other
+  const latest = store.getFailure()
+  sends[1].resolve(answer(200))
+  assert.equal(await retry, 'saved')
+  assert.equal(store.getFailure(), latest)
+})
+
+test('switching accounts clears the old warning without reusing its dismissed key', async () => {
+  const { store, sends } = fakeServer()
+  const failed = store.toggle(A, false)
+  sends[0].resolve(answer(500))
+  await failed
+  const dismissedKey = store.getFailure().n
+  const oldRetry = store.toggle(A, false)
+  store.accountChanged('another-account')
+  assert.equal(store.getFailure(), null)
+  const nextFailed = store.toggle(B, false)
+  sends[2].resolve(answer(500))
+  await nextFailed
+  const nextWarning = store.getFailure()
+  assert.ok(nextWarning.n > dismissedKey)
+  sends[1].resolve(answer(200))
+  await oldRetry
+  assert.equal(store.getFailure(), nextWarning)
+})
+
 test('while loading or after the list failed, a tap shows at once and the next tap undoes it', async () => {
   const { store, lists, sends } = fakeServer()
   store.load('/a')
