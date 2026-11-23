@@ -80,7 +80,7 @@ const CONTENT: Record<HomeRole, HomeContent> = {
       title: 'Ready for your guests.',
       body: 'See who’s arriving and keep your places up to date.',
       shortcuts: [
-        { label: 'Message guests', hint: 'Write to guests who booked', href: PAGE_ROUTES.OWNER_MESSAGES, icon: 'messages' },
+        { label: 'Message guests', hint: 'Write to guests who booked', href: `${PAGE_ROUTES.OWNER_MESSAGES}?view=compose`, icon: 'messages' },
         { label: 'Add property', hint: 'List a new place', href: PAGE_ROUTES.LISTINGS_NEW, icon: 'add' },
       ],
     },

@@ -274,8 +274,10 @@ async function getApi<T>(
 
 export function OwnerMessagesDashboard({
                                            hotels,
+                                           initialView = "sent",
                                        }: {
     hotels: Hotel[];
+    initialView?: View;
 }) {
     const [preview, setPreview] = useState(
         process.env.NODE_ENV === "development"
@@ -298,7 +300,11 @@ export function OwnerMessagesDashboard({
     const [composeHotelId, setComposeHotelId] =
         useState("");
 
-    const [view, setView] = useState<View>("sent");
+    const [view, setView] = useState<View>(initialView);
+
+    useEffect(() => {
+        setView(initialView);
+    }, [initialView]);
 
     const [readFilter, setReadFilter] =
         useState<ReadFilter>("all");
