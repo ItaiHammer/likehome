@@ -16,28 +16,28 @@ export const createClient = async (request: NextRequest) => {
   });
 
   const supabase = createServerClient(
-    supabaseUrl!,
-    supabaseKey!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
+      supabaseUrl!,
+      supabaseKey!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+            supabaseResponse = NextResponse.next({
+              request,
+            })
+            cookiesToSet.forEach(({ name, value, options }) =>
+                supabaseResponse.cookies.set(name, value, options)
+            )
+          },
         },
       },
-    },
   );
 
   const access: RouteAccess = await getRouteAccess(request);
-  
+
   const url = request.nextUrl.clone();
 
   switch (access) {
@@ -65,13 +65,28 @@ const getRouteAccess = async (request: NextRequest): Promise<RouteAccess> => {
 
   const isBusinessRoute = ROUTE_PREFIXES.BUSINESS.some((prefix) => request.nextUrl.pathname.startsWith(prefix));
   const isPersonalRoute = ROUTE_PREFIXES.PERSONAL.some((prefix) => request.nextUrl.pathname.startsWith(prefix));
-  
+
   if (isBusinessRoute || isPersonalRoute) {
     if (userId) {
-      const { data, error } = await getAccountType(userId);
-      if (!data || error) return ROUTE_ACCESS.INVALID_ACCOUNT_TYPE;
+      let accountType: AccountType | null = null;
 
-      switch (data as AccountType) {
+      if (process.env.NODE_ENV === "development") {
+        const devRole = request.cookies.get("dev_role")?.value;
+
+        if (devRole === "business" || devRole === "personal") {
+          accountType = devRole;
+        } else if (devRole === "not_chosen" || devRole === "none") {
+          return ROUTE_ACCESS.INVALID_ACCOUNT_TYPE;
+        }
+      }
+
+      if (!accountType) {
+        const { data, error } = await getAccountType(userId);
+        if (!data || error) return ROUTE_ACCESS.INVALID_ACCOUNT_TYPE;
+        accountType = data as AccountType;
+      }
+
+      switch (accountType) {
         case 'business':
           if (isBusinessRoute) return ROUTE_ACCESS.PERMITTED;
           return ROUTE_ACCESS.UNAUTHORIZED;
@@ -81,9 +96,8 @@ const getRouteAccess = async (request: NextRequest): Promise<RouteAccess> => {
         default:
           return ROUTE_ACCESS.INVALID_ACCOUNT_TYPE;
       }
-    } 
+    }
     return ROUTE_ACCESS.UNAUTHENTICATED;
-  } 
+  }
   return ROUTE_ACCESS.PERMITTED;
 }
-
