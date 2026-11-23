@@ -1,10 +1,13 @@
 "use client";
 
+import { stayDisplayName } from "@/app/_components/stayDisplayName";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
+import type { ComparisonListing } from "@/lib/comparison";
 import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
 import { freeUnitId, markBookedRooms, mergeBookedNights, soldOutNights } from "@/lib/room-availability";
 import { matchingRoom, roomFits } from "@/lib/stay-filters";
@@ -14,8 +17,11 @@ import { cardExpired } from "@/utils/payment-logic";
 import { MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
-import { buttonPrimary, buttonSecondary, Card, Field, Stars, Tag } from "../../_components/ui";
+import { buttonPrimary, buttonSecondary, Card, Field, Tag } from "../../_components/ui";
 import { HotelPhoto } from "../../MyBookings/_components/HotelPhoto";
+import { SaveHotelButton } from "../../_components/SaveHotelButton";
+import { SearchResultCard } from "../../search/components/SearchResultCard";
+import type { ViewerRole } from "@/lib/account/role";
 import { TAX_RATE, type Room, type Stay } from "../../_data/stays";
 import { checkoutRequest } from "./checkoutRequest";
 import { DateRangePicker } from "./DateRangePicker";
@@ -23,7 +29,7 @@ import { GuestsField, guestLabel } from "./GuestsField";
 import { PhotoGallery } from "./PhotoGallery";
 import { RewardsSection, RewardsUnavailable } from "./RewardsSection";
 import { RoomOptions } from "./RoomOptions";
-import { StayOffers } from "./StayOffers";
+import { displayRoomName } from "./roomDisplay";
 import { useBookedNightsLookup } from "./useBookedNightsLookup";
 
 type Step = "stay" | "details" | "done";
@@ -90,20 +96,29 @@ function Line({ label, value }: { label: string; value: string }) {
 export function StayReservation({
                                   stay,
                                   account,
+                                  viewerRole = "signed-out",
+                                  displayDetails,
                                   otherStays = [],
                                   initial = {},
                                   search = "",
                                   pointsBalance = null,
+                                  comparisonRecent = [],
+                                  similarStays,
                                 }: {
   stay: Stay;
+  viewerRole?: ViewerRole;
+  displayDetails?: { description: string; propertyType: string };
   account: { email: string } | null;
   /** null: couldn't be read */
   pointsBalance?: number | null;
   otherStays?: OtherStay[];
   initial?: StayChoices;
   search?: string;
+  comparisonRecent?: (ComparisonListing & { availableRooms?: number })[];
+  similarStays?: React.ReactNode;
 }) {
   const router = useRouter();
+  const businessAccount = viewerRole === "business";
 
   const [checkIn, setCheckIn] = useState(initial.checkIn ?? "");
   const [checkOut, setCheckOut] = useState(initial.checkOut ?? "");
@@ -177,7 +192,7 @@ export function StayReservation({
   const total = subtotal + cleaning + taxes;
   // Rewards need a saved booking (signed in, real hotel), where the total is exactly what /api/checkout charges.
   // A discount is a percent of that total; one whose points no longer fit the balance is dropped.
-  const showRewards = Boolean(account) && stay.bookable;
+  const showRewards = Boolean(account) && stay.bookable && !businessAccount;
   const chosenReward = showRewards ? findDiscount(rewardId) : null;
   // Cents, as the server rounds the total it prices the reward from
   const rewardPoints = chosenReward ? discountPoints(chosenReward.percent, Math.round(total * 100) / 100) : 0;
@@ -342,7 +357,7 @@ export function StayReservation({
     if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     if (!roomFits(room, guests, adults, children)) return { field: "guests", message: `${room.name} is too small for ${guestLabel(adults, children)}. Pick another room.` };
-    if (room.bookedForDates) return { field: "guests", message: `${room.name} is booked for those dates. Pick another room or change your dates.` };
+    if (room.bookedForDates) return { field: "guests", message: `${displayRoomName(room.name)} is booked for those dates. Pick another room or change your dates.` };
     if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
     return null;
   }
@@ -400,7 +415,7 @@ export function StayReservation({
   }
 
   function reserve() {
-    if (pricesPending) return;
+    if (pricesPending || businessAccount) return;
     const problem = stayProblem();
     if (problem) return showStayProblem(problem);
     if (!account) return router.push(signInHref());
@@ -605,7 +620,7 @@ export function StayReservation({
     goTo("stay");
   }
 
-  if (step === "details") {
+  if (step === "details" && !businessAccount) {
     const stayDates = nights > 0 ? `${formatShort(checkIn)} – ${formatShort(checkOut)}` : "";
     return (
         <form ref={formRef} noValidate onSubmit={handleSubmit} className={moved ? "step-in" : ""}>
@@ -795,7 +810,7 @@ export function StayReservation({
             <Card as="section">
               <h2 className="text-xl font-semibold text-ink">Booking summary</h2>
               <HotelPhoto url={stay.photos?.[0] ?? null} priority className="mt-5 aspect-[16/9] w-full" />
-              <h3 className="mt-5 break-words text-lg font-semibold text-ink">{stay.name}</h3>
+              <h3 className="mt-5 break-words text-lg font-semibold text-ink">{stayDisplayName(stay.name)}</h3>
               <p className="mt-1 text-sm text-slate">{stay.location}</p>
               <p className="mt-3 text-sm text-slate">
                 {room.name}
@@ -913,28 +928,32 @@ export function StayReservation({
 
   return (
       <>
-        <Link href={search ? `/search?${search}` : "/search"} className="group inline-flex items-center gap-1 text-base font-semibold text-ink">
+        <Link href={search ? `/search?${search}` : "/search"} className="group inline-flex items-center gap-1 text-base font-semibold text-blue hover:text-blue-dark">
           <span aria-hidden className="transition-transform duration-200 group-hover:-translate-x-1">←</span> Back to stays
         </Link>
 
-        <div className="mt-4">
-          <h1 className="break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[56px] sm:leading-[64px]">{stay.name}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-slate">
-            <span>{stay.location}</span>
-            {stay.rating !== null && (
-                <>
-                  <span aria-hidden>·</span>
-                  <Stars rating={stay.rating} reviews={stay.reviews} />
-                </>
-            )}
-          </p>
-        </div>
-
         <PhotoGallery stayName={stay.name} photos={stay.photos} />
 
-        <StayOffers offers={stay.offers ?? stay.tags.map((label) => ({ label }))} goodFor={stay.goodFor ?? []} />
+        <div className="mt-7">
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="min-w-0 flex-1 break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[52px] sm:leading-[60px]">{stayDisplayName(stay.name)}</h1>
+            {!businessAccount && <div className="shrink-0 pt-2"><SaveHotelButton hotelId={stay.slug} /></div>}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-base text-slate">
+            <p>{stay.location}</p>
+            <p className="text-sm">Listing type: <span className="capitalize">{stay.rating !== null && Number.isFinite(stay.rating) && stay.rating >= 1 && stay.rating <= 5 ? `${Math.floor(stay.rating)}-star ` : ""}{displayDetails?.propertyType || stay.type}</span></p>
+          </div>
+        </div>
 
-      <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_514px] lg:items-start">
+      {displayDetails?.description?.trim() && (
+        <section className="mt-10 rounded-2xl border border-edge bg-surface p-6 sm:p-8" aria-labelledby="listing-about">
+          <h2 id="listing-about" className="text-2xl font-semibold text-ink">About this property</h2>
+          <p className="mt-3 whitespace-pre-line leading-7 text-slate">{displayDetails.description}</p>
+        </section>
+      )}
+
+      <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <div className="min-w-0 space-y-9">
         <fieldset id="rooms" disabled={roomsLocked} aria-describedby={roomsLocked ? "rooms-locked" : undefined} className="min-w-0 scroll-mt-6">
           <legend className="text-[32px] font-bold leading-10 text-ink">
             <h2>Choose a room</h2>
@@ -952,10 +971,11 @@ export function StayReservation({
               clear("guests");
             }}
             locked={roomsLocked}
-            note={() => "Non-refundable"}
+            note={(room) => room.refundable === false ? "Non-refundable" : ""}
             party={{ adults, children }}
           />
         </fieldset>
+        </div>
 
           <aside
               ref={cardRef}
@@ -973,7 +993,7 @@ export function StayReservation({
                         <span className="text-[32px] font-bold leading-10 text-ink">{money(room.nightly)}</span>
                         <span className="text-base text-slate"> / night</span>
                       </p>
-                      <p className="truncate text-sm text-slate">{room.name}</p>
+                      <p className="truncate text-sm text-slate">{displayRoomName(room.name)}</p>
                     </div>
 
               <DateRangePicker
@@ -1007,7 +1027,7 @@ export function StayReservation({
                     <div className="flex items-center justify-between gap-3 text-base">
                       <span className="text-slate">Room</span>
                       <span className="flex items-baseline gap-3">
-                    <span className="font-semibold text-ink">{room.name}</span>
+                    <span className="font-semibold text-ink">{displayRoomName(room.name)}</span>
                     <a href="#rooms" className="text-base font-semibold text-blue hover:text-blue-dark">
                       Change
                     </a>
@@ -1031,17 +1051,25 @@ export function StayReservation({
                 <p className="text-sm text-slate">Add your dates to see the total for your stay.</p>
               )}
 
-              {!account && (
-                <div className="rounded-control border border-blue/30 bg-blue/5 p-4 text-sm text-slate">
-                  <p className="text-base font-semibold leading-5 text-ink">Sign in to reserve</p>
-                  <p className="mt-1">You need a LikeHome account to book. Pick your room and dates first, and we’ll bring you back here after you sign in.</p>
+              {businessAccount ? (
+                <div role="status" className="rounded-control border border-blue/30 bg-blue/5 p-4 text-sm text-ink">
+                  <p className="font-semibold">Business accounts are unable to book stays.</p>
+                  <p className="mt-1 text-slate">You can explore rooms, dates, amenities and compare listings, but reservations require a personal account.</p>
                 </div>
+              ) : (
+                <>
+                  {!account && (
+                    <div className="rounded-control border border-blue/30 bg-blue/5 p-4 text-sm text-slate">
+                      <p className="text-base font-semibold leading-5 text-ink">Sign in to reserve</p>
+                      <p className="mt-1">You need a LikeHome account to book. Pick your room and dates first, and we’ll bring you back here after you sign in.</p>
+                    </div>
+                  )}
+                  <button type="button" onClick={reserve} disabled={pricesPending} className={`${buttonPrimary} w-full`}>
+                    {pricesPending ? "Updating prices…" : nights === 0 ? "Check availability" : account ? "Reserve" : "Sign in to reserve"}
+                  </button>
+                  <p className="text-center text-sm text-slate">You won’t be charged yet.</p>
+                </>
               )}
-
-              <button type="button" onClick={reserve} disabled={pricesPending} className={`${buttonPrimary} w-full`}>
-                {pricesPending ? "Updating prices…" : nights === 0 ? "Check availability" : account ? "Reserve" : "Sign in to reserve"}
-              </button>
-              <p className="text-center text-sm text-slate">You won’t be charged yet.</p>
             </div>
           )}
 
@@ -1086,6 +1114,47 @@ export function StayReservation({
           </div>
         </aside>
       </div>
+
+      {stay.tags.length > 0 && (
+        <section className="mt-10 rounded-2xl border border-edge bg-surface p-6 sm:p-8" aria-labelledby="listing-amenities">
+          <h2 id="listing-amenities" className="text-2xl font-semibold text-ink">Amenities</h2>
+          <ul className="mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+            {stay.tags.map((tag) => <li key={tag} className="flex items-start gap-2 text-slate"><span aria-hidden className="text-blue">✓</span>{tag}</li>)}
+          </ul>
+        </section>
+      )}
+
+      {step === "stay" && (
+        <section className="mt-12" aria-labelledby="compare-invite">
+          <h2 id="compare-invite" className="font-serif text-[30px] text-ink">Find the best stay for you</h2>
+          <p className="mt-2 text-slate">Compare this property with stays you recently viewed.</p>
+          {comparisonRecent.length > 0 ? (
+            <ul className="mt-6 grid auto-rows-fr grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {comparisonRecent.map((hotel, index) => (
+                <li key={hotel.id} className={`${index >= 2 ? "hidden lg:flex" : "flex"} min-w-0 [&>article]:w-full`}>
+                  <SearchResultCard
+                    stay={{
+                      id: hotel.id,
+                      name: hotel.name,
+                      address: hotel.location,
+                      photo_urls: hotel.photo ? [hotel.photo] : [],
+                      min_price: hotel.priceFrom,
+                      max_capacity: hotel.sleepsUpTo,
+                      available_rooms: hotel.availableRooms ?? null,
+                    }}
+                    headingLevel="h3"
+                    hideDescription
+                    businessAccount={businessAccount}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : <p className="mt-5 text-sm text-slate">Your recently viewed stays will appear here when available.</p>}
+          <div className="mt-6 flex justify-end"><Link href={`/compare/${encodeURIComponent(stay.slug)}`} className="inline-flex rounded-control bg-blue px-5 py-3 font-semibold text-on-blue hover:bg-blue-dark">Compare listings</Link></div>
+        </section>
+      )}
+
+      {step === "stay" && similarStays}
     </>
   );
 }

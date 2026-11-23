@@ -33,6 +33,7 @@ export function Pagination({
 }) {
   if (pages <= 1) return null;
 
+
   const visible = visiblePages(current, pages);
 
   return (

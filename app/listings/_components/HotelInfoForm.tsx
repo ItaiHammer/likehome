@@ -27,6 +27,7 @@ export function HotelInfoForm({ info, errors, onChange }: Props) {
 
   return (
     <div className="space-y-12">
+      <p className="text-sm text-slate"><span className="font-semibold text-ink">Required:</span> Property details and location. Description is optional.</p>
       <FormSection title="Property details" description="Introduce your property to guests.">
         <div className="grid gap-6 sm:grid-cols-2">
           <Field label="Property name" maxLength={MAX_LENGTH.name} {...control("name")} />
@@ -55,7 +56,7 @@ export function HotelInfoForm({ info, errors, onChange }: Props) {
         </div>
       </FormSection>
 
-      <FormSection title="Description" description="Tell guests what makes your stay special.">
+      <FormSection title="Description (optional)" description="Tell guests what makes your stay special.">
         <TextArea
           label="Property description"
           hint={`Guests will see this on your listing - ${info.description.length} / ${MAX_LENGTH.description}`}

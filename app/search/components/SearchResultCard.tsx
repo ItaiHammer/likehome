@@ -1,3 +1,4 @@
+import { stayDisplayName } from "@/app/_components/stayDisplayName";
 import Link from "next/link";
 import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
 
@@ -74,17 +75,20 @@ export function SearchResultCard({
   eager = false,
   search = "",
   headingLevel: Heading = "h2",
+  businessAccount = false,
+  hideDescription = false,
 }: {
   stay: HotelSearchResult;
   eager?: boolean;
   search?: string;
   headingLevel?: "h2" | "h3";
+  businessAccount?: boolean;
+  hideDescription?: boolean;
 }) {
   const photo = stay.photo_urls?.find(Boolean);
   const price = asNumber(stay.min_price);
   const capacity = asNumber(stay.max_capacity);
   const availableRooms = asNumber(stay.available_rooms);
-  const rating = asNumber(stay.rating);
   // A LiteAPI hotel that isn't saved yet opens by its LiteAPI id
   const slug = stay.id ?? stay.liteapi_id;
   const href = slug ? `/reserve/${slug}${search ? `?${search}` : ""}` : null;
@@ -107,20 +111,15 @@ export function SearchResultCard({
 
   return (
       <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface shadow-[0_18px_45px_-34px_rgba(7,13,47,0.45)] transition-transform duration-200 hover:-translate-y-0.5">
+        {href && <Link href={href} aria-label={`View ${stay.name || "stay"}`} className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue" /> }
         <div className="relative aspect-[16/10] overflow-hidden bg-blue/10">
-          {href ? (
-              <Link href={href} tabIndex={-1} aria-hidden className="relative block h-full w-full">
-                {media}
-              </Link>
-          ) : (
-              media
-          )}
+          {media}
 
           {/* Save/Heart Button overlaid on top-right of image container */}
-          {stay.id && (
+          {stay.id && !businessAccount && (
               <SaveHotelButton
                   hotelId={stay.id}
-                  className="absolute top-3 right-3 z-10"
+                  className="absolute top-3 right-3 z-20"
               />
           )}
         </div>
@@ -129,20 +128,16 @@ export function SearchResultCard({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <Heading className="truncate text-lg font-semibold text-ink">
-                {stay.name || "LikeHome stay"}
+                {stayDisplayName(stay.name || "LikeHome stay")}
               </Heading>
               <p className="mt-1 flex items-start gap-1.5 text-sm leading-5 text-slate">
                 <PinIcon />
                 <span>{formatLocation(stay)}</span>
               </p>
             </div>
-            {rating !== null && (
-              <span className="shrink-0 rounded-full bg-blue/10 px-2.5 py-1 text-xs font-semibold text-blue-dark">
-                ★ {rating.toFixed(1)}
-              </span>
-            )}
+
           </div>
-        {stay.description && <p className="mt-4 line-clamp-2 text-sm leading-6 text-slate">{stay.description}</p>}
+        {!hideDescription && stay.description && <p className="mt-4 line-clamp-2 text-sm leading-6 text-slate">{stay.description}</p>}
         {stay.tags && stay.tags.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-1.5">
             {stay.tags.slice(0, 3).map((tag) => (
@@ -183,12 +178,7 @@ export function SearchResultCard({
               </div>
             )}
             {href ? (
-              <Link
-                href={href}
-                className="rounded-control text-sm font-semibold text-blue hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
-              >
-                View stay<span className="sr-only"> at {stay.name || "this hotel"}</span>
-              </Link>
+              <span className="rounded-control text-sm font-semibold text-blue group-hover:text-blue-dark">View stay</span>
             ) : (
               <span className="text-sm font-semibold text-slate">Sample stay</span>
             )}

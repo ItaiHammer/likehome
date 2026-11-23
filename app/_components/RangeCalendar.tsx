@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { addDays, formatLong, formatRange, formatShort, nightsBetween, todayISO } from "./dates";
 import { buttonPrimary, buttonSecondary, iconButton } from "./ui";

@@ -1,4 +1,4 @@
-import { Button, Field, inputClass, labelClass, Stepper, TextArea } from "@/app/_components/ui";
+import { Button, Field, inputClass, labelClass, Stepper } from "@/app/_components/ui";
 import { checkRoomForm, type RoomForm as RoomFormValues, type RoomFormErrors } from "@/lib/validation/listing";
 import type { ListingRoom } from "@/types/listing";
 import type { RoomEditor } from "./editor-state";
@@ -51,7 +51,7 @@ export function RoomForm({ editor, onChange, onInvalid, onApply, onCancel, onRem
           apply();
         }}
       >
-        <FormSection title="Room details" description="Describe this room type and its availability.">
+        <FormSection title="Room details" description="Add at least one room type. All fields shown here are required.">
           <div className="grid gap-6">
             <Field label="Room type" maxLength={60} hint="For example, Garden double." {...control("roomType")} />
             <div className="grid gap-6 sm:grid-cols-2">
@@ -95,13 +95,6 @@ export function RoomForm({ editor, onChange, onInvalid, onApply, onCancel, onRem
                 />
               </div>
             </div>
-            <TextArea
-              label="Room description"
-              hint={`${form.description.length} / 1000`}
-              rows={3}
-              maxLength={1000}
-              {...control("description")}
-            />
             <div className="flex flex-wrap gap-3">
               <Button variant="secondary" onClick={onCancel}>
                 Cancel

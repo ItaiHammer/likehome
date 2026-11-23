@@ -13,6 +13,7 @@ import { EmptyListings } from "./_components/EmptyListings";
 import { ListingCreationToast } from "./_components/ListingCreationToast";
 import { ListingPreview } from "./_components/ListingPreview";
 import { ListingRow } from "./_components/ListingRow";
+import { MockListingRows } from "./_components/MockListingRows";
 
 export const metadata: Metadata = { title: "My listings - LikeHome" };
 
@@ -99,7 +100,7 @@ export default async function MyListingsPage({ searchParams }: Props) {
                 <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 rounded-control border border-blue/20 bg-blue/5 px-4 py-3 text-sm">
                   <p className="min-w-0 text-ink">
                     {isSample
-                      ? "SAMPLE DATA - Three fictional properties. Nothing here is saved."
+                      ? "SAMPLE DATA - Three fictional properties. Changes are stored in this browser only."
                       : "Preview My listings with test properties without creating any."}
                   </p>
                   <Link href={isSample ? "/listings" : "/listings?sample=1"} className="shrink-0 font-semibold text-blue hover:text-blue-dark">
@@ -119,11 +120,13 @@ export default async function MyListingsPage({ searchParams }: Props) {
           )}
 
           {listings.length > 0 ? (
-            <ul className="space-y-4">
-              {listings.map((listing, index) => (
-                <ListingRow key={listing.id} listing={listing} index={index} isSample={isSample} />
-              ))}
-            </ul>
+            isSample ? <MockListingRows listings={listings} /> : (
+              <ul className="space-y-4">
+                {listings.map((listing, index) => (
+                  <ListingRow key={listing.id} listing={listing} index={index} />
+                ))}
+              </ul>
+            )
           ) : (
             // EmptyListings has its own Add property button. Do not duplicate it above.
             <EmptyListings />

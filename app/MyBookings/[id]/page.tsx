@@ -6,6 +6,8 @@ import { getOtherStays } from "@/lib/other-stays";
 import { cardsForBooking, withoutStay } from "@/lib/room-availability";
 import { guestToday } from "@/utils/guest-today";
 import { getHotelStay, withLiveRoomPrices } from "../../reserve/[slug]/hotelStay";
+import { getHotel } from "@/utils/hotels";
+import { PageBackdrop } from "@/app/_components/PageBackdrop";
 import { SampleNotice } from "../_components/SampleNotice";
 import { getSampleBooking } from "../sampleBookings";
 import { loadReservation, toBooking } from "./booking";
@@ -29,7 +31,12 @@ async function loadBooking(id: string, today: string) {
   // The card holding the booked room is named by it, and the booking's own nights don't count as
   // booked, so only rooms other guests hold show as unavailable (audit retest)
   const rooms = withoutStay(cardsForBooking(listed, r.room_id), r.room_id, booking.checkIn, booking.checkOut);
-  return { booking, rooms, otherStays, hotelId: r.hotel_id, bookedWindow: stay?.bookedWindow };
+  const details = stay ? await getHotel(r.hotel_id) : null;
+  const record = details?.data as { description?: string | null; property_type?: string | null } | undefined;
+  return { booking, rooms, otherStays, hotelId: r.hotel_id, bookedWindow: stay?.bookedWindow,
+    listingPhotos: stay?.photos ?? [], listingDescription: record?.description ?? "",
+    listingType: stay ? `${stay.rating !== null && Number.isFinite(stay.rating) && stay.rating >= 1 && stay.rating <= 5 ? `${Math.floor(stay.rating)}-star ` : ""}${record?.property_type?.replaceAll("_", " ") ?? stay.type}` : "",
+    listingAmenities: stay?.offers?.map((offer) => offer.label) ?? stay?.tags ?? [] };
 }
 
 export default async function BookingPage(props: PageProps<"/MyBookings/[id]">) {
@@ -40,10 +47,12 @@ export default async function BookingPage(props: PageProps<"/MyBookings/[id]">) 
   const { sample } = await props.searchParams;
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
   const sampleData = showSample ? getSampleBooking(id, today) : null;
-  const data = showSample ? sampleData && { ...sampleData, hotelId: undefined, bookedWindow: undefined } : await loadBooking(id, today);
+  const data = showSample ? sampleData && { ...sampleData, hotelId: undefined, bookedWindow: undefined, listingPhotos: sampleData.booking.photoUrl ? [sampleData.booking.photoUrl] : [], listingDescription: "", listingType: "", listingAmenities: [] } : await loadBooking(id, today);
   if (!data) notFound();
 
   return (
+    <div className="relative isolate flex flex-1 flex-col">
+    <PageBackdrop />
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
       {showSample && <SampleNotice>A sample booking, shown only on your local dev server. Changes aren’t saved.</SampleNotice>}
       <ChangeBooking
@@ -53,7 +62,12 @@ export default async function BookingPage(props: PageProps<"/MyBookings/[id]">) 
         sample={showSample}
         hotelId={data.hotelId}
         bookedWindow={data.bookedWindow}
+        listingPhotos={data.listingPhotos}
+        listingDescription={data.listingDescription}
+        listingType={data.listingType}
+        listingAmenities={data.listingAmenities}
       />
     </main>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { browserTimeZone, formatRange, formatShort, nightsBetween } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
 import { RangeCalendar, type RangeField } from "./RangeCalendar";
@@ -30,6 +31,32 @@ export function DatesField({
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 368 });
+
+  // Keep the calendar visually anchored to the search date field. A portal
+  // prevents result-card stacking contexts from sitting above the dropdown.
+  const updatePosition = useCallback(() => {
+    const anchor = triggerRef.current?.closest('[data-date-anchor]') as HTMLElement | null;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const width = Math.min(368, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 12));
+    const expectedHeight = 450;
+    const top = rect.bottom + 12 + expectedHeight > window.innerHeight && rect.top > expectedHeight
+      ? Math.max(12, rect.top - expectedHeight - 12) : rect.bottom + 12;
+    setPosition({ top, left, width });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open, updatePosition]);
 
   // Done and Escape send focus back to the field (if it was in the calendar).
   // An outside click just closes, leaving focus where the click put it.
@@ -39,21 +66,17 @@ export function DatesField({
 
   useEffect(() => {
     if (!open) return;
-    const onPointer = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
       setOpen(false);
     };
-    document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
 
   function toggle() {
     if (open) {
@@ -63,6 +86,7 @@ export function DatesField({
     // Pick up where they left off: a lone check-in still needs its check-out.
     setField(checkIn && !checkOut ? "out" : "in");
     setSession((s) => s + 1);
+    updatePosition();
     setOpen(true);
   }
 
@@ -75,7 +99,7 @@ export function DatesField({
         : "";
 
   return (
-    <div ref={ref} className={`relative ${className}`}>
+    <div ref={ref} data-date-anchor className={`relative ${className}`}>
       <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-slate" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
         <rect x="4" y="5" width="16" height="15" rx="2" />
         <path d="M4 10h16M9 3v4M15 3v4" strokeLinecap="round" />
@@ -107,30 +131,39 @@ export function DatesField({
       <input type="hidden" name="checkOut" value={checkOut} />
       <input type="hidden" name="tz" value={timeZone} />
 
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-label="Choose your dates"
-        data-open={open}
-        inert={!open}
-        className="dropdown absolute left-0 right-0 top-full z-30 mt-3 rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] md:left-1/2 md:right-auto md:w-[23rem] md:-translate-x-1/2"
-      >
-        <RangeCalendar
-          resetKey={session}
-          checkIn={checkIn}
-          checkOut={checkOut}
-          onChange={(a, b) => {
-            setCheckIn(a);
-            setCheckOut(b);
+      {open && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[99999]"
+          // The transparent layer receives clicks instead of any listing cards
+          // behind the dropdown. No screen-dimming or centered modal.
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (event.target === event.currentTarget) setOpen(false);
           }}
-          field={field}
-          onFieldChange={setField}
-          onDone={() => {
-            restoreFocus();
-            setOpen(false);
-          }}
-        />
-      </div>
+        >
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-label="Choose your dates"
+            style={{ position: "fixed", top: position.top, left: position.left, width: position.width, maxHeight: "calc(100dvh - 24px)" }}
+            className="overflow-y-auto rounded-2xl border border-edge bg-surface p-4 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)]"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <RangeCalendar
+              resetKey={session}
+              checkIn={checkIn}
+              checkOut={checkOut}
+              onChange={(a, b) => { setCheckIn(a); setCheckOut(b); }}
+              field={field}
+              onFieldChange={setField}
+              onDone={() => { restoreFocus(); setOpen(false); }}
+            />
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

@@ -793,7 +793,7 @@ export function OwnerMessagesDashboard({
             )}
 
             {properties.length === 0 ? (
-                <section className="border-l-2 border-blue px-4 py-2">
+                <section className="rounded-lg border border-edge bg-surface p-5 sm:p-6">
                     <h2 className="text-base font-semibold text-ink">
                         No properties yet
                     </h2>

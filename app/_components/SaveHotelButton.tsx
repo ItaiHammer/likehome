@@ -1,36 +1,56 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 
 interface SaveHotelButtonProps {
     hotelId: string;
     className?: string;
 }
 
+const SAVED_KEY = "likehome_saved_hotels";
+
+function readSavedHotels(): string[] {
+    try {
+        const parsed: unknown = JSON.parse(localStorage.getItem(SAVED_KEY) || "[]");
+        return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+    } catch {
+        return [];
+    }
+}
+
 export function SaveHotelButton({ hotelId, className = "" }: SaveHotelButtonProps) {
     const [isSaved, setIsSaved] = useState(false);
 
-    useEffect(() => {
-        const saved = JSON.parse(localStorage.getItem("likehome_saved_hotels") || "[]");
-        setIsSaved(saved.includes(hotelId));
+    const refresh = useCallback(() => {
+        setIsSaved(readSavedHotels().includes(hotelId));
     }, [hotelId]);
 
-    const toggleSave = (e: React.MouseEvent) => {
+    useEffect(() => {
+        refresh();
+        window.addEventListener("saved_hotels_updated", refresh);
+        window.addEventListener("storage", refresh);
+        return () => {
+            window.removeEventListener("saved_hotels_updated", refresh);
+            window.removeEventListener("storage", refresh);
+        };
+    }, [refresh]);
+
+    const toggleSave = (e: MouseEvent<HTMLButtonElement>) => {
         e.preventDefault();
         e.stopPropagation();
 
-        const saved: string[] = JSON.parse(localStorage.getItem("likehome_saved_hotels") || "[]");
-        let updated: string[];
+        const saved = readSavedHotels();
+        const updated = saved.includes(hotelId)
+            ? saved.filter((id) => id !== hotelId)
+            : [...saved, hotelId];
 
-        if (saved.includes(hotelId)) {
-            updated = saved.filter((id) => id !== hotelId);
-            setIsSaved(false);
-        } else {
-            updated = [...saved, hotelId];
-            setIsSaved(true);
+        try {
+            localStorage.setItem(SAVED_KEY, JSON.stringify(updated));
+        } catch {
+            // Do not claim the hotel was saved if browser storage is unavailable.
+            refresh();
+            return;
         }
-
-        localStorage.setItem("likehome_saved_hotels", JSON.stringify(updated));
         window.dispatchEvent(new Event("saved_hotels_updated"));
     };
 
@@ -39,15 +59,16 @@ export function SaveHotelButton({ hotelId, className = "" }: SaveHotelButtonProp
             type="button"
             onClick={toggleSave}
             aria-label={isSaved ? "Remove from saved hotels" : "Save hotel"}
-            style={{ backgroundColor: "#ffffff" }}
-            className={`flex h-8 w-8 items-center justify-center rounded-full bg-white !bg-white border border-slate-200/80 shadow-md transition-all hover:scale-110 active:scale-95 ${className}`}
+            aria-pressed={isSaved}
+            className={`flex h-8 w-8 items-center justify-center rounded-full border border-edge bg-surface text-ink shadow-md transition-all hover:scale-110 active:scale-95 ${className}`}
         >
             <svg
                 className="h-4 w-4 transition-colors"
                 viewBox="0 0 24 24"
                 fill={isSaved ? "#ef4444" : "none"}
-                stroke={isSaved ? "#ef4444" : "#475569"}
+                stroke={isSaved ? "#ef4444" : "currentColor"}
                 strokeWidth={2}
+                aria-hidden="true"
             >
                 <path
                     strokeLinecap="round"

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 // Blur Text from React Bits (https://reactbits.dev/text-animations/blur-text), TS + Tailwind variant,
 // copied as-is apart from this header and three additions:

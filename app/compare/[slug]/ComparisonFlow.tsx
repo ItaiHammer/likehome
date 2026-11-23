@@ -1,5 +1,6 @@
 "use client";
 
+import { stayDisplayName } from "@/app/_components/stayDisplayName";
 import Link from "next/link";
 import {
     useRouter,
@@ -77,7 +78,7 @@ function StayPhoto({
             // eslint-disable-next-line @next/next/no-img-element
             <img
                 src={stay.photo}
-                alt={`${stay.name} photo`}
+                alt={`${stayDisplayName(stay.name)} photo`}
                 className={className}
             />
         );
@@ -114,7 +115,7 @@ function CurrentStaySummary({
 
                 <div className="min-w-0 flex-1">
                     <h2 className="text-xl font-semibold text-ink">
-                        {stay.name}
+                        {stayDisplayName(stay.name)}
                     </h2>
 
                     <p className="mt-1 text-sm text-slate">
@@ -196,7 +197,7 @@ function RecentStayRow({
 
             <div className="min-w-0 flex-1">
                 <h3 className="truncate text-base font-semibold text-ink">
-                    {stay.name}
+                    {stayDisplayName(stay.name)}
                 </h3>
 
                 <p className="mt-1 truncate text-sm text-slate">
@@ -307,7 +308,7 @@ function ComparisonCard({
                             stay.name
                         }
                     >
-                        {stay.name}
+                        {stayDisplayName(stay.name)}
                     </h2>
 
                     <p className="mt-1 truncate text-sm text-slate">

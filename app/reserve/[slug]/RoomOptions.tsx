@@ -1,10 +1,8 @@
-"use client";
-
-import { Fragment } from "react";
 import { money } from "@/lib/bookings";
 import { roomFits } from "@/lib/stay-filters";
 import type { Room } from "../../_data/stays";
 import { guestLabel } from "./GuestsField";
+import { displayRoomName, displayRoomOptions } from "./roomDisplay";
 
 // The room list as radio cards, shared by the stay page and the change-booking page.
 // Keep it inside a <fieldset> with the legend; `locked` greys out every room but the selected one.
@@ -28,7 +26,7 @@ export function RoomOptions({
   return (
     <div className="mt-5 space-y-4">
       {/* Live prices can sell out any room, so the ones left to book always come first, cheapest first like the server's order */}
-      {[...rooms].sort((a, b) => Number(!!a.soldOut) - Number(!!b.soldOut) || a.nightly - b.nightly).map((r) => {
+      {displayRoomOptions(rooms, selectedId).sort((a, b) => Number(!!a.soldOut) - Number(!!b.soldOut) || a.nightly - b.nightly).map((r) => {
         const on = r.id === selectedId;
         const off = !!r.soldOut;
         const tooSmall = off && !roomFits(r, party.adults + party.children, party.adults, party.children);
@@ -50,18 +48,15 @@ export function RoomOptions({
           >
             <input type="radio" name="room" value={r.id} checked={on} disabled={off} onChange={() => onSelect(r.id)} className="sr-only" />
             <div className="min-w-0 flex-1">
-              <p className={`text-base font-semibold leading-5 ${off ? "text-slate" : "text-ink"}`}>{r.name}</p>
+              <p className={`text-base font-semibold leading-5 ${off ? "text-slate" : "text-ink"}`}>{displayRoomName(r.name)}</p>
               <p className="mt-1 text-sm text-slate">
-                {/* Each dot is glued to the label after it, so a wrapped line never ends on a dot */}
-                {[...r.description.split(" · ").filter(Boolean), `Sleeps ${r.sleeps}`].map((part, i) => (
-                  <Fragment key={part}>
-                    {i > 0 && " "}
-                    <span className="whitespace-nowrap">
-                      {i > 0 && "· "}
-                      {part}
-                    </span>
-                  </Fragment>
-                ))}
+                {/* Show supported bed details and capacity, not imported room amenity tags. */}
+                {(() => {
+                  const bedDetails = r.bedSize
+                    ? `${r.beds ?? 1} ${r.bedSize.toLowerCase()} bed${(r.beds ?? 1) === 1 ? "" : "s"}`
+                    : r.description.split(" · ").find((part) => /\bbed(s)?\b/i.test(part)) ?? "";
+                  return bedDetails ? `${bedDetails} · Sleeps ${r.sleeps}` : `Sleeps ${r.sleeps}`;
+                })()}
               </p>
               {line && <p className="text-sm text-slate">{line}</p>}
               {/* LiteAPI quotes these for the whole stay, apart from the nightly price */}

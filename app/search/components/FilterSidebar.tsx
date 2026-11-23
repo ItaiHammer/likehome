@@ -146,7 +146,7 @@ function FilterSections({ values, apply, radioGroup }: ReturnType<typeof useFilt
         </div>
       </Section>
 
-      <Section title="Guest rating">
+      <Section title="Hotel star classification">
         <CheckRow type="radio" name={`${radioGroup}-rating`} checked={!values.minRating} onChange={() => apply({ minRating: "" })}>
           Any
         </CheckRow>
@@ -245,11 +245,24 @@ export function FilterSheetButton({ initial, params, total, className = "" }: { 
 
   useEffect(() => {
     if (!open) return;
+    // The mobile sheet must close when the desktop filter sidebar takes over.
+    // Otherwise its full-screen layer and scroll lock remain active after resize.
+    const desktopQuery = window.matchMedia("(min-width: 1024px)");
+    const closeOnDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) setOpen(false);
+    };
+    if (desktopQuery.matches) {
+      setOpen(false);
+      return;
+    }
+    desktopQuery.addEventListener("change", closeOnDesktop);
+    const previousOverflow = document.documentElement.style.overflow;
     document.documentElement.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
     document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.documentElement.style.overflow = "";
+      document.documentElement.style.overflow = previousOverflow;
+      desktopQuery.removeEventListener("change", closeOnDesktop);
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);

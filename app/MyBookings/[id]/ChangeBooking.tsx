@@ -11,11 +11,15 @@ import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, FormError, Stepper } from "../../_components/ui";
 import type { Room } from "../../_data/stays";
 import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
-import { guestLabel } from "../../reserve/[slug]/GuestsField";
+import { GuestsField, guestLabel } from "../../reserve/[slug]/GuestsField";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
 import { useBookedNightsLookup } from "../../reserve/[slug]/useBookedNightsLookup";
 import { freeUnitId, markBookedRooms, mergeBookedNights, withoutStay, type BookedWindow } from "@/lib/room-availability";
 import { HotelPhoto } from "../_components/HotelPhoto";
+import { PhotoGallery } from "../../reserve/[slug]/PhotoGallery";
+import { displayRoomName } from "../../reserve/[slug]/roomDisplay";
+import { bookingDisplayName } from "../_components/bookingDisplayName";
+import { SaveHotelButton } from "../../_components/SaveHotelButton";
 
 export type BookingToChange = {
   id: string;
@@ -51,6 +55,10 @@ export function ChangeBooking({
   sample = false,
   hotelId,
   bookedWindow,
+  listingPhotos = [],
+  listingDescription = "",
+  listingType = "",
+  listingAmenities = [],
 }: {
   booking: BookingToChange;
   /** The hotel's rooms; the booking can move to any of them */
@@ -62,6 +70,10 @@ export function ChangeBooking({
   /** For looking up booked nights after the page's ~400-day window */
   hotelId?: string;
   bookedWindow?: BookedWindow;
+  listingPhotos?: string[];
+  listingDescription?: string;
+  listingType?: string;
+  listingAmenities?: string[];
 }) {
   const router = useRouter();
   // From the first load only: the refresh after a save mustn't swap the confirmation for the read-only view
@@ -83,6 +95,7 @@ export function ChangeBooking({
   const guests = adults + children;
   const [roomId, setRoomId] = useState(booking.roomId);
   const [datesOpen, setDatesOpen] = useState(false);
+  const [guestsOpen, setGuestsOpen] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
@@ -182,6 +195,12 @@ export function ChangeBooking({
         backHref={backHref}
         roomName={currentRoom?.name ?? null}
         reason={blocker ?? "This room isn’t listed anymore, so the booking can’t be changed online."}
+        photos={listingPhotos}
+        description={listingDescription}
+        listingType={listingType}
+        amenities={listingAmenities}
+        rooms={listedRooms}
+        allowFavorite={!sample && Boolean(booking.hotelId)}
       />
     );
   }
@@ -194,8 +213,8 @@ export function ChangeBooking({
     const clash = findOverlap(otherStays, checkIn, checkOut);
     if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (lookingUp) return { field: "dates", message: "Still checking which rooms are free on those dates. Try again in a moment." };
-    if (room.bookedForDates) return { field: "guests", message: `${room.name} is booked for those dates. Pick another room or change your dates.` };
-    if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
+    if (room.bookedForDates) return { field: "guests", message: `${displayRoomName(room.name)} is booked for those dates. Pick another room or change your dates.` };
+    if (guests > room.sleeps) return { field: "guests", message: `${displayRoomName(room.name)} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     return null;
   }
 
@@ -273,8 +292,15 @@ export function ChangeBooking({
 
   return (
     <>
-      <BookingHeader booking={booking} backHref={backHref} />
-
+      <BookingIntro booking={booking} backHref={backHref} />
+      <PhotoGallery stayName={booking.hotelName} photos={listingPhotos.length ? listingPhotos : booking.photoUrl ? [booking.photoUrl] : []} />
+      <BookingPropertyHeading booking={booking} listingType={listingType} allowFavorite={!sample && Boolean(booking.hotelId)} />
+      {listingDescription.trim() && (
+        <section className="mt-10 rounded-2xl border border-edge bg-surface p-6 sm:p-8">
+          <h2 className="text-2xl font-semibold text-ink">About this property</h2>
+          <p className="mt-3 whitespace-pre-line leading-7 text-slate">{listingDescription}</p>
+        </section>
+      )}
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_514px] lg:items-start">
         <fieldset id="rooms" disabled={locked} aria-describedby={done ? "rooms-locked" : undefined} className="min-w-0 scroll-mt-6">
           <legend className="text-[32px] font-bold leading-10 text-ink">
@@ -302,7 +328,7 @@ export function ChangeBooking({
           />
         </fieldset>
 
-        <aside ref={cardRef} aria-label="Change your booking" className={`scroll-mt-6 rounded-2xl border border-edge bg-surface p-5 sm:p-6 lg:p-7 ${done ? "" : "lg:sticky lg:top-6"}`}>
+        <aside ref={cardRef} aria-label="Change your booking" className={`scroll-mt-6 rounded-2xl border border-edge bg-surface p-5 sm:p-6 lg:p-7 ${datesOpen ? "relative z-[100]" : done ? "" : "lg:sticky lg:top-6"}`}>
           {!done ? (
             <div className="space-y-5">
               <h2 ref={headingRef} tabIndex={-1} className="text-[32px] font-bold leading-10 text-ink outline-none">
@@ -317,7 +343,7 @@ export function ChangeBooking({
                     {formatStayDates(current.checkIn, current.checkOut)} · {nightsLabel(nightsBetween(current.checkIn, current.checkOut))}
                   </p>
                   <p>
-                    {currentRoom.name} · {guestsLabel(current)} · {money(current.total)}
+                    {displayRoomName(currentRoom.name)} · {guestsLabel(current)} · {money(current.total)}
                   </p>
                 </div>
               </div>
@@ -336,47 +362,27 @@ export function ChangeBooking({
                 error={errors.dates}
               />
 
-              <div>
-                {/* The stay page's guest limits, within what the biggest room sleeps */}
-                <div className={`divide-y divide-edge rounded-control border px-4 ${errors.guests ? "border-danger" : "border-edge"}`}>
-                  <Stepper
-                    label="Adults"
-                    hint="Ages 13 or above"
-                    value={adults}
-                    min={1}
-                    max={Math.min(16, Math.max(1, maxGuests - children))}
-                    onChange={(n) => {
-                      setAdults(n);
-                      setErrors(({ dates }) => ({ dates }));
-                    }}
-                  />
-                  <Stepper
-                    label="Children"
-                    hint="Ages 0 to 12"
-                    value={children}
-                    min={0}
-                    max={Math.min(10, Math.max(0, maxGuests - adults))}
-                    onChange={(n) => {
-                      setChildren(n);
-                      setErrors(({ dates }) => ({ dates }));
-                    }}
-                  />
-                </div>
-                {errors.guests ? (
-                  <p role="alert" className="mt-1.5 text-sm text-danger">
-                    {errors.guests}
-                  </p>
-                ) : (
-                  <p className="mt-1.5 text-sm text-slate">
-                    {room.name} sleeps up to {room.sleeps}.
-                  </p>
-                )}
+              <div className={guestsOpen ? "relative z-40" : "relative"}>
+                <GuestsField
+                  adults={adults}
+                  childCount={children}
+                  onChange={(nextAdults, nextChildren) => {
+                    if (nextAdults + nextChildren > maxGuests) return;
+                    setAdults(nextAdults);
+                    setChildren(nextChildren);
+                    setErrors(({ dates }) => ({ dates }));
+                  }}
+                  open={guestsOpen}
+                  onOpenChange={setGuestsOpen}
+                  sleeps={room.sleeps}
+                  error={errors.guests}
+                />
               </div>
 
               <div className="flex items-center justify-between gap-3 text-base">
                 <span className="text-slate">Room</span>
                 <span className="flex items-baseline gap-3">
-                  <span className="font-semibold text-ink">{room.name}</span>
+                  <span className="font-semibold text-ink">{displayRoomName(room.name)}</span>
                   <a href="#rooms" className="text-base font-semibold text-blue hover:text-blue-dark">
                     Change
                   </a>
@@ -451,7 +457,7 @@ export function ChangeBooking({
                   )}
                 </p>
               </div>
-              <StayDetails roomName={room.name} stay={current} />
+              <StayDetails roomName={displayRoomName(room.name)} stay={current} />
               <Link href={backHref} className={`${buttonPrimary} w-full`}>
                 Back to My Bookings
               </Link>
@@ -466,32 +472,81 @@ export function ChangeBooking({
           )}
         </aside>
       </div>
+      {listingAmenities.length > 0 && (
+        <section className="mt-10 rounded-2xl border border-edge bg-surface p-6 sm:p-8">
+          <h2 className="text-2xl font-semibold text-ink">Amenities</h2>
+          <ul className="mt-5 grid gap-x-6 gap-y-3 text-slate sm:grid-cols-2 lg:grid-cols-3">
+            {listingAmenities.map((amenity) => <li key={amenity}>✓ {amenity}</li>)}
+          </ul>
+        </section>
+      )}
     </>
   );
 }
 
-function BookingHeader({ booking, backHref }: { booking: BookingToChange; backHref: string }) {
+function BookingIntro({ booking, backHref }: { booking: BookingToChange; backHref: string }) {
   return (
     <>
-      {/* Ink, not blue, even on hover: blue text on the sky strip is too faint to read */}
-      <Link href={backHref} className="group inline-flex items-center gap-1 text-base font-semibold text-ink">
+      <Link href={backHref} className="group inline-flex items-center gap-1 text-base font-semibold text-blue hover:text-blue-dark">
         <span aria-hidden className="transition-transform duration-200 group-hover:-translate-x-1">
           ←
         </span>{" "}
         Back to My Bookings
       </Link>
-      <p className="mt-6 text-sm font-semibold uppercase tracking-[0.08em] text-ink">Booking {bookingCode(booking.id)}</p>
-      <h1 className="mt-2 break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[56px] sm:leading-[64px]">{booking.hotelName}</h1>
-      {booking.location && <p className="mt-1 text-base text-ink">{booking.location}</p>}
+      <p className="mt-6 text-sm font-semibold uppercase tracking-normal text-blue">Booking {bookingCode(booking.id)}</p>
     </>
   );
 }
 
-function ReadOnlyBooking({ booking, backHref, roomName, reason }: { booking: BookingToChange; backHref: string; roomName: string | null; reason: string }) {
+function BookingPropertyHeading({ booking, listingType = "", allowFavorite = false }: { booking: BookingToChange; listingType?: string; allowFavorite?: boolean }) {
+  return (
+    <div className="mt-6">
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="min-w-0 flex-1 break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[56px] sm:leading-[64px]">{bookingDisplayName(booking.hotelName)}</h1>
+        {allowFavorite && <div className="shrink-0 pt-2"><SaveHotelButton hotelId={booking.hotelId} /></div>}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-base text-slate">
+        {booking.location && <p>{booking.location}</p>}
+        {listingType && <p className="text-sm">Listing type: <span className="capitalize">{listingType}</span></p>}
+      </div>
+    </div>
+  );
+}
+
+function ReadOnlyBooking({ booking, backHref, roomName, reason, photos, description, listingType, amenities, rooms, allowFavorite = false }: {
+  booking: BookingToChange; backHref: string; roomName: string | null; reason: string;
+  photos: string[]; description: string; listingType: string; amenities: string[]; rooms: Room[]; allowFavorite?: boolean;
+}) {
   return (
     <>
-      <BookingHeader booking={booking} backHref={backHref} />
-      <section className="mt-10 max-w-xl space-y-5 rounded-2xl border border-edge bg-surface p-5 sm:p-6 lg:p-7">
+      <BookingIntro booking={booking} backHref={backHref} />
+      <PhotoGallery stayName={booking.hotelName} photos={photos.length ? photos : booking.photoUrl ? [booking.photoUrl] : []} />
+      <BookingPropertyHeading booking={booking} listingType={listingType} allowFavorite={allowFavorite} />
+      {description.trim() && (
+        <section className="mt-10 rounded-2xl border border-edge bg-surface p-6 sm:p-8">
+          <h2 className="text-2xl font-semibold text-ink">About this property</h2>
+          <p className="mt-3 whitespace-pre-line leading-7 text-slate">{description}</p>
+        </section>
+      )}
+      <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_514px] lg:items-start">
+        <fieldset disabled className="min-w-0">
+          <legend className="text-[32px] font-bold leading-10 text-ink">Choose a room</legend>
+          {rooms.length > 0 ? (
+            <RoomOptions
+              rooms={rooms}
+              selectedId={booking.roomId}
+              onSelect={() => {}}
+              locked
+              party={{ adults: Math.max(1, booking.guests - booking.children), children: booking.children }}
+              note={() => ""}
+            />
+          ) : (
+            <div className="mt-5 rounded-control border border-edge bg-surface p-5 text-slate">
+              {roomName ? displayRoomName(roomName) : "Room information is unavailable."}
+            </div>
+          )}
+        </fieldset>
+      <section className="space-y-5 rounded-2xl border border-edge bg-surface p-5 sm:p-6 lg:p-7">
         <p role="status" className="flex gap-2 text-base text-ink">
           <svg viewBox="0 0 24 24" className="mt-1 h-4 w-4 shrink-0 text-blue" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
             <circle cx="12" cy="12" r="9" />
@@ -499,11 +554,20 @@ function ReadOnlyBooking({ booking, backHref, roomName, reason }: { booking: Boo
           </svg>
           {reason}
         </p>
-        <StayDetails roomName={roomName} stay={booking} />
+        <StayDetails roomName={roomName ? displayRoomName(roomName) : null} stay={booking} />
         <Link href={backHref} className={`${buttonPrimary} w-full`}>
           Back to My Bookings
         </Link>
       </section>
+      </div>
+      {amenities.length > 0 && (
+        <section className="mt-10 rounded-2xl border border-edge bg-surface p-6 sm:p-8">
+          <h2 className="text-2xl font-semibold text-ink">Amenities</h2>
+          <ul className="mt-5 grid gap-x-6 gap-y-3 text-slate sm:grid-cols-2 lg:grid-cols-3">
+            {amenities.map((amenity) => <li key={amenity}>✓ {amenity}</li>)}
+          </ul>
+        </section>
+      )}
     </>
   );
 }

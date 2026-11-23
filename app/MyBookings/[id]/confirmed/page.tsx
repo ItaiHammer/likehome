@@ -1,9 +1,11 @@
+import { stayDisplayName } from "@/app/_components/stayDisplayName";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowIcon, Button, Card } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { bookingCode, formatStayDates, money } from "@/lib/bookings";
+import { displayRoomName } from "@/app/reserve/[slug]/roomDisplay";
 import { formatPoints, pointsShortfall, pointsToDollars, shortfallNote, shownPointsParam } from "@/lib/rewards";
 import { countNights } from "@/utils/reservation-logic";
 import { guestToday } from "@/utils/guest-today";
@@ -83,7 +85,7 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
         </div>
         <p className="mt-4 text-sm font-semibold uppercase tracking-[0.08em] text-blue-dark">Booking confirmed</p>
         <h1 className="mt-2 text-balance break-words font-serif text-[32px] leading-10 text-ink sm:text-[40px] sm:leading-[48px]">
-          You’re going to {booking.hotelName}!
+          You’re going to {stayDisplayName(booking.hotelName)}!
         </h1>
         <p className="mt-2 text-base text-slate">Your booking is saved. You can view or change it any time in My Bookings.</p>
         <div className="mt-6 inline-flex flex-wrap items-center justify-center gap-x-2 rounded-lg border border-edge bg-paper px-4 py-2">
@@ -106,10 +108,10 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
         <div className="mt-4 grid gap-6 sm:grid-cols-[12rem_1fr]">
           <HotelPhoto url={booking.photoUrl} priority className="aspect-[4/3] w-full" />
           <div className="min-w-0">
-            <h3 className="break-words text-lg font-semibold text-ink">{booking.hotelName}</h3>
+            <h3 className="break-words text-lg font-semibold text-ink">{stayDisplayName(booking.hotelName)}</h3>
             {booking.location && <p className="text-sm text-slate">{booking.location}</p>}
             <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-edge pt-4 text-sm">
-              {roomName && <Detail label="Room type" value={roomName} />}
+              {roomName && <Detail label="Room type" value={displayRoomName(roomName)} />}
               <Detail label="Dates" value={formatStayDates(booking.checkIn, booking.checkOut)} />
               <Detail label="Nights" value={`${nights} ${nights === 1 ? "night" : "nights"}`} />
               <Detail label="Guests" value={`${booking.guests} ${booking.guests === 1 ? "guest" : "guests"}`} />

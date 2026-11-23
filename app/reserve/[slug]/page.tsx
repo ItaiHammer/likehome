@@ -6,7 +6,7 @@ import {isLiteapiId, saveLiteapiHotel} from "@/lib/liteapi/save";
 import {savedHotelId} from "@/utils/liteapi-hotels";
 import {getOtherStays} from "@/lib/other-stays";
 import {markBookedRooms, mergeBookedNights, outsideWindow} from "@/lib/room-availability";
-import {getBookedNights} from "@/utils/rooms";
+import {getBookedNights, getRoomsByHotel} from "@/utils/rooms";
 import { getPointsBalance } from "@/utils/points";
 import {matchingRoom, originalSearch, readRoomFilters} from "@/lib/stay-filters";
 import {recordHotelView} from "@/utils/recently-viewed";
@@ -15,8 +15,12 @@ import {createClient} from "@/utils/supabase/server";
 import {addDays} from "../../_components/dates";
 import {PageBackdrop} from "../../_components/PageBackdrop";
 import {getStay, type Stay} from "../../_data/stays";
+import {getViewer} from "@/utils/viewer";
+import {getHotel} from "@/utils/hotels";
 import {getHotelStay, withLiveRoomPrices} from "./hotelStay";
 import {StayReservation, type StayChoices} from "./StayReservation";
+import {RecommendedStays} from "@/app/_components/RecommendedStays";
+import {getRecentlyViewedListings} from "@/utils/comparison";
 
 // Database hotels are read per request with the cookie-based Supabase client, which a prerendered
 // page can't do: a production build would answer every hotel id with a 500.
@@ -141,6 +145,17 @@ export default async function ReservePage(props: PageProps<"/reserve/[slug]">) {
             ? recordHotelView(claims.sub, stay.slug)
             : null;
 
+    // Read only existing stored hotel fields for the listing presentation. No writes or schema changes.
+    const [viewer, hotelDetails] = await Promise.all([
+        getViewer(),
+        /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(stay.slug) ? getHotel(stay.slug) : Promise.resolve(null),
+    ]);
+    const hotelRecord = hotelDetails?.data as { description?: string | null; property_type?: string | null } | undefined;
+    const displayDetails = {
+        description: hotelRecord?.description ?? "",
+        propertyType: hotelRecord?.property_type?.replaceAll("_", " ") ?? stay.type,
+    };
+
     const [otherStays, pointsRead] = await Promise.all([
         claims?.sub && stay.bookable ? getOtherStays(claims.sub, stay.slug) : [],
         claims?.sub && stay.bookable ? getPointsBalance(claims.sub) : null,
@@ -149,18 +164,38 @@ export default async function ReservePage(props: PageProps<"/reserve/[slug]">) {
     const pointsBalance = pointsRead && !pointsRead.error ? pointsRead.balance : null;
 
     await viewed;
+    const comparisonHistory = claims?.sub
+        ? await getRecentlyViewedListings(claims.sub, stay.slug).then((result) => result.data.slice(0, 3)).catch(() => [])
+        : [];
+    // History provides real hotel IDs but not room counts. Reuse the existing room
+    // lookup for each preview; no new API, database fields, or comparison-page changes.
+    // With no dates selected, this is room inventory (as in undated search results),
+    // not a guarantee that a room is free on particular nights.
+    const comparisonRecent = await Promise.all(comparisonHistory.map(async (hotel) => {
+        try {
+            const rooms = await getRoomsByHotel(hotel.id);
+            return { ...hotel, ...(rooms.error ? {} : { availableRooms: rooms.data?.length ?? 0 }) };
+        } catch {
+            return hotel;
+        }
+    }));
     return (
         <div className="relative isolate flex flex-1 flex-col">
             <PageBackdrop/>
             <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
                 <StayReservation
                     stay={priced}
+                    viewerRole={viewer.role}
+                    displayDetails={displayDetails}
                     account={account}
                     pointsBalance={pointsBalance}
                     otherStays={otherStays}
                     initial={readChoices(params, priced, d)}
                     search={originalSearch(params)}
+                    comparisonRecent={comparisonRecent}
+                    similarStays={<div className="mt-12"><RecommendedStays title="Similar stays" excludeStayId={stay.slug} /></div>}
                 />
+
             </main>
         </div>
     );

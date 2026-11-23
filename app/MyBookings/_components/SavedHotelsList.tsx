@@ -1,5 +1,6 @@
 "use client";
 
+import { stayDisplayName } from "@/app/_components/stayDisplayName";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/app/_components/ui";
@@ -23,15 +24,23 @@ export function SavedHotelsList({ allHotels }: { allHotels: Hotel[] }) {
     const [sortBy, setSortBy] = useState<"recent" | "name_asc" | "name_desc">("recent");
 
     const loadSaved = () => {
-        const saved = JSON.parse(localStorage.getItem("likehome_saved_hotels") || "[]");
-        setSavedIds(saved);
+        try {
+            const saved: unknown = JSON.parse(localStorage.getItem("likehome_saved_hotels") || "[]");
+            setSavedIds(Array.isArray(saved) ? saved.filter((id): id is string => typeof id === "string") : []);
+        } catch {
+            setSavedIds([]);
+        }
         setIsLoaded(true);
     };
 
     useEffect(() => {
         loadSaved();
         window.addEventListener("saved_hotels_updated", loadSaved);
-        return () => window.removeEventListener("saved_hotels_updated", loadSaved);
+        window.addEventListener("storage", loadSaved);
+        return () => {
+            window.removeEventListener("saved_hotels_updated", loadSaved);
+            window.removeEventListener("storage", loadSaved);
+        };
     }, []);
 
     if (!isLoaded) {
@@ -168,7 +177,7 @@ export function SavedHotelsList({ allHotels }: { allHotels: Hotel[] }) {
                             {/* Card Details */}
                             <div className="flex flex-1 flex-col p-4 space-y-2">
                                 <div>
-                                    <h3 className="font-semibold text-ink text-sm truncate">{hotel.name}</h3>
+                                    <h3 className="font-semibold text-ink text-sm truncate">{stayDisplayName(hotel.name)}</h3>
                                     {locationText && <p className="text-xs text-slate mt-0.5 truncate">{locationText}</p>}
                                 </div>
 

@@ -11,7 +11,7 @@ export function EmptyListings() {
     return (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
             <section className="rounded-lg border border-edge bg-surface p-6 sm:p-8 xl:p-10">
-                <p className="text-sm font-semibold text-blue">
+                <p className="text-xs font-medium uppercase tracking-normal text-blue">
                     Get started
                 </p>
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef } from "react";
 import { buttonPrimary, iconButton, labelClass } from "../../_components/ui";
 

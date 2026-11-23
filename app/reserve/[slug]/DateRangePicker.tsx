@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useId, useRef, useState } from "react";
 import { formatDate } from "../../_components/dates";
 import { RangeCalendar, type RangeField } from "../../_components/RangeCalendar";

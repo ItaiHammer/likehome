@@ -7,6 +7,7 @@ import {
 } from "@/utils/comparison";
 import type {ComparisonListing} from "@/lib/comparison";
 import {ComparisonFlow} from "./ComparisonFlow";
+import {PageBackdrop} from "@/app/_components/PageBackdrop";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,8 @@ export default async function ComparePage({
     }
 
     return (
-        <div className="flex flex-1 flex-col">
+        <div className="relative isolate flex flex-1 flex-col">
+            <PageBackdrop />
             <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-7 sm:px-6 sm:py-9">
                 <ComparisonFlow
                     currentStay={currentStay}

@@ -304,3 +304,8 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
   ) !important;
   border-image: none !important;
 }
+/* Native property-type menus should use the same UI font as their controls.
+   Browser/OS popup rendering can still override option styling. */
+select, select option {
+  font-family: var(--font-sans), sans-serif;
+}

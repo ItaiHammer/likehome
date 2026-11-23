@@ -363,12 +363,11 @@ export function CustomersDashboard() {
                                 ))}
                             </div>
                         ) : (
-                            <p className="mt-5 rounded-control bg-paper p-6 text-center text-sm text-slate">
-                                {query ? "No customers match your search." : data.listings.length === 0 ? "Add a property to start seeing customer history." : "No customer bookings yet."}
+                            <p className="mt-5 px-2 py-6 text-center text-sm text-slate">
+                                {query ? "No customers match your search." : data.listings.length === 0 ? "Add a property and start receiving reservations to see your customer history." : "Once your property receives reservations, your customer history will appear here."}
                             </p>
                         )}
-                        <p className="mt-4 text-xs text-slate">Only guests who have booked your properties are
-                            shown.</p>
+
                         <div className="mt-3"><Pagination page={safePage} pages={pages} onChange={changePage}/></div>
                     </section>
 

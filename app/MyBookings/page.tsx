@@ -19,6 +19,7 @@ import { UpcomingBooking } from "./_components/UpcomingBooking";
 import { getSampleBookings, getSampleQuote } from "./sampleBookings";
 import { getMyBookings, getTransactionHistory, type TransactionHistoryRow } from "@/utils/history";
 import { getPointsBalance } from "@/utils/points";
+import { getViewer } from "@/utils/viewer";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
 const sectionHeading = "font-serif text-[32px] leading-10 text-ink";
@@ -149,6 +150,7 @@ export default async function MyBookingsPage({
 }) {
   // The guest's today (from their time zone cookie), not UTC's
   const today = await guestToday();
+  const businessAccount = (await getViewer()).role === "business";
   // Dev only: ?sample (or ?sample=empty) fills the page without signing in, see sampleBookings.ts
   const { sample, tab } = await searchParams;
   const activeTab: AccountTab =
@@ -270,7 +272,11 @@ export default async function MyBookingsPage({
 
             {activeTab === "saved" && (
                 <section aria-labelledby="saved-heading">
-                  <SavedHotelsList allHotels={allHotels} />
+                  {businessAccount ? (
+                    <p className="rounded-2xl border border-edge bg-surface p-6 text-slate">Business accounts cannot save favorite stays.</p>
+                  ) : (
+                    <SavedHotelsList allHotels={allHotels} />
+                  )}
                 </section>
             )}
 

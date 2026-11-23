@@ -1,3 +1,4 @@
+import { bookingDisplayName } from "./bookingDisplayName";
 import { Tag } from "@/app/_components/ui";
 import { formatStayDates, type Booking } from "@/lib/bookings";
 import { RebookButton } from "./RebookButton";
@@ -10,7 +11,7 @@ export function PastBooking({ booking, sample = false }: { booking: Booking; sam
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <h3 className="min-w-0 break-words font-semibold text-ink">
-            {booking.hotelName}
+            {bookingDisplayName(booking.hotelName)}
           </h3>
           {cancelled && <Tag>Cancelled</Tag>}
         </div>
@@ -21,6 +22,7 @@ export function PastBooking({ booking, sample = false }: { booking: Booking; sam
         </p>
       </div>
 
+      <div className="flex items-center gap-3">
       {!cancelled && !booking.unlisted && (
         <RebookButton
           bookingId={booking.id}
@@ -28,6 +30,7 @@ export function PastBooking({ booking, sample = false }: { booking: Booking; sam
           sample={sample}
         />
       )}
+      </div>
     </li>
   );
 }

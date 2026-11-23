@@ -7,13 +7,16 @@ import { liveRatesEnabled } from "@/lib/liteapi/rates";
 import { RECOMMENDED_CARDS, recommendationSubtitle, toRecommendedCards } from "@/lib/recommendations";
 import { getRecommendedStays } from "@/utils/recommended-stays";
 import { TZ_COOKIE } from "@/utils/tz-cookie";
+import { getViewer } from "@/utils/viewer";
+import { RecommendedCarousel } from "./RecommendedCarousel";
 
 const TITLE = "Stays that feel like yours";
 const TITLE_ID = "recommended-stays-title";
 
 // Cara's recommendations (US 3.3.2): stays near the guest's latest viewed hotel and price range, else their time zone
-export async function RecommendedStays() {
+export async function RecommendedStays({ title = TITLE, excludeStayId }: { title?: string; excludeStayId?: string } = {}) {
   const timeZone = (await cookies()).get(TZ_COOKIE)?.value;
+  const { role } = await getViewer();
 
   let result: Awaited<ReturnType<typeof getRecommendedStays>>;
   try {
@@ -29,14 +32,16 @@ export async function RecommendedStays() {
     return null;
   }
 
-  const cards = toRecommendedCards(output.results.data, liveRatesEnabled());
+  const cards = toRecommendedCards(output.results.data, liveRatesEnabled()).filter(
+    (card) => !excludeStayId || (card.id !== excludeStayId && card.liteapi_id !== excludeStayId)
+  );
   const moreHref = `/search?${new URLSearchParams({ where: place.where })}`;
 
   return (
     <section id="stays" aria-labelledby={TITLE_ID} className="scroll-mt-6">
       <SectionHeading
         id={TITLE_ID}
-        title={TITLE}
+        title={title}
         subtitle={recommendationSubtitle(place)}
         action={
           cards.length > 0 && (
@@ -48,13 +53,13 @@ export async function RecommendedStays() {
         }
       />
       {cards.length > 0 ? (
-        <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <RecommendedCarousel>
           {cards.map((stay, i) => (
-            <li key={stay.id ?? stay.liteapi_id ?? i} className="card-in grid" style={{ "--i": i } as React.CSSProperties}>
-              <SearchResultCard stay={stay} headingLevel="h3" eager={i < 3} />
+            <li key={stay.id ?? stay.liteapi_id ?? i} className="card-in min-w-0" style={{ "--i": i } as React.CSSProperties}>
+              <SearchResultCard stay={stay} headingLevel="h3" eager={i < 3} businessAccount={role === "business"} />
             </li>
           ))}
-        </ul>
+        </RecommendedCarousel>
       ) : (
         <NoRecommendations city={place.city} />
       )}
