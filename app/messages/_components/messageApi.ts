@@ -2,12 +2,11 @@ import { API_ROUTES } from "@/constants/routes";
 
 const messageUrl = (id: string) => `${API_ROUTES.MESSAGES}/${encodeURIComponent(id)}`;
 
-// The route answers 400 both when the message was already read and when the update failed
-export async function sendRead(id: string): Promise<"marked" | "unconfirmed" | "failed"> {
+// Already-read messages also return success; every failed response needs visible feedback.
+export async function sendRead(id: string, signal?: AbortSignal): Promise<"marked" | "failed"> {
   try {
-    const res = await fetch(`${messageUrl(id)}/read`, { method: "PATCH" });
-    if (res.ok) return "marked";
-    return res.status === 400 ? "unconfirmed" : "failed";
+    const res = await fetch(`${messageUrl(id)}/read`, { method: "PATCH", signal });
+    return res.ok ? "marked" : "failed";
   } catch {
     return "failed";
   }

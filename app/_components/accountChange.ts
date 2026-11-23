@@ -7,7 +7,23 @@ const changeListeners = new Set<Listener>();
 const knownListeners = new Set<Listener>();
 // undefined until Supabase reports the first session
 let current: string | null | undefined;
+// The version also distinguishes A -> B -> A when React batches the notifications.
+export type AccountSnapshot = { accountId: string | null | undefined; version: number };
+export const UNKNOWN_ACCOUNT: AccountSnapshot = { accountId: undefined, version: 0 };
+let snapshot = UNKNOWN_ACCOUNT;
 let watching = false;
+
+export const getAccountSnapshot = () => snapshot;
+
+/** Subscribe to both the first known session and later identity changes. */
+export function subscribeAccount(listener: () => void): () => void {
+  const stopKnown = whenAccountKnown(listener);
+  const stopChange = onAccountChange(listener);
+  return () => {
+    stopKnown();
+    stopChange();
+  };
+}
 
 function watch() {
   if (watching) return;
@@ -16,12 +32,14 @@ function watch() {
     const next = session?.user.id ?? null;
     if (current === undefined) {
       current = next;
+      snapshot = { accountId: next, version: 0 };
       for (const listener of knownListeners) listener(next);
       knownListeners.clear();
       return;
     }
     if (next === current) return;
     current = next;
+    snapshot = { accountId: next, version: snapshot.version + 1 };
     for (const listener of changeListeners) listener(next);
   });
 }

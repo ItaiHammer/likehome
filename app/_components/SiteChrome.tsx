@@ -13,6 +13,7 @@ import { getViewer } from "@/utils/viewer";
 import { AccountMenu } from "./AccountMenu";
 import { MessagesBell } from "./MessagesBell";
 import { PointsPill } from "./PointsPill";
+import { AccountSessionRefresh } from "./AccountSessionRefresh";
 
 function Logo() {
   return (
@@ -50,6 +51,7 @@ export async function SiteHeader() {
   const points = pointsRead && !pointsRead.error ? pointsRead.balance : null;
   return (
     <header className="relative border-b border-edge bg-surface">
+      <AccountSessionRefresh accountId={viewer.userId} />
       {/* With the bell, the controls only fit beside the logo at 360px with tighter gaps on phones */}
       {/* From md the links sit in a middle column between two equal sides, so they stay centered on the page
           however wide the controls on the right get */}
@@ -63,7 +65,7 @@ export async function SiteHeader() {
         <div className={`flex items-center md:justify-self-end ${hasBell ? "gap-1 sm:gap-2" : "gap-2"}`}>
           {/* 8px apart, so the two buttons' 44px tap areas meet without overlapping */}
           <div className="flex items-center gap-2">
-            {hasBell && <MessagesBell summary={bell} />}
+            {hasBell && viewer.userId && <MessagesBell accountId={viewer.userId} summary={bell} />}
             <ThemeToggle />
           </div>
           {points !== null && <PointsPill points={points} />}

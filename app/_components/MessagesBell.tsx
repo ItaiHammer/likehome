@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { API_ROUTES, PAGE_ROUTES } from "@/constants/routes";
 import { bellSummary, KIND_LABEL, mailBadge, relativeTime, toInboxMessages, type BellSummary, type InboxMessage, type MessageKind } from "@/lib/messages";
 import { ArrowIcon, arrowSlideClass, headerIconButtonClass as bellClass, Popover, sectionLinkClass } from "./ui";
 import { useCurrentMinute } from "./useCurrentMinute";
+import { getAccountSnapshot, subscribeAccount, UNKNOWN_ACCOUNT } from "./accountChange";
 
 const focusRing = "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue";
 
@@ -15,20 +16,27 @@ const cascadeAt = (i: number) => ({ "--i": i }) as CSSProperties;
 const NO_MESSAGES: BellSummary = { unreadDirect: 0, unreadPromotional: 0, direct: [], promotional: [] };
 
 // Travelers only; `summary` is null when the server couldn't read the inbox
-export function MessagesBell({ summary }: { summary: BellSummary | null }) {
-  return <InboxBell summary={summary} />;
+export function MessagesBell({ summary, accountId }: { summary: BellSummary | null; accountId: string }) {
+  const identity = useSyncExternalStore(subscribeAccount, getAccountSnapshot, () => UNKNOWN_ACCOUNT);
+  const changedAccount = identity.accountId !== undefined && identity.accountId !== accountId;
+
+  // Never reuse server props belonging to a previous account, even while its refresh is pending.
+  if (changedAccount) return null;
+  return <InboxBell key={`${accountId}:${identity.version}`} summary={summary} />;
 }
 
-// null for any failure
-async function fetchSummary(signal: AbortSignal): Promise<BellSummary | null> {
+type SummaryResult = { kind: "loaded"; summary: BellSummary } | { kind: "unauthorized" } | { kind: "failed" };
+
+async function fetchSummary(signal: AbortSignal): Promise<SummaryResult> {
   try {
     const res = await fetch(API_ROUTES.MESSAGES, { signal, cache: "no-store" });
-    if (res.status !== 200) return null;
+    if (res.status === 401 || res.status === 403) return { kind: "unauthorized" };
+    if (res.status !== 200) return { kind: "failed" };
     const body: unknown = await res.json();
     const rows = typeof body === "object" && body !== null ? (body as { data?: unknown }).data : null;
-    return Array.isArray(rows) ? bellSummary(toInboxMessages(rows)) : null;
+    return Array.isArray(rows) ? { kind: "loaded", summary: bellSummary(toInboxMessages(rows)) } : { kind: "failed" };
   } catch {
-    return null;
+    return { kind: "failed" };
   }
 }
 
@@ -43,7 +51,8 @@ function InboxBell({ summary }: { summary: BellSummary | null }) {
   const [seenPath, setSeenPath] = useState(pathname);
   const [request, setRequest] = useState<Request | null>(null);
   const [settled, setSettled] = useState<Request | null>(null);
-  const [fetched, setFetched] = useState<{ from: BellSummary | null; summary: BellSummary } | null>(null);
+  const [fetched, setFetched] = useState<{ from: BellSummary | null; summary: BellSummary | null } | null>(null);
+  const [unauthorized, setUnauthorized] = useState(false);
 
   if (pathname !== seenPath) {
     setSeenPath(pathname);
@@ -55,13 +64,23 @@ function InboxBell({ summary }: { summary: BellSummary | null }) {
     const controller = new AbortController();
     void fetchSummary(controller.signal).then((result) => {
       if (controller.signal.aborted) return;
-      if (result) setFetched({ from: request.from, summary: result });
+      if (result.kind === "loaded") {
+        setUnauthorized(false);
+        setFetched({ from: request.from, summary: result.summary });
+      }
+      // Unlike a temporary read failure, lost authorization must discard the old private previews.
+      else if (result.kind === "unauthorized") {
+        setUnauthorized(true);
+        setFetched(null);
+      }
       setSettled(request);
     });
     return () => controller.abort();
   }, [request]);
 
-  const shown = fetched && fetched.from === summary ? fetched.summary : summary;
+  // A stale RSC refresh cannot resurrect previews after a denied read. Only a successful
+  // request (or a new account/version's remount) can establish authorization again.
+  const shown = unauthorized ? null : fetched && fetched.from === summary ? fetched.summary : summary;
   const loading = shown === null && request !== null && settled !== request;
   const badge = mailBadge(shown ?? NO_MESSAGES);
   const reload = () => setRequest({ from: summary });
