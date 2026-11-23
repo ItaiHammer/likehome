@@ -11,7 +11,7 @@ import { matchingRoom, roomFits } from "@/lib/stay-filters";
 import { cardBrandLabel, cardErrors, typedCardBrand, type CardBrandLabel } from "@/lib/card";
 import { PRICE_CHANGED_ERROR, discountPoints, findDiscount, formatPoints, pointsToDollars } from "@/lib/rewards";
 import { cardExpired } from "@/utils/payment-logic";
-import { MAX_NIGHTS } from "@/utils/reservation-logic";
+import { CANCEL_INSURANCE_PREMIUM, MAX_NIGHTS } from "@/utils/reservation-logic";
 import { addDays, formatDate, formatShort, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, Card, Field, Stars, Tag } from "../../_components/ui";
@@ -122,9 +122,11 @@ export function StayReservation({
   const [submitting, setSubmitting] = useState(false);
   const [booking, setBooking] = useState<Booking | null>(null);
   const [rewardId, setRewardId] = useState<string | null>(null);
+  const [insured, setInsured] = useState(false);
   const [contact, setContact] = useState<Contact>({ firstName: "", lastName: "", email: "", phone: "" });
 
   const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
+  const [savedTraveler, setSavedTraveler] = useState<Contact | null>(null);
   // null until the guest picks: the default card is used, even when the list arrives late
   const [pickedCardId, setPickedCardId] = useState<string | null>(null);
   const [cardNumber, setCardNumber] = useState("");
@@ -185,8 +187,11 @@ export function StayReservation({
     chosenReward && pointsBalance !== null && rewardPoints > 0 && rewardPoints <= pointsBalance
       ? { ...chosenReward, points: rewardPoints, dollars: pointsToDollars(rewardPoints) }
       : null;
+  // Insurance is only offered on saved bookings, the only ones that can be cancelled. /api/checkout adds the
+  // premium after pricing the reward, so the reward never covers a share of the premium.
+  const insurancePremium = stay.bookable && insured && nights > 0 ? CANCEL_INSURANCE_PREMIUM : 0;
   // In cents, so a free stay comes to exactly $0
-  const amountDue = Math.max(0, Math.round((total - (reward?.dollars ?? 0)) * 100) / 100);
+  const amountDue = Math.max(0, Math.round((total + insurancePremium - (reward?.dollars ?? 0)) * 100) / 100);
   const pointsCoverStay = reward !== null && amountDue === 0;
   // Not part of the total: the guest pays these to the hotel
   const dueAtProperty = nights ? (room.dueAtProperty ?? 0) : 0;
@@ -279,6 +284,19 @@ export function StayReservation({
     })();
     return () => request.abort();
   }, [canUseSavedCards]);
+
+  useEffect(() => {
+    if (!account) return;
+    fetch("/api/saved-travelers")
+      .then((res) => res.json())
+      .then(({ traveler: t }) => t && setSavedTraveler({ firstName: t.first_name, lastName: t.last_name, email: t.email, phone: t.phone ?? "" }))
+      .catch(() => {}); // Typing the details in still works
+  }, [account]);
+
+  function fillSavedTraveler() {
+    for (const k of CONTACT_FIELDS) (formRef.current?.elements.namedItem(k) as HTMLInputElement).value = savedTraveler![k];
+    setErrors({});
+  }
 
   const isExpired = (card: SavedCard) => Boolean(today) && cardExpired(card.expMonth, card.expYear, today);
   const usableCards = savedCards.filter((card) => !isExpired(card));
@@ -489,6 +507,7 @@ export function StayReservation({
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           rewardId: reward?.id,
           expectedTotal: total,
+          hasInsurance: insurancePremium > 0,
         })
       : checkoutRequest({
           roomId: roomToBook,
@@ -503,6 +522,7 @@ export function StayReservation({
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           rewardId: reward?.id,
           expectedTotal: total,
+          hasInsurance: insurancePremium > 0,
         });
 
     saveRequest.current?.abort();
@@ -541,7 +561,11 @@ export function StayReservation({
         signal,
       });
 
-      const body = (await res.json().catch(() => ({}))) as { error?: string; reservation?: { id?: string; total_price?: number | string } };
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        reservation?: { id?: string; total_price?: number | string };
+        total_charged?: number | string;
+      };
       if (res.status === 401) return fail("Your sign-in has ended. Sign in again to finish booking.", true);
       if (res.status === 402) {
         const message = `${body.error ?? "Your card was declined."} Try another card.`;
@@ -573,7 +597,7 @@ export function StayReservation({
         }).catch(() => undefined);
       }
 
-      const { id, total_price } = body.reservation;
+      const { id } = body.reservation;
       router.refresh();
       if (id) {
         // The points shown here, so the confirmation can say if the server spent fewer
@@ -581,11 +605,13 @@ export function StayReservation({
         return;
       }
 
-      const savedTotal = Number(total_price);
+      // total_charged includes the insurance premium; reservation.total_price is the stay alone
+      const charged = body.total_charged;
+      const savedTotal = Number(charged);
       setBooking({
         ...snapshot,
         saved: true,
-        total: Number.isFinite(savedTotal) && total_price !== null ? savedTotal : snapshot.total,
+        total: charged !== undefined && charged !== null && Number.isFinite(savedTotal) ? savedTotal : snapshot.total,
         confirmation: "LH-SAVED",
       });
       setSubmitting(false);
@@ -602,6 +628,7 @@ export function StayReservation({
     setCheckOut("");
     setErrors({});
     setBooking(null);
+    setInsured(false);
     goTo("stay");
   }
 
@@ -643,6 +670,11 @@ export function StayReservation({
                     <p className="mt-1 text-sm text-slate">
                       Signed in as <span className="font-semibold text-ink">{account.email}</span>
                     </p>
+                )}
+                {savedTraveler && (
+                    <button type="button" onClick={fillSavedTraveler} className="mt-2 text-sm font-semibold text-blue hover:text-blue-dark">
+                      Use my saved traveler info
+                    </button>
                 )}
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
                   <Field id="firstName" name="firstName" label="First name" autoComplete="given-name" defaultValue={contact.firstName} error={errors.firstName} onChange={() => clear("firstName")} />
@@ -849,6 +881,7 @@ export function StayReservation({
                     <Line label={`${money(room.nightly)} × ${nights} ${nights === 1 ? "night" : "nights"}`} value={money(subtotal)} />
                     {stay.cleaningFee > 0 && <Line label="Cleaning fee" value={money(cleaning)} />}
                     {taxes > 0 && <Line label="Taxes and fees" value={money(taxes)} />}
+                    {insurancePremium > 0 && <Line label="Cancellation insurance" value={money(insurancePremium)} />}
                     {reward && <Line label={`${reward.category} reward`} value={`−${money(reward.dollars)}`} />}
                     <div className="flex justify-between border-t border-edge pt-3 text-lg font-bold text-ink">
                       <dt>Total</dt>
@@ -868,8 +901,37 @@ export function StayReservation({
             {checkIn && (
               <Card tone="tint" padding="none" className="mt-5 p-4 text-sm">
                 {/* The rule cancel_reservation applies (audit F4): only insured bookings are refunded */}
-                <p className="font-semibold text-ink">Non-refundable</p>
-                <p className="mt-1 text-slate">You can cancel any time before check-in, but without cancellation insurance there’s no refund.</p>
+                {stay.bookable ? (
+                  <label className="flex cursor-pointer items-start justify-between gap-4">
+                    <span>
+                      <span className="block font-semibold text-ink">
+                        Cancellation insurance · {money(CANCEL_INSURANCE_PREMIUM)}
+                      </span>
+                      <span className="mt-1 block text-slate">
+                        {insured
+                          ? `Full refund of your stay if you cancel before check-in. The ${money(CANCEL_INSURANCE_PREMIUM)} fee isn’t refunded.`
+                          : "Without it, you can still cancel before check-in, but there’s no refund."}
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={insured}
+                      disabled={submitting}
+                      onChange={(e) => setInsured(e.target.checked)}
+                      className="peer sr-only"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="relative mt-0.5 h-6 w-11 shrink-0 rounded-full bg-edge transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-blue peer-checked:after:translate-x-5 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue peer-disabled:opacity-50"
+                    />
+                  </label>
+                ) : (
+                  <>
+                    <p className="font-semibold text-ink">Non-refundable</p>
+                    <p className="mt-1 text-slate">You can cancel any time before check-in, but without cancellation insurance there’s no refund.</p>
+                  </>
+                )}
               </Card>
             )}
 

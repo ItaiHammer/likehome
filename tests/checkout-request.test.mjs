@@ -82,3 +82,11 @@ test('a reward goes with a saved card too', () => {
   assert.equal(body.expected_total, 200)
   assert.deepEqual(body.payment, { saved_payment_method_id: 'pm-1' })
 })
+
+test('cancellation insurance is sent as a boolean the route accepts, off unless the guest turns it on', () => {
+  assert.equal(checkoutRequest(form()).has_insurance, false)
+  assert.equal(checkoutRequest(form({ hasInsurance: true })).has_insurance, true)
+  assert.equal(checkoutRequest(form({ hasInsurance: false })).has_insurance, false)
+  const saved = { ...form({ hasInsurance: true }), cardNumber: undefined, expiry: undefined, cvc: undefined, cardName: undefined, savedPaymentMethodId: 'pm_1' }
+  assert.equal(checkoutRequest(saved).has_insurance, true)
+})

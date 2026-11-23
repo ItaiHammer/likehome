@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { CANCEL_INSURANCE_PREMIUM } from '@/utils/reservation-logic'
 
 // check_in / check_out are timestamptz in the db, so reads come back like "2099-01-01T00:00:00+00:00".
 // The rest of the app (validation, pricing, UI) works with YYYY-MM-DD, so reads are normalized to that.
@@ -277,5 +278,5 @@ export async function checkoutReservation(
 
 // Fixed, reasonable number for simplicity
 export function getCancelInsurancePremium(): number {
-  return 20
+  return CANCEL_INSURANCE_PREMIUM
 }

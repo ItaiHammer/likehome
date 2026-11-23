@@ -13,6 +13,8 @@ type CheckoutStay = {
   rewardId?: string;
   /** The stay total the guest saw, so /api/checkout can refuse a reward when its price differs */
   expectedTotal?: number;
+  /** Cancellation insurance: full refund before check-in, for a flat premium charged on top */
+  hasInsurance?: boolean;
 };
 
 export type CheckoutForm = CheckoutStay &
@@ -43,6 +45,7 @@ export function checkoutRequest(form: CheckoutForm) {
     adults: form.adults,
     children: form.children,
     time_zone: form.timeZone,
+    has_insurance: form.hasInsurance === true,
     ...(form.rewardId ? { reward_id: form.rewardId, expected_total: Math.round((form.expectedTotal ?? 0) * 100) / 100 } : {}),
   };
 
