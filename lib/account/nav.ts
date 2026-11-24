@@ -25,6 +25,7 @@ export function accountMenuLinkFor(role: ViewerRole): NavLink | null {
 const PERSONAL_MENU: NavLink[] = [
   { label: 'Account details', href: PAGE_ROUTES.MY_BOOKINGS_ACCOUNT },
   { label: 'Rewards', href: PAGE_ROUTES.REWARDS },
+  { label: 'Saved hotels', href: PAGE_ROUTES.MY_BOOKINGS_SAVED },
   { label: 'Payment methods', href: `${PAGE_ROUTES.MY_BOOKINGS_ACCOUNT}#payment-methods` },
 ]
 

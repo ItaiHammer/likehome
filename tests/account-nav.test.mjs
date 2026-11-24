@@ -39,6 +39,7 @@ test('personal avatar menu follows the rewards Figma: account details, rewards, 
   assert.deepEqual(accountMenuItemsFor('personal'), [
     { label: 'Account details', href: '/MyBookings?tab=account' },
     { label: 'Rewards', href: '/MyBookings/rewards' },
+    { label: 'Saved hotels', href: '/MyBookings?tab=saved' },
     { label: 'Payment methods', href: '/MyBookings?tab=account#payment-methods' },
   ])
 })

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { browserTimeZone, formatRange, formatShort, nightsBetween } from "./dates";
+import { datesLabel } from "@/lib/recent-searches";
+import { browserTimeZone, nightsBetween } from "./dates";
 import { RotatingPlaceholder } from "./placeholders";
 import { RangeCalendar, type RangeField } from "./RangeCalendar";
 
@@ -14,10 +15,12 @@ export function DatesField({
   className = "",
   initialCheckIn = "",
   initialCheckOut = "",
+  fieldLabel,
 }: {
   className?: string;
   initialCheckIn?: string;
   initialCheckOut?: string;
+  fieldLabel?: string;
 }) {
   // Empty during the server render; filled in from the browser after hydration
   const timeZone = useSyncExternalStore(noSubscribe, browserTimeZone, () => "");
@@ -67,12 +70,8 @@ export function DatesField({
   }
 
   const nights = nightsBetween(checkIn, checkOut);
-  const label =
-    checkIn && checkOut
-      ? `${formatRange(checkIn, checkOut)} · ${nights} ${nights === 1 ? "night" : "nights"}`
-      : checkIn
-        ? `${formatShort(checkIn)} - Add check-out`
-        : "";
+  const dates = datesLabel(checkIn, checkOut);
+  const label = checkIn && checkOut ? `${dates} · ${nights} ${nights === 1 ? "night" : "nights"}` : dates;
 
   return (
     <div ref={ref} className={`relative ${className}`}>
@@ -91,10 +90,14 @@ export function DatesField({
         // after: covers the whole segment, padding included, so a click anywhere in it opens the calendar
         className={`min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 focus-visible:outline-hidden ${label ? "text-ink" : "text-slate"}`}
       >
+        {fieldLabel && <span aria-hidden className="mb-0.5 hidden text-sm font-semibold text-ink lg:block lg:text-base">
+          {fieldLabel}
+          {checkIn && checkOut && <span className="ml-2 text-xs font-normal text-slate">· {nights} {nights === 1 ? "night" : "nights"}</span>}
+        </span>}
         {checkIn && checkOut ? (
           <span className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate text-base">{formatRange(checkIn, checkOut)}</span>
-            <span className="mt-1 text-xs font-medium text-slate">
+            <span className="truncate text-base">{dates}</span>
+            <span className={`mt-1 text-xs font-medium text-slate${fieldLabel ? " lg:hidden" : ""}`}>
               {nights} {nights === 1 ? "night" : "nights"}
             </span>
           </span>
@@ -104,7 +107,8 @@ export function DatesField({
       </button>
 
       <input type="hidden" name="checkIn" value={checkIn} />
-      <input type="hidden" name="checkOut" value={checkOut} />
+      {/* A check-out with no check-in stays on screen but isn't searched, so /search never gets half a range */}
+      <input type="hidden" name="checkOut" value={checkIn ? checkOut : ""} />
       <input type="hidden" name="tz" value={timeZone} />
 
       <div
@@ -129,6 +133,8 @@ export function DatesField({
             restoreFocus();
             setOpen(false);
           }}
+          tabs
+          quickPicks
         />
       </div>
     </div>

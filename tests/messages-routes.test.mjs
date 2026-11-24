@@ -7,7 +7,9 @@ let mockAuthUser = { id: 'user-1' }
 let mockAccountType = 'personal'
 let mockMessageResult = { data: { id: 'msg-1', hotel_id: 'hotel-1', recipient_id: 'user-1', subject: 'Hello', body: 'Welcome', read_at: null, created_at: new Date().toISOString() }, error: null }
 let mockCreateMessagesResult = { data: [{ id: 'msg-1' }], error: null }
-let mockMarkReadResult = { data: [{ id: 'msg-1', read_at: new Date().toISOString() }], error: null }
+let mockMarkReadResult = { data: [{ id: 'msg-1', recipient_id: 'user-1', read_at: new Date().toISOString() }], error: null }
+let markReadCalls = 0
+let mockMessageResults = []
 let mockRecipientsResult = { data: [{ account_id: 'acc-1', email: 'guest@example.com', full_name: 'John Doe', last_check_in: null, last_status: null }], error: null }
 let mockBusinessMessagesResult = { data: [{ id: 'msg-biz-1' }], error: null }
 let mockPersonalMessagesResult = { data: [{ id: 'msg-per-1' }], error: null }
@@ -33,11 +35,14 @@ mock.module('../utils/accounts.ts', {
 
 mock.module('../utils/messages.ts', {
   namedExports: {
-    getMessage: async (id) => mockMessageResult,
+    getMessage: async (id) => mockMessageResults.length ? mockMessageResults.shift() : mockMessageResult,
     getMessagesByAccount: async (accountId) => mockPersonalMessagesResult,
     getMessagesByHotel: async (hotelId) => mockBusinessMessagesResult,
     createMessages: async (hotelId, recipientIds, subject, body) => mockCreateMessagesResult,
-    markMessageRead: async (id) => mockMarkReadResult,
+    markMessageRead: async (id) => {
+      markReadCalls++
+      return mockMarkReadResult
+    },
     getHotelRecipients: async (hotelId) => mockRecipientsResult,
   },
 })
@@ -54,7 +59,9 @@ beforeEach(() => {
   mockAccountTypeError = null
   mockMessageResult = { data: { id: 'msg-1', hotel_id: 'hotel-1', recipient_id: 'user-1', subject: 'Hello', body: 'Welcome', read_at: null, created_at: new Date().toISOString() }, error: null }
   mockCreateMessagesResult = { data: [{ id: 'msg-1' }], error: null }
-  mockMarkReadResult = { data: [{ id: 'msg-1', read_at: new Date().toISOString() }], error: null }
+  mockMarkReadResult = { data: [{ id: 'msg-1', recipient_id: 'user-1', read_at: new Date().toISOString() }], error: null }
+  markReadCalls = 0
+  mockMessageResults = []
   mockRecipientsResult = { data: [{ account_id: 'acc-1', email: 'guest@example.com', full_name: 'John Doe', last_check_in: null, last_status: null }], error: null }
   mockBusinessMessagesResult = { data: [{ id: 'msg-biz-1' }], error: null }
   mockPersonalMessagesResult = { data: [{ id: 'msg-per-1' }], error: null }
@@ -72,22 +79,74 @@ test('PATCH /api/messages/[id]/read - returns 401 when unauthenticated', async (
   assert.equal(json.error, 'You must be logged in to mark messages read.')
 })
 
-test('PATCH /api/messages/[id]/read - returns 400 when markMessageRead returns error', async () => {
+test('PATCH /api/messages/[id]/read - returns 500 when markMessageRead returns error', async () => {
   mockMarkReadResult = { data: null, error: { message: 'Database error' } }
   const req = new Request('http://localhost/api/messages/msg-1/read', { method: 'PATCH' })
   const res = await patchRead(req, { params: Promise.resolve({ id: 'msg-1' }) })
-  assert.equal(res.status, 400)
+  assert.equal(res.status, 500)
   const json = await res.json()
   assert.deepEqual(json, { data: null, error: 'Failed to mark message read' })
 })
 
-test('PATCH /api/messages/[id]/read - returns 400 when markMessageRead returns empty data', async () => {
+test('PATCH /api/messages/[id]/read - does not mistake a still-unread row for success', async () => {
   mockMarkReadResult = { data: [], error: null }
   const req = new Request('http://localhost/api/messages/msg-1/read', { method: 'PATCH' })
   const res = await patchRead(req, { params: Promise.resolve({ id: 'msg-1' }) })
-  assert.equal(res.status, 400)
+  assert.equal(res.status, 500)
   const json = await res.json()
   assert.deepEqual(json, { data: null, error: 'Failed to mark message read' })
+})
+
+test('PATCH /api/messages/[id]/read - an already-read own message is an idempotent success', async () => {
+  mockMarkReadResult = { data: [], error: null }
+  mockMessageResult.data.read_at = '2026-11-22T10:00:00Z'
+  const res = await patchRead(new Request('http://localhost/api/messages/msg-1/read', { method: 'PATCH' }), { params: Promise.resolve({ id: 'msg-1' }) })
+  assert.equal(res.status, 200)
+  assert.equal((await res.json()).data[0].read_at, '2026-11-22T10:00:00Z')
+  assert.equal(markReadCalls, 0)
+})
+
+test('PATCH /api/messages/[id]/read - a concurrent reader is verified after an empty update', async () => {
+  mockMarkReadResult = { data: [], error: null }
+  mockMessageResults = [mockMessageResult, { data: { ...mockMessageResult.data, read_at: '2026-11-22T10:00:00Z' }, error: null }]
+  const res = await patchRead(new Request('http://localhost/api/messages/msg-1/read', { method: 'PATCH' }), { params: Promise.resolve({ id: 'msg-1' }) })
+  assert.equal(res.status, 200)
+  assert.equal((await res.json()).data[0].read_at, '2026-11-22T10:00:00Z')
+  assert.equal(markReadCalls, 1)
+})
+
+test('PATCH /api/messages/[id]/read - a failed verification is not reported as already read', async () => {
+  mockMarkReadResult = { data: [], error: null }
+  mockMessageResults = [mockMessageResult, { data: null, error: { code: 'XX000', message: 'Read failed' } }]
+  const res = await patchRead(new Request('http://localhost/api/messages/msg-1/read', { method: 'PATCH' }), { params: Promise.resolve({ id: 'msg-1' }) })
+  assert.equal(res.status, 500)
+  assert.equal(markReadCalls, 1)
+})
+
+test('PATCH /api/messages/[id]/read - a missing message returns 404', async () => {
+  mockMarkReadResult = { data: [], error: null }
+  mockMessageResult = { data: null, error: { code: 'PGRST116', message: 'No rows' } }
+  const res = await patchRead(new Request('http://localhost/api/messages/msg-1/read', { method: 'PATCH' }), { params: Promise.resolve({ id: 'msg-1' }) })
+  assert.equal(res.status, 404)
+})
+
+test('PATCH /api/messages/[id]/read - hidden and other-recipient messages cannot qualify as already read', async () => {
+  mockMarkReadResult = { data: [], error: null }
+  for (const overrides of [{ hidden_at: '2026-11-22T10:00:00Z' }, { recipient_id: 'other-user' }]) {
+    mockMessageResult = { data: { id: 'msg-1', recipient_id: 'user-1', read_at: '2026-11-22T10:00:00Z', ...overrides }, error: null }
+    const res = await patchRead(new Request('http://localhost/api/messages/msg-1/read', { method: 'PATCH' }), { params: Promise.resolve({ id: 'msg-1' }) })
+    assert.equal(res.status, 404)
+    assert.equal((await res.json()).data, null)
+    assert.equal(markReadCalls, 0)
+  }
+})
+
+test('PATCH /api/messages/[id]/read - hidden unread messages are rejected before mutation', async () => {
+  mockMessageResult.data.hidden_at = '2026-11-22T10:00:00Z'
+  const res = await patchRead(new Request('http://localhost/api/messages/msg-1/read', { method: 'PATCH' }), { params: Promise.resolve({ id: 'msg-1' }) })
+  assert.equal(res.status, 404)
+  assert.equal((await res.json()).data, null)
+  assert.equal(markReadCalls, 0)
 })
 
 test('PATCH /api/messages/[id]/read - successfully marks message read and returns 200', async () => {
@@ -97,6 +156,22 @@ test('PATCH /api/messages/[id]/read - successfully marks message read and return
   const json = await res.json()
   assert.equal(json.error, null)
   assert.ok(json.data)
+})
+
+test('PATCH /api/messages/[id]/read - successful updates never return hidden or other-recipient messages', async () => {
+  for (const overrides of [{ hidden_at: '2026-11-22T10:00:00Z' }, { recipient_id: 'other-user' }]) {
+    mockMarkReadResult = { data: [{ id: 'msg-1', recipient_id: 'user-1', read_at: '2026-11-22T10:00:00Z', ...overrides }], error: null }
+    const res = await patchRead(new Request('http://localhost/api/messages/msg-1/read', { method: 'PATCH' }), { params: Promise.resolve({ id: 'msg-1' }) })
+    assert.equal(res.status, 404)
+    assert.deepEqual(await res.json(), { data: null, error: 'Message not found' })
+  }
+})
+
+test('PATCH /api/messages/[id]/read - updated rows from before hidden_at exists still work', async () => {
+  mockMarkReadResult = { data: [{ id: 'msg-1', recipient_id: 'user-1', read_at: '2026-11-22T10:00:00Z' }], error: null }
+  const res = await patchRead(new Request('http://localhost/api/messages/msg-1/read', { method: 'PATCH' }), { params: Promise.resolve({ id: 'msg-1' }) })
+  assert.equal(res.status, 200)
+  assert.equal((await res.json()).data[0].recipient_id, 'user-1')
 })
 
 // ============================================================================

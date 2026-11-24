@@ -1,0 +1,40 @@
+.sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, #a9d6f7 0%, #dcebf7 58%, var(--paper) 100%);
+}
+
+.day {
+  object-fit: cover;
+  object-position: center top;
+  mask-image: linear-gradient(to bottom, black 25%, transparent 100%);
+}
+.night { position: absolute; inset: 0; opacity: 0; }
+:global([data-theme="dark"]) .day { opacity: 0; }
+:global([data-theme="dark"]) .night { opacity: 1; }
+
+.cloud {
+  position: absolute;
+  width: min(560px, 39vw);
+  height: auto;
+  color: #fff;
+  opacity: 0.85;
+  animation: drift 70s ease-in-out infinite alternate;
+  mask-image: linear-gradient(to bottom, black 55%, transparent);
+}
+
+.left { left: -7%; top: 0; }
+.right { right: -6%; top: -8%; scale: -1 1; animation-delay: -30s; }
+.horizon { left: -8%; bottom: -22%; width: 44vw; opacity: 0.18; filter: blur(8px); animation-delay: -45s; }
+
+:global([data-theme="dark"]) .sky {
+  background: linear-gradient(180deg, #182b4c 0%, #18243e 50%, var(--paper) 100%);
+}
+:global([data-theme="dark"]) .cloud { opacity: 0.07; }
+
+@keyframes drift {
+  from { translate: -2% 0; }
+  to { translate: 5% 4px; }
+}
+:global([data-motion="reduce"]) .cloud { animation: none; }

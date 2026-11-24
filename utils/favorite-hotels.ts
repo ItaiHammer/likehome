@@ -40,6 +40,18 @@ export async function getFavoriteHotels(accountId: string) {
   return { data, error }
 }
 
+// Just the hotel ids, newest favorite first (for the hearts).
+export async function getFavoriteHotelIds(accountId: string) {
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+  const { data, error } = await supabase
+    .from('favorite_hotels')
+    .select('hotel_id')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: false })
+  return { data, error }
+}
+
 // data is true when the hotel is one of the account's favorites (for the heart state).
 export async function isFavoriteHotel(accountId: string, hotelId: string) {
   const cookieStore = await cookies()

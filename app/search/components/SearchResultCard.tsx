@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
+import { cardLiftClass, photoZoomClass } from "@/app/_components/ui";
+import { hotelLocation } from "@/lib/comparison";
 
 export type PriceStatus = "checking" | "needs-dates" | "sold-out" | "unavailable";
 
@@ -58,8 +60,7 @@ function UsersIcon() {
 }
 
 function formatLocation(stay: HotelSearchResult) {
-  const pieces = [stay.city, stay.region, stay.country].filter(Boolean);
-  return pieces.length ? pieces.join(", ") : stay.address || "Location available at booking";
+  return hotelLocation(stay) || stay.address || "Location available at booking";
 }
 
 function asNumber(value: HotelSearchResult["min_price"]) {
@@ -68,17 +69,20 @@ function asNumber(value: HotelSearchResult["min_price"]) {
 }
 
 // `search` is the current search's query string: the stay page opens on a room that matches it, and its
-// Back to stays link returns here. `headingLevel` h3 fits the card under a section's h2 (the home page)
+// Back to stays link returns here. `headingLevel` h3 fits the card under a section's h2 (the home page).
+// `compactOnPhones` drops the description and the guest and room chips below sm, for a sideways row of cards
 export function SearchResultCard({
   stay,
   eager = false,
   search = "",
   headingLevel: Heading = "h2",
+  compactOnPhones = false,
 }: {
   stay: HotelSearchResult;
   eager?: boolean;
   search?: string;
   headingLevel?: "h2" | "h3";
+  compactOnPhones?: boolean;
 }) {
   const photo = stay.photo_urls?.find(Boolean);
   const price = asNumber(stay.min_price);
@@ -88,6 +92,7 @@ export function SearchResultCard({
   // A LiteAPI hotel that isn't saved yet opens by its LiteAPI id
   const slug = stay.id ?? stay.liteapi_id;
   const href = slug ? `/reserve/${slug}${search ? `?${search}` : ""}` : null;
+  const phoneHidden = compactOnPhones ? " max-sm:hidden" : "";
 
   const media = photo ? (
     // A plain <img> so photos below the fold can lazy-load: next.config doesn't list image hosts yet.
@@ -97,7 +102,7 @@ export function SearchResultCard({
       alt={`${stay.name ?? "Stay"} photo`}
       loading={eager ? "eager" : "lazy"}
       decoding="async"
-      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.025]"
+      className={`absolute inset-0 h-full w-full object-cover ${photoZoomClass}`}
     />
   ) : (
       <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_30%_30%,rgba(68,115,181,0.22),transparent_38%),linear-gradient(145deg,rgba(68,115,181,0.12),rgba(68,115,181,0.03))]">
@@ -106,7 +111,7 @@ export function SearchResultCard({
   );
 
   return (
-      <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface shadow-[0_18px_45px_-34px_rgba(7,13,47,0.45)] transition-transform duration-200 hover:-translate-y-0.5">
+      <article className={`group relative flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface shadow-[0_18px_45px_-34px_rgba(7,13,47,0.45)] ${cardLiftClass}`}>
         <div className="relative aspect-[16/10] overflow-hidden bg-blue/10">
           {href ? (
               <Link href={href} tabIndex={-1} aria-hidden className="relative block h-full w-full">
@@ -116,10 +121,11 @@ export function SearchResultCard({
               media
           )}
 
-          {/* Save/Heart Button overlaid on top-right of image container */}
+          {/* Only hotels saved in the database have an id; an unsaved LiteAPI hotel (liteapi_id only) gets no heart */}
           {stay.id && (
               <SaveHotelButton
                   hotelId={stay.id}
+                  hotelName={stay.name}
                   className="absolute top-3 right-3 z-10"
               />
           )}
@@ -142,7 +148,7 @@ export function SearchResultCard({
               </span>
             )}
           </div>
-        {stay.description && <p className="mt-4 line-clamp-2 text-sm leading-6 text-slate">{stay.description}</p>}
+        {stay.description && <p className={`mt-4 line-clamp-2 text-sm leading-6 text-slate${phoneHidden}`}>{stay.description}</p>}
         {stay.tags && stay.tags.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-1.5">
             {stay.tags.slice(0, 3).map((tag) => (
@@ -153,7 +159,7 @@ export function SearchResultCard({
           </div>
         )}
 
-        <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-slate">
+        <div className={`mt-4 flex flex-wrap gap-2 text-xs font-medium text-slate${phoneHidden}`}>
           {capacity !== null && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-paper/40 px-2.5 py-1.5">
               <UsersIcon /> Up to {capacity} guests

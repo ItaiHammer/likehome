@@ -60,11 +60,33 @@ export function Tag({ tone = "neutral", size = "sm", children }: { tone?: "neutr
   return <span className={`inline-flex items-center rounded-control border ${tones[tone]} ${sizes[size]}`}>{children}</span>;
 }
 
-/** The arrow at the end of a "go there" link. Slide it on hover with `group-hover:translate-x-1` */
+/** The arrow at the end of a "go there" link. Slide it on hover with `arrowSlideClass` */
 export function ArrowIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * A 24px line icon drawn in the text color; pass its paths as children.
+ *
+ *   <Icon><path d="M12 5v14M5 12h14" strokeLinecap="round" /></Icon>
+ */
+export function Icon({ children, className = "h-5 w-5" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      {children}
+    </svg>
+  );
+}
+
+/** The down chevron on a control that opens something; add `rotate-180` while it's open */
+export function ChevronIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+      <path d="M5.5 7.5L10 12l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Pagination } from "@/app/_components/Pagination";
-import { ArrowIcon, Card } from "@/app/_components/ui";
+import { ArrowIcon, Card, filterChipClass } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { HISTORY_PAGE_SIZE, historyFilter, historyPage, matchesFilter, pageCount, type HistoryFilter } from "@/lib/rewards";
 import { getRewardsHistory } from "@/utils/rewards";
@@ -83,9 +83,7 @@ export default async function RewardsHistoryPage(props: PageProps<"/MyBookings/r
               key={value}
               href={historyHref(value, 1, showSample)}
               aria-current={filter === value ? "page" : undefined}
-              className={`inline-flex h-[35px] min-w-[60px] items-center justify-center rounded-control px-4 text-base transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${
-                filter === value ? "bg-blue text-on-blue" : "border border-edge text-ink hover:border-blue"
-              }`}
+              className={filterChipClass(filter === value)}
             >
               {label}
             </Link>

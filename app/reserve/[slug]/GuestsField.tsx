@@ -1,18 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { guestLabel } from "@/lib/bookings";
 import { buttonPrimary, iconButton, labelClass } from "../../_components/ui";
 
 const ROWS = [
   { key: "adults", label: "Adults", hint: "Ages 13 or above", min: 1, max: 16 },
   { key: "children", label: "Children", hint: "Ages 0 to 12", min: 0, max: 10 },
 ] as const;
-
-export function guestLabel(adults: number, children: number) {
-  const parts = [`${adults} ${adults === 1 ? "adult" : "adults"}`];
-  if (children) parts.push(`${children} ${children === 1 ? "child" : "children"}`);
-  return parts.join(", ");
-}
 
 // Controlled guest counter for the reservation card (the search bar keeps its own GuestsPicker).
 export function GuestsField({

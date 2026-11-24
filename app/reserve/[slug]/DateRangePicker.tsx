@@ -17,6 +17,7 @@ export function DateRangePicker({
   checkOut,
   onChange,
   blockedOffsets,
+  blockedNote,
   open,
   onOpenChange,
   onDone,
@@ -29,6 +30,8 @@ export function DateRangePicker({
   onChange: (checkIn: string, checkOut: string) => void;
   /** Booked nights, as days from today */
   blockedOffsets: number[];
+  /** What the struck-through dates mean, when it's more than "already booked" */
+  blockedNote?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** After Done or Escape closes the calendar (not an outside click, which may be mid-click on something else) */
@@ -155,6 +158,7 @@ export function DateRangePicker({
               onDone?.();
             }}
             blockedOffsets={blockedOffsets}
+            blockedNote={blockedNote}
           />
         </div>
       </div>
