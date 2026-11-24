@@ -2,6 +2,7 @@ import { HotelPhoto } from "@/app/MyBookings/_components/HotelPhoto";
 import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
 import { ArrowIcon, arrowSlideClass, Card, cardLiftClass, photoZoomClass, SectionHeading, swipeItemClass, swipeRowClass } from "@/app/_components/ui";
 import type { HotelCard } from "@/lib/recently-viewed";
+import styles from "./home/HomeLayout.module.css";
 
 // A homepage row of hotel cards (photo, name, location), four across, swiping sideways on phones
 export function HotelCardRow({
@@ -24,7 +25,7 @@ export function HotelCardRow({
   more?: { href: string; label: string };
 }) {
   return (
-    <section aria-labelledby={titleId}>
+    <section aria-labelledby={titleId} className={styles.hotelRow}>
       <SectionHeading id={titleId} title={title} subtitle={subtitle} action={action} />
       {/* On phones the padding keeps a focused card's ring and the entrance slide inside the scroll box, and the margin takes it back */}
       <ul className={`mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 ${swipeRowClass()} max-sm:-mb-3 max-sm:mt-5 max-sm:pb-3 max-sm:pt-1`}>
@@ -36,8 +37,8 @@ export function HotelCardRow({
                 <HotelPhoto url={hotel.photo} className={`aspect-[16/10] w-full rounded-none ${photoZoomClass}`} />
               </div>
               <div className="px-5 py-4 sm:px-4 sm:py-3">
-                <h3 className="truncate font-serif text-xl leading-7 text-ink">{hotel.name}</h3>
-                {hotel.location && <p className="truncate text-sm leading-6 text-slate">{hotel.location}</p>}
+                <h3 title={hotel.name} className="truncate font-serif text-xl leading-7 text-ink">{hotel.name}</h3>
+                {hotel.location && <p title={hotel.location} className="truncate text-sm leading-6 text-slate">{hotel.location}</p>}
               </div>
             </Card>
             {/* Beside the link, not in it: a button can't sit inside a link */}

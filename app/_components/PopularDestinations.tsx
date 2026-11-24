@@ -10,6 +10,7 @@ import { POPULAR_DESTINATIONS, POPULAR_TABS, type DestinationTab } from "../_dat
 import { browserTimeZone } from "./dates";
 import { isMotionReduced, useReducedMotion } from "./motion";
 import { buttonPrimary, buttonSecondary, iconButton, SectionHeading } from "./ui";
+import styles from "./home/HomeLayout.module.css";
 
 const STEP_MS = 3500; // how long the carousel rests on each position before moving on
 const RING_R = 12.75; // radius of the countdown ring on the (28px) pause button
@@ -345,14 +346,15 @@ export function PopularDestinations() {
         if (!e.currentTarget.contains(from) && (e.target as HTMLElement).matches(":focus-visible")) setAutoplayChoice(false);
       }}
     >
+      <div className={styles.destinationHeader}>
       <SectionHeading
         id={`${baseId}-title`}
         title="Find your next escape"
-        subtitle="The places guests are booking most, close by, across the country and around the world."
       />
+      <p className={`mt-1 text-base text-slate ${styles.destinationSubtitle}`}>The places guests are booking most, close by, across the country and around the world.</p>
 
       {/* relative z-[1]: stays clickable above the track's top bleed padding */}
-      <div className="relative z-[1] mt-5 flex flex-wrap items-center justify-between gap-3">
+      <div className={`relative z-[1] mt-5 flex flex-wrap items-center justify-between gap-3 ${styles.destinationControls}`}>
         <div role="tablist" aria-label="Destinations" className="flex flex-wrap gap-2">
           {POPULAR_TABS.map((t, i) => {
             const selected = t.id === tab;
@@ -381,12 +383,15 @@ export function PopularDestinations() {
           {arrow(1)}
         </div>
       </div>
+      </div>
 
-      <div id={`${baseId}-panel`} role="tabpanel" aria-labelledby={`${baseId}-tab-${tab}`} className="mt-5">
+      <div id={`${baseId}-panel`} role="tabpanel" aria-labelledby={`${baseId}-tab-${tab}`} className={`mt-5 ${styles.destinationPanel}`}>
         {/* Keyed by tab: switching starts at the first tile and replays the entrance.
             The padding (cancelled by negative margin) leaves room for the hover pop:
             a little on top, more below for its shadow; the sideways bleed lets
-            tiles slide to the edge. Mouse users can drag it; touch swipes natively. */}
+            tiles slide to the edge. Desktop keeps a card-gap of side padding too,
+            so an edge tile can tilt beyond its resting bounds without being clipped.
+            Mouse users can drag it; touch swipes natively. */}
         <ul
           key={tab}
           ref={trackRef}
@@ -411,7 +416,7 @@ export function PopularDestinations() {
             if (tile.matches(":focus-visible")) tile.closest("li")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: scrollBehavior() });
           }}
           onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setFocusInTrack(false)}
-          className={`relative -mx-4 -mb-16 -mt-6 flex select-none gap-4 overflow-x-auto scroll-px-4 px-4 pb-16 pt-6 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden ${
+          className={`relative -mx-4 -mb-16 -mt-6 flex select-none gap-4 overflow-x-auto scroll-px-4 px-4 pb-16 pt-6 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 lg:-mx-4 lg:scroll-px-4 lg:px-4 [&::-webkit-scrollbar]:hidden ${
             dragging ? "cursor-grabbing snap-none" : "cursor-grab snap-x snap-mandatory"
           }`}
         >
@@ -423,7 +428,7 @@ export function PopularDestinations() {
             <li
               key={d.name}
               data-index={i}
-              className="relative w-[80%] shrink-0 snap-start hover:z-10 focus-within:z-10 sm:w-[46%] lg:w-[31%]"
+              className="relative w-[80%] shrink-0 snap-start hover:z-10 focus-within:z-10 sm:w-[46%] lg:w-[calc((100%_-_2rem)/3)]"
             >
               <div
                 role="group"
@@ -444,34 +449,28 @@ export function PopularDestinations() {
                   onPointerMove={tilt}
                   onPointerLeave={untilt}
                   aria-label={`Search stays in ${d.name}, ${d.region}`}
-                  className={`tilt theme-fade-keep group relative block h-80 w-full overflow-hidden rounded-lg border border-edge text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue sm:h-96 lg:h-[420px] ${
-                    dragging ? "cursor-grabbing" : "cursor-grab"
+                  className={`tilt ${styles.destinationTile} theme-fade-keep group relative block h-full w-full overflow-hidden rounded-lg border border-edge bg-surface text-left focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-blue ${
+                    dragging ? "cursor-grabbing" : "cursor-pointer"
                   }`}
                 >
-                  <Image
-                    src={d.photo}
-                    alt=""
-                    fill
-                    sizes="(min-width: 1024px) 31vw, (min-width: 640px) 46vw, 80vw"
-                    placeholder="blur"
-                    draggable={false}
-                    className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-                  />
-                  {/* Night: the tile dims with the theme */}
-                  <div className="absolute inset-0 bg-[#141a45]/30 opacity-0 dark:opacity-100" />
-                  {/* Ink fade behind the caption: it eases in across the 112px top padding,
-                      then stays at 58%+ under every line of text (however many lines the
-                      name wraps to), so the white text clears 4.5:1 even if the
-                      photo under it were pure white. Hover or keyboard focus
-                      deepens it to about 70%. */}
-                  <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(to_bottom,rgb(7_13_47/0)_0,rgb(7_13_47/0.09)_28px,rgb(7_13_47/0.29)_56px,rgb(7_13_47/0.49)_84px,rgb(7_13_47/0.58)_112px,rgb(7_13_47/0.6))] p-5 pt-28 sm:p-6 sm:pt-28">
-                    <div
-                      aria-hidden
-                      className="absolute inset-0 bg-[linear-gradient(to_bottom,rgb(7_13_47/0)_0,rgb(7_13_47/0.04)_28px,rgb(7_13_47/0.14)_56px,rgb(7_13_47/0.23)_84px,rgb(7_13_47/0.27)_112px)] opacity-0 transition-opacity duration-500 ease-out group-hover:opacity-100 group-focus-visible:opacity-100"
+                  <div className={`relative aspect-[16/10] overflow-hidden lg:aspect-video ${styles.destinationPhoto}`}>
+                    <Image
+                      src={d.photo}
+                      alt=""
+                      fill
+                      sizes="(min-width: 1360px) 437px, (min-width: 1024px) 32vw, (min-width: 640px) 46vw, 80vw"
+                      placeholder="blur"
+                      draggable={false}
+                      className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
                     />
-                    <p className="relative text-sm font-semibold text-white">#{i + 1}</p>
-                    <p className="relative font-serif text-[32px] leading-[38px] text-white">{d.name}</p>
-                    <p className="relative truncate text-sm text-white">{d.region}</p>
+                    <div className="absolute inset-0 bg-[#141a45]/30 opacity-0 dark:opacity-100" />
+                  </div>
+                  <div className={`px-5 py-4 ${styles.destinationCaption}`}>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="font-serif text-2xl leading-8 text-ink">{d.name}</p>
+                      <p className="shrink-0 text-xs font-semibold text-slate">#{i + 1}</p>
+                    </div>
+                    <p className={`mt-1 truncate text-sm text-slate ${styles.destinationRegion}`}>{d.region}</p>
                   </div>
                 </Link>
               </div>
@@ -483,7 +482,7 @@ export function PopularDestinations() {
       {/* Bottom row: a small pause/play button beside the position dots, with the
           arrows either side on phones. relative z-[1] keeps it clickable above
           the track's bottom bleed padding. */}
-      <div className="relative z-[1] mt-5 flex items-center justify-between gap-3 sm:justify-center">
+      <div className={`relative z-[1] mt-5 flex items-center justify-between gap-3 sm:justify-center ${styles.destinationFooter}`}>
         {arrow(-1, "sm:hidden")}
         <div className="flex items-center gap-3">
           <button

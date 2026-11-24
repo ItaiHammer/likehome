@@ -7,6 +7,7 @@ import { liveRatesEnabled } from "@/lib/liteapi/rates";
 import { RECOMMENDED_CARDS, recommendationSubtitle, toRecommendedCards } from "@/lib/recommendations";
 import { getRecommendedStays } from "@/utils/recommended-stays";
 import { TZ_COOKIE } from "@/utils/tz-cookie";
+import styles from "./home/HomeLayout.module.css";
 
 const TITLE = "Stays that feel like yours";
 const TITLE_ID = "recommended-stays-title";
@@ -37,7 +38,7 @@ export async function RecommendedStays({ count = RECOMMENDED_CARDS }: { count?: 
   const moreHref = `/search?${new URLSearchParams({ where: place.where })}`;
 
   return (
-    <section id="stays" aria-labelledby={TITLE_ID} className="scroll-mt-6">
+    <section id="stays" aria-labelledby={TITLE_ID} className={`scroll-mt-6 ${styles.stays}`}>
       <SectionHeading
         id={TITLE_ID}
         title={TITLE}
@@ -89,7 +90,7 @@ function NoRecommendations({ city }: { city: string }) {
 export function RecommendedStaysSkeleton({ count = RECOMMENDED_CARDS }: { count?: number }) {
   const block = "rounded-lg bg-disabled";
   return (
-    <section id="stays" aria-busy="true" aria-labelledby={TITLE_ID} className="scroll-mt-6">
+    <section id="stays" aria-busy="true" aria-labelledby={TITLE_ID} className={`scroll-mt-6 ${styles.stays}`}>
       <SectionHeading id={TITLE_ID} title={TITLE} />
       <p role="status" className="sr-only">
         Loading stays…
