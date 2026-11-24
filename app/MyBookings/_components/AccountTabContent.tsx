@@ -114,6 +114,20 @@ export function AccountTabContent({
         loadAccountData();
     }, []);
 
+    useEffect(() => {
+        fetch("/api/saved-travelers")
+            .then((res) => res.json())
+            .then(({ traveler }) => {
+                if (!traveler) return;
+                setPhone(traveler.phone ?? ""); setSavedPhone(traveler.phone ?? "");
+                setStreet(traveler.street ?? ""); setSavedStreet(traveler.street ?? "");
+                setCity(traveler.city ?? ""); setSavedCity(traveler.city ?? "");
+                setState(traveler.state ?? ""); setSavedState(traveler.state ?? "");
+                setZip(traveler.zip ?? ""); setSavedZip(traveler.zip ?? "");
+            })
+            .catch(() => setAccountError("We couldn’t load your account details."));
+    }, []);
+
     const detectedBrand = typedCardBrand(cardNumber);
 
     const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -263,6 +277,16 @@ export function AccountTabContent({
 
         if (zip && !/^\d{5}$/.test(zip.trim())) {
             setAccountError("ZIP code must be exactly 5 numeric digits.");
+            return;
+        }
+
+        const response = await fetch("/api/saved-travelers", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone, street, city, state, zip }),
+        }).catch(() => null);
+        if (!response?.ok) {
+            setAccountError("We couldn’t save your details. Please try again.");
             return;
         }
 

@@ -31,6 +31,9 @@ export type ValidationResult =
 
 export const MAX_NIGHTS = 30
 
+// Flat cancellation insurance premium. Here (not utils/reservations.ts) so the checkout page can show it.
+export const CANCEL_INSURANCE_PREMIUM = 20
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 /** Parses a YYYY-MM-DD string as a UTC date. Returns null if it isn't a real calendar date. */
