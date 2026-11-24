@@ -220,6 +220,22 @@ test('returns 404 if room is not found', async () => {
   assert.equal(mockEditCalls.length, 0)
 })
 
+// QA 4.8.4 (from #195): a change can't move the booking to a room at another hotel
+test('returns 400 when the new room is at a different hotel', async () => {
+  mockRoomResult = {
+    data: { id: 'room-9', hotel_id: 'hotel-2', price_per_night: 900, capacity: 4 },
+    error: null,
+  }
+  const req = createMockRequest({ room_id: 'room-9' })
+  const res = await PATCH(req, {
+    params: Promise.resolve({ id: 'res-1' }),
+  })
+
+  assert.equal(res.status, 400)
+  assert.match((await res.json()).error, /same hotel/)
+  assert.equal(mockEditCalls.length, 0)
+})
+
 test('returns 400 if guest count exceeds room capacity', async () => {
   const req = createMockRequest({ guests: 5 })
   const res = await PATCH(req, {
