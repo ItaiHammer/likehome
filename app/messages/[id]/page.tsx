@@ -43,8 +43,7 @@ export default async function MessagePage(props: PageProps<"/messages/[id]">) {
   const message = messages.find((m) => m.id === id);
   if (!message) notFound();
 
-  const needsStay = message.reservationId !== null || message.kind === "direct";
-  const [stays, today] = needsStay ? await Promise.all([getInboxStays(), guestToday()]) : [[], ""];
+  const [stays, today] = await Promise.all([getInboxStays(), guestToday()]);
   const stay = messageStay(message, stays, today);
 
   return (
@@ -53,7 +52,6 @@ export default async function MessagePage(props: PageProps<"/messages/[id]">) {
         message={message}
         regarding={regardingLine(message.hotelName, stay)}
         link={messageLink(message, stay)}
-        afterDelete={hubHref(view, true)}
       />
     </MessagesFrame>
   );

@@ -18,12 +18,7 @@ export function MessagesSkeleton({ rows }: { rows: number }) {
           <div className="mx-auto mt-8 max-w-[900px] rounded-[10px] border-2 border-edge bg-surface sm:mt-10">
             {rows > 0 ? (
               <>
-                <div className="flex justify-between gap-3 border-b border-edge px-4 py-5 sm:px-14">
-                  <div className="flex gap-2 sm:gap-[25px]">
-                    <div className={`h-[35px] w-[60px] ${block}`} />
-                    <div className={`h-[35px] w-[72px] ${block}`} />
-                    <div className={`hidden h-[35px] w-[116px] sm:block ${block}`} />
-                  </div>
+                <div className="flex justify-end border-b border-edge px-4 py-5 sm:px-14">
                   <div className={`h-[35px] w-[116px] ${block}`} />
                 </div>
                 <div className="space-y-6 px-4 py-6 sm:px-14">

@@ -2,7 +2,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  badgeLabel,
   bellSummary,
   emptyText,
   filterMessages,
@@ -36,7 +35,7 @@ const row = (overrides = {}) => ({
   ...overrides,
 })
 
-const inbox = (id, readAt = null, kind = 'direct', extra = {}) => ({
+const inbox = (id, readAt = null, extra = {}) => ({
   id,
   hotelId: 'h1',
   hotelName: 'Casa del Sol',
@@ -44,8 +43,6 @@ const inbox = (id, readAt = null, kind = 'direct', extra = {}) => ({
   body: 'Hello',
   createdAt: '2026-11-18T09:00:00Z',
   readAt,
-  kind,
-  reservationId: null,
   ...extra,
 })
 const READ = '2026-11-18T10:00:00Z'
@@ -59,8 +56,6 @@ test('an API row becomes an inbox message', () => {
     body: 'The pool will be closed for cleaning.',
     createdAt: '2026-11-18T09:00:00.123456+00:00',
     readAt: null,
-    kind: 'direct',
-    reservationId: null,
   })
   assert.equal(toInboxMessage(row({ read_at: '2026-11-18T10:00:00Z' })).readAt, '2026-11-18T10:00:00Z')
 })
@@ -84,25 +79,9 @@ test('a row without an id, subject or created_at is not a message', () => {
   for (const odd of [null, undefined, 'm1', 42, [], [row()]]) assert.equal(toInboxMessage(odd), null)
 })
 
-test('kind reads as direct unless the row says promotional, so rows from before the column work', () => {
-  assert.equal(toInboxMessage(row()).kind, 'direct')
-  assert.equal(toInboxMessage(row({ kind: null })).kind, 'direct')
-  assert.equal(toInboxMessage(row({ kind: 'spam' })).kind, 'direct')
-  assert.equal(toInboxMessage(row({ kind: 'direct' })).kind, 'direct')
-  assert.equal(toInboxMessage(row({ kind: 'promotional' })).kind, 'promotional')
-})
-
-test('reservation_id is carried when present and null otherwise', () => {
-  assert.equal(toInboxMessage(row({ reservation_id: 'r1' })).reservationId, 'r1')
-  assert.equal(toInboxMessage(row({ reservation_id: null })).reservationId, null)
-  assert.equal(toInboxMessage(row({ reservation_id: '' })).reservationId, null)
-})
-
-test('a message the traveler deleted (hidden_at set) is left out everywhere', () => {
-  assert.equal(toInboxMessage(row({ hidden_at: '2026-11-19T10:00:00Z' })), null)
-  assert.notEqual(toInboxMessage(row({ hidden_at: null })), null)
-  const list = toInboxMessages([row({ id: 'a' }), row({ id: 'b', hidden_at: '2026-11-19T10:00:00Z' })])
-  assert.deepEqual(list.map((m) => m.id), ['a'])
+test('columns the table does not have are ignored', () => {
+  const m = toInboxMessage(row({ kind: 'promotional', reservation_id: 'r1', hidden_at: '2026-11-19T10:00:00Z' }))
+  assert.deepEqual(Object.keys(m).sort(), ['body', 'createdAt', 'hotelId', 'hotelName', 'id', 'readAt', 'subject'])
 })
 
 test('odd optional fields still give a usable message', () => {
@@ -127,13 +106,14 @@ test('only unread messages count toward the badge', () => {
 })
 
 test('the badge is empty at zero, shows 1 to 9, and caps at 9+', () => {
-  assert.equal(badgeLabel(0), '')
-  assert.equal(badgeLabel(-3), '')
-  assert.equal(badgeLabel(Number.NaN), '')
-  assert.equal(badgeLabel(1), '1')
-  assert.equal(badgeLabel(9), '9')
-  assert.equal(badgeLabel(10), '9+')
-  assert.equal(badgeLabel(250), '9+')
+  const count = (unread) => mailBadge({ unread }).count
+  assert.equal(count(0), '')
+  assert.equal(count(-3), '')
+  assert.equal(count(Number.NaN), '')
+  assert.equal(count(1), '1')
+  assert.equal(count(9), '9')
+  assert.equal(count(10), '9+')
+  assert.equal(count(250), '9+')
 })
 
 test('a short preview is the body on one line with spaces tidied', () => {
@@ -165,90 +145,69 @@ test('the preview limit defaults to 90 characters', () => {
   assert.equal(preview(exact), exact)
 })
 
-test('the header menu counts unread per kind over the whole inbox and carries the newest three of each', () => {
+test('the header menu counts unread over the whole inbox and carries the newest five', () => {
   const long = 'word '.repeat(60)
-  const list = [
-    ...Array.from({ length: 5 }, (_, i) => ({ ...inbox(`d${i}`, i < 4 ? READ : null), body: long })),
-    inbox('p0', null, 'promotional'),
-    inbox('p1', READ, 'promotional'),
-    inbox('p2', null, 'promotional'),
-    inbox('p3', null, 'promotional'),
-  ]
+  const list = Array.from({ length: 8 }, (_, i) => ({ ...inbox(`m${i}`, i === 2 || i === 6 ? null : READ), body: long }))
   const summary = bellSummary(list)
-  // the one unread Direct is past the third, so the count can't come from the three alone
-  assert.equal(summary.unreadDirect, 1)
-  assert.equal(summary.unreadPromotional, 3)
-  assert.deepEqual(summary.direct.map((m) => m.id), ['d0', 'd1', 'd2'])
-  assert.deepEqual(summary.promotional.map((m) => m.id), ['p0', 'p1', 'p2'])
-  assert.deepEqual(summary.direct[0], { ...list[0], body: preview(long) })
+  // one unread is past the fifth, so the count can't come from the five alone
+  assert.equal(summary.unread, 2)
+  assert.deepEqual(summary.latest.map((m) => m.id), ['m0', 'm1', 'm2', 'm3', 'm4'])
+  assert.deepEqual(summary.latest[0], { ...list[0], body: preview(long) })
   assert.equal(list[0].body, long)
 })
 
-test('the header menu keeps inbox order (newest first) within each kind', () => {
-  const list = [inbox('p-new', null, 'promotional'), inbox('d-new'), inbox('p-old', null, 'promotional'), inbox('d-old')]
-  const summary = bellSummary(list)
-  assert.deepEqual(summary.direct.map((m) => m.id), ['d-new', 'd-old'])
-  assert.deepEqual(summary.promotional.map((m) => m.id), ['p-new', 'p-old'])
+test('the header menu keeps inbox order (newest first)', () => {
+  const list = [inbox('new'), inbox('mid', READ), inbox('old')]
+  assert.deepEqual(bellSummary(list).latest.map((m) => m.id), ['new', 'mid', 'old'])
 })
 
-test('the header menu takes another limit and copes with an empty or missing inbox', () => {
+test('the header menu takes another size and copes with an empty or missing inbox', () => {
   const list = [inbox('a'), inbox('b'), inbox('c', READ)]
-  assert.equal(bellSummary(list, 1).direct.length, 1)
-  assert.equal(bellSummary(list, 0).direct.length, 0)
-  assert.equal(bellSummary(list, 0).unreadDirect, 2)
-  assert.equal(bellSummary(list, Number.NaN).direct.length, 3)
-  const empty = { unreadDirect: 0, unreadPromotional: 0, direct: [], promotional: [] }
+  assert.equal(bellSummary(list, 1).latest.length, 1)
+  assert.equal(bellSummary(list, 0).latest.length, 0)
+  assert.equal(bellSummary(list, 0).unread, 2)
+  assert.equal(bellSummary(list, Number.NaN).latest.length, 3)
+  const empty = { unread: 0, latest: [] }
   assert.deepEqual(bellSummary([]), empty)
   assert.deepEqual(bellSummary(undefined), empty)
 })
 
-test('the mail badge shows the unread Direct count, capped at 9+', () => {
-  assert.deepEqual(mailBadge({ unreadDirect: 3, unreadPromotional: 0 }), { count: '3', dot: false, label: 'Messages, 3 unread' })
-  assert.deepEqual(mailBadge({ unreadDirect: 12, unreadPromotional: 0 }), { count: '9+', dot: false, label: 'Messages, 12 unread' })
+test('the mail badge shows the unread count, capped at 9+', () => {
+  assert.deepEqual(mailBadge({ unread: 3 }), { count: '3', label: 'Messages, 3 unread' })
+  assert.deepEqual(mailBadge({ unread: 9 }), { count: '9', label: 'Messages, 9 unread' })
+  assert.deepEqual(mailBadge({ unread: 12 }), { count: '9+', label: 'Messages, 12 unread' })
+  assert.deepEqual(mailBadge({ unread: 0 }), { count: '', label: 'Messages' })
+  assert.deepEqual(mailBadge(undefined), { count: '', label: 'Messages' })
 })
 
-test('the mail badge is a dot when only Promotional is unread, and Direct wins when both are', () => {
-  assert.deepEqual(mailBadge({ unreadDirect: 0, unreadPromotional: 2 }), { count: '', dot: true, label: 'Messages, new offers' })
-  assert.deepEqual(mailBadge({ unreadDirect: 1, unreadPromotional: 5 }), { count: '1', dot: false, label: 'Messages, 1 unread' })
-  assert.deepEqual(mailBadge({ unreadDirect: 0, unreadPromotional: 0 }), { count: '', dot: false, label: 'Messages' })
-  assert.deepEqual(mailBadge(undefined), { count: '', dot: false, label: 'Messages' })
-})
-
-test('the hub view reads type, unread and page from the search params', () => {
-  assert.deepEqual(hubView({}), { kind: 'all', unread: false, page: 1 })
-  assert.deepEqual(hubView({ type: 'direct', unread: '1', page: '3' }), { kind: 'direct', unread: true, page: 3 })
-  assert.deepEqual(hubView({ type: 'promotional' }), { kind: 'promotional', unread: false, page: 1 })
-  assert.deepEqual(hubView({ type: 'other', unread: 'yes', page: '-2' }), { kind: 'all', unread: false, page: 1 })
-  assert.deepEqual(hubView({ type: ['direct'], page: ['2'] }), { kind: 'all', unread: false, page: 1 })
-  assert.deepEqual(hubView(undefined), { kind: 'all', unread: false, page: 1 })
+test('the hub view reads unread and page from the search params, ignoring old type links', () => {
+  assert.deepEqual(hubView({}), { unread: false, page: 1 })
+  assert.deepEqual(hubView({ unread: '1', page: '3' }), { unread: true, page: 3 })
+  assert.deepEqual(hubView({ type: 'promotional', unread: '1' }), { unread: true, page: 1 })
+  assert.deepEqual(hubView({ unread: 'yes', page: '-2' }), { unread: false, page: 1 })
+  assert.deepEqual(hubView({ page: ['2'] }), { unread: false, page: 1 })
+  assert.deepEqual(hubView(undefined), { unread: false, page: 1 })
 })
 
 test('the hub query leaves out defaults, and round-trips through hubView', () => {
-  assert.equal(hubQuery({ kind: 'all', unread: false, page: 1 }), '')
-  assert.equal(hubQuery({ kind: 'direct', unread: true, page: 2 }), '?type=direct&unread=1&page=2')
-  assert.equal(hubQuery({ kind: 'all', unread: false, page: 1 }, true), '?deleted=1')
-  assert.equal(hubHref({ kind: 'promotional', unread: false, page: 1 }), '/messages?type=promotional')
-  const view = { kind: 'promotional', unread: true, page: 4 }
+  assert.equal(hubQuery({ unread: false, page: 1 }), '')
+  assert.equal(hubQuery({ unread: true, page: 2 }), '?unread=1&page=2')
+  assert.equal(hubHref({ unread: false, page: 3 }), '/messages?page=3')
+  assert.equal(hubHref({ unread: false, page: 1 }), '/messages')
+  const view = { unread: true, page: 4 }
   assert.deepEqual(hubView(Object.fromEntries(new URLSearchParams(hubQuery(view)))), view)
 })
 
-test('filters pick a kind, unread only combines with any of them, and All shows both kinds', () => {
-  const list = [inbox('d1'), inbox('d2', READ), inbox('p1', null, 'promotional'), inbox('p2', READ, 'promotional')]
-  const ids = (view) => filterMessages(list, view).map((m) => m.id)
-  assert.deepEqual(ids({ kind: 'all', unread: false }), ['d1', 'd2', 'p1', 'p2'])
-  assert.deepEqual(ids({ kind: 'direct', unread: false }), ['d1', 'd2'])
-  assert.deepEqual(ids({ kind: 'promotional', unread: false }), ['p1', 'p2'])
-  assert.deepEqual(ids({ kind: 'all', unread: true }), ['d1', 'p1'])
-  assert.deepEqual(ids({ kind: 'direct', unread: true }), ['d1'])
-  assert.deepEqual(ids({ kind: 'promotional', unread: true }), ['p1'])
-  assert.deepEqual(filterMessages(undefined, { kind: 'all', unread: false }), [])
+test('unread only keeps the unread messages in inbox order', () => {
+  const list = [inbox('a'), inbox('b', READ), inbox('c'), inbox('d', READ)]
+  assert.deepEqual(filterMessages(list, { unread: false }).map((m) => m.id), ['a', 'b', 'c', 'd'])
+  assert.deepEqual(filterMessages(list, { unread: true }).map((m) => m.id), ['a', 'c'])
+  assert.deepEqual(filterMessages(undefined, { unread: false }), [])
 })
 
-test('each filter has its own empty line', () => {
-  assert.equal(emptyText({ kind: 'all', unread: false }), 'No messages yet.')
-  assert.equal(emptyText({ kind: 'direct', unread: false }), 'No direct messages yet.')
-  assert.equal(emptyText({ kind: 'promotional', unread: true }), 'No unread promotional messages.')
-  assert.equal(emptyText({ kind: 'all', unread: true }), 'No unread messages.')
+test('each view has its own empty line', () => {
+  assert.equal(emptyText({ unread: false }), 'No messages yet.')
+  assert.equal(emptyText({ unread: true }), 'No unread messages.')
 })
 
 test('the hub pages 10 at a time, with pagination only past 10, and a page past the end shows the last', () => {
@@ -285,50 +244,41 @@ test('reservation rows become stay refs, dropping ones without an id or dates', 
   assert.deepEqual(toStayRefs(undefined), [])
 })
 
-test('a message with a reservation_id is about that stay, at its stage', () => {
-  const upcoming = messageStay(inbox('a', null, 'direct', { reservationId: 'r-next' }), stays, TODAY)
-  assert.deepEqual(upcoming, { reservationId: 'r-next', stage: 'upcoming', dates: 'Nov 25 - 28, 2026' })
-  assert.equal(messageStay(inbox('a', null, 'direct', { reservationId: 'r-now', hotelId: 'h2' }), stays, TODAY).stage, 'in-stay')
-  assert.equal(messageStay(inbox('a', null, 'direct', { reservationId: 'r-past' }), stays, TODAY).stage, 'past')
-  assert.equal(messageStay(inbox('a', null, 'direct', { reservationId: 'r-off' }), stays, TODAY).stage, 'cancelled')
-  assert.equal(messageStay(inbox('a', null, 'direct', { reservationId: 'gone' }), stays, TODAY), null)
+test('a message is about the nearest stay at its hotel to when it was sent, at that stay\'s stage', () => {
+  const afterStay = inbox('a', null, { createdAt: '2026-10-24T09:00:00Z' })
+  assert.deepEqual(messageStay(afterStay, stays, TODAY), { reservationId: 'r-past', stage: 'past', dates: 'Oct 20 - 23, 2026' })
+  const beforeNext = inbox('a', null, { createdAt: '2026-11-18T09:00:00Z' })
+  assert.deepEqual(messageStay(beforeNext, stays, TODAY), { reservationId: 'r-next', stage: 'upcoming', dates: 'Nov 25 - 28, 2026' })
+  const during = inbox('a', null, { hotelId: 'h2', createdAt: '2026-11-20T09:00:00Z' })
+  assert.equal(messageStay(during, stays, TODAY).stage, 'in-stay')
 })
 
-test('a Direct message without a reservation_id falls back to the nearest stay at that hotel, skipping cancelled ones', () => {
-  const afterStay = inbox('a', null, 'direct', { createdAt: '2026-10-24T09:00:00Z' })
-  assert.equal(messageStay(afterStay, stays, TODAY).reservationId, 'r-past')
-  const beforeNext = inbox('a', null, 'direct', { createdAt: '2026-11-18T09:00:00Z' })
-  assert.equal(messageStay(beforeNext, stays, TODAY).reservationId, 'r-next')
-  assert.equal(messageStay(inbox('a', null, 'direct', { hotelId: 'h9' }), stays, TODAY), null)
+test('cancelled stays and other hotels\' stays are never matched', () => {
+  // r-off (cancelled) contains the send date, so r-next wins
+  assert.equal(messageStay(inbox('a', null, { createdAt: '2026-11-18T09:00:00Z' }), stays, TODAY).reservationId, 'r-next')
+  assert.equal(messageStay(inbox('a', null, { hotelId: 'h9' }), stays, TODAY), null)
+  const onlyCancelled = toStayRefs([{ id: 'x', hotel_id: 'h1', check_in: '2026-11-17', check_out: '2026-11-19', status: 'cancelled' }])
+  assert.equal(messageStay(inbox('a'), onlyCancelled, TODAY), null)
   assert.equal(messageStay(inbox('a'), [], TODAY), null)
 })
 
-test('a Promotional message without a reservation_id has no stay', () => {
-  assert.equal(messageStay(inbox('p', null, 'promotional'), stays, TODAY), null)
-  assert.equal(messageStay(inbox('p', null, 'promotional', { reservationId: 'r-past' }), stays, TODAY).stage, 'past')
-})
-
-test('the stay line names the stage and dates, or "Special offer" for a promotion with no stay', () => {
+test('the stay line names the stage and dates, and is empty with no stay', () => {
   const stay = (stage) => ({ reservationId: 'r', stage, dates: 'Oct 20 - 23, 2026' })
-  assert.equal(stayLine(inbox('a'), stay('past')), 'Past stay · Oct 20 - 23, 2026')
-  assert.equal(stayLine(inbox('a'), stay('upcoming')), 'Upcoming stay · Oct 20 - 23, 2026')
-  assert.equal(stayLine(inbox('a'), stay('in-stay')), 'Current stay · Oct 20 - 23, 2026')
-  assert.equal(stayLine(inbox('p', null, 'promotional'), stay('past')), 'Past stay · Oct 20 - 23, 2026')
-  assert.equal(stayLine(inbox('p', null, 'promotional'), null), 'Special offer')
-  assert.equal(stayLine(inbox('a'), null), '')
+  assert.equal(stayLine(stay('past')), 'Past stay · Oct 20 - 23, 2026')
+  assert.equal(stayLine(stay('upcoming')), 'Upcoming stay · Oct 20 - 23, 2026')
+  assert.equal(stayLine(stay('in-stay')), 'Current stay · Oct 20 - 23, 2026')
+  assert.equal(stayLine(null), '')
 })
 
-test('the detail page says which stay it is about and links to the reservation or the listing', () => {
+test('the detail page says which stay it is about and links to the reservation, else the listing', () => {
   const past = { reservationId: 'r-1', stage: 'past', dates: '' }
   assert.equal(regardingLine('Pacific Terrace', past), 'Regarding your previous stay at Pacific Terrace')
   assert.equal(regardingLine('Casa Maré', { ...past, stage: 'upcoming' }), 'Regarding your upcoming stay at Casa Maré')
   assert.equal(regardingLine('Casa Maré', { ...past, stage: 'in-stay' }), 'Regarding your current stay at Casa Maré')
   assert.equal(regardingLine('Casa Maré', null), '')
   assert.deepEqual(messageLink(inbox('a'), past), { href: '/MyBookings/r-1', label: 'View reservation' })
-  assert.equal(messageLink(inbox('a'), null), null)
-  assert.deepEqual(messageLink(inbox('p', null, 'promotional'), null), { href: '/reserve/h1', label: 'View listing' })
-  assert.deepEqual(messageLink(inbox('p', null, 'promotional'), past), { href: '/reserve/h1', label: 'View listing' })
-  assert.equal(messageLink(inbox('p', null, 'promotional', { hotelId: '' }), null), null)
+  assert.deepEqual(messageLink(inbox('a'), null), { href: '/reserve/h1', label: 'View listing' })
+  assert.equal(messageLink(inbox('a', null, { hotelId: '' }), null), null)
 })
 
 // Built from local dates so the calendar wording is the same in any time zone
