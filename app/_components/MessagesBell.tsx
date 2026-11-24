@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { API_ROUTES, PAGE_ROUTES } from "@/constants/routes";
-import { bellSummary, KIND_LABEL, mailBadge, relativeTime, toInboxMessages, type BellSummary, type InboxMessage, type MessageKind } from "@/lib/messages";
+import { bellSummary, mailBadge, relativeTime, toInboxMessages, type BellSummary, type InboxMessage } from "@/lib/messages";
 import { ArrowIcon, arrowSlideClass, headerIconButtonClass as bellClass, Popover, sectionLinkClass } from "./ui";
 import { useCurrentMinute } from "./useCurrentMinute";
 import { getAccountSnapshot, subscribeAccount, UNKNOWN_ACCOUNT } from "./accountChange";
@@ -13,7 +13,7 @@ const focusRing = "focus-visible:outline-2 focus-visible:-outline-offset-2 focus
 
 const cascadeAt = (i: number) => ({ "--i": i }) as CSSProperties;
 
-const NO_MESSAGES: BellSummary = { unreadDirect: 0, unreadPromotional: 0, direct: [], promotional: [] };
+const NO_MESSAGES: BellSummary = { unread: 0, latest: [] };
 
 // Travelers only; `summary` is null when the server couldn't read the inbox
 export function MessagesBell({ summary, accountId }: { summary: BellSummary | null; accountId: string }) {
@@ -42,6 +42,7 @@ async function fetchSummary(signal: AbortSignal): Promise<SummaryResult> {
 
 type Request = { from: BellSummary | null };
 
+// Travelers only; `summary` is null when the server couldn't read the inbox.
 // The root layout isn't re-rendered on client-side navigation, so the server's props are only a
 // starting point: the bell reads the inbox again on each navigation and each time the panel opens.
 // A result counts only while the props it started from are still the current ones, so newer
@@ -105,7 +106,7 @@ function InboxBell({ summary }: { summary: BellSummary | null }) {
         trigger={
           <>
             <MailIcon />
-            {(badge.count || badge.dot) && (
+            {badge.count && (
               <span
                 aria-hidden
                 className="absolute -right-0.5 -top-0.5 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-blue px-[3px] text-xs leading-none tabular-nums text-on-blue ring-2 ring-surface forced-colors:border"
@@ -127,7 +128,6 @@ function InboxBell({ summary }: { summary: BellSummary | null }) {
 // Its own component so each open re-renders it and reads a fresh "now"
 function InboxPanel({ summary, loading, onRetry, close }: { summary: BellSummary | null; loading: boolean; onRetry: () => void; close: () => void }) {
   const now = useCurrentMinute();
-  const sections = (["direct", "promotional"] as MessageKind[]).filter((kind) => summary && summary[kind].length > 0);
 
   return (
     <div className="flex flex-col">
@@ -165,25 +165,18 @@ function InboxPanel({ summary, loading, onRetry, close }: { summary: BellSummary
             Try again
           </button>
         </div>
-      ) : sections.length === 0 ? (
+      ) : summary.latest.length === 0 ? (
         <p className="cascade border-t border-edge py-6 text-sm text-slate" style={cascadeAt(1)}>
           No messages yet.
         </p>
       ) : (
-        sections.map((kind, i) => (
-          <section key={kind} aria-label={KIND_LABEL[kind]} className="cascade border-t border-edge pt-2" style={cascadeAt(i + 1)}>
-            <h3 aria-hidden className="text-sm text-slate">
-              {KIND_LABEL[kind]}
-            </h3>
-            <ul className="pb-1">
-              {summary[kind].map((message) => (
-                <li key={message.id}>
-                  <MessageLink message={message} now={now} onOpen={close} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))
+        <ul aria-label="Latest messages" className="cascade border-t border-edge pb-1 pt-2" style={cascadeAt(1)}>
+          {summary.latest.map((message) => (
+            <li key={message.id}>
+              <MessageLink message={message} now={now} onOpen={close} />
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

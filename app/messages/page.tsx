@@ -23,7 +23,7 @@ export default async function MessagesPage(props: PageProps<"/messages">) {
   const traveler = await requireTraveler(back);
 
   const frame = (children: React.ReactNode) => (
-    <MessagesFrame eyebrow="Messages" title="Your messages" subtitle="Updates and offers from your stays.">
+    <MessagesFrame eyebrow="Messages" title="Your messages" subtitle="Updates from your stays.">
       {children}
     </MessagesFrame>
   );
@@ -36,8 +36,8 @@ export default async function MessagesPage(props: PageProps<"/messages">) {
   const [stays, today] = shown.items.length > 0 ? await Promise.all([getInboxStays(), guestToday()]) : [[], ""];
   const rows = shown.items.map((message) => ({
     message: { ...message, body: preview(message.body) },
-    stayLine: stayLine(message, messageStay(message, stays, today)),
+    stayLine: stayLine(messageStay(message, stays, today)),
   }));
 
-  return frame(<MessageHub rows={rows} view={{ ...view, page: shown.page }} pages={shown.pages} deleted={searchParams.deleted === "1"} />);
+  return frame(<MessageHub rows={rows} view={{ ...view, page: shown.page }} pages={shown.pages} />);
 }

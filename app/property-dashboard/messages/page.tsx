@@ -10,8 +10,13 @@ export const metadata: Metadata = {
   title: "Reservation messages — LikeHome",
 };
 
-export default async function MessagesPage() {
-  const user = await getCurrentUser();
+export default async function MessagesPage(
+    props: PageProps<"/property-dashboard/messages">
+) {
+    const searchParams = await props.searchParams;
+    const initialView = searchParams.view === "compose" ? "compose" : "sent";
+
+    const user = await getCurrentUser();
 
   const account = user
       ? await getAccount(user.id)
@@ -41,6 +46,7 @@ export default async function MessagesPage() {
             </p>
         ) : (
             <OwnerMessagesDashboard
+                initialView={initialView}
                 hotels={(hotels.data ?? []).map((hotel) => ({
                   id: String(hotel.id),
                   name: String(hotel.name),

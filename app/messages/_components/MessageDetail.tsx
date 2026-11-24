@@ -3,32 +3,22 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Toast, useToast } from "@/app/_components/Toast";
 import { ArrowIcon, arrowSlideClass, sectionLinkClass } from "@/app/_components/ui";
 import type { InboxMessage } from "@/lib/messages";
-import { MessageMenu, useDeleteMessage } from "./DeleteMessage";
 import { sendRead } from "./messageApi";
 
 export function MessageDetail({
   message,
   regarding,
   link,
-  afterDelete,
 }: {
   message: InboxMessage;
   regarding: string;
   link: { href: string; label: string } | null;
-  /** The hub to return to once the message is deleted */
-  afterDelete: string;
 }) {
   const router = useRouter();
   const [attempt, setAttempt] = useState(0);
   const [readState, setReadState] = useState<{ id: string; status: "pending" | "failed" } | null>(null);
-  const { toast, show, dismiss } = useToast();
-  const { ask, dialog } = useDeleteMessage(({ error }) => {
-    if (error) show({ title: "Couldn’t delete message", body: error, tone: "error" });
-    else router.push(afterDelete);
-  });
 
   // Opening a message marks it read; the refresh updates the header's unread mark
   useEffect(() => {
@@ -46,12 +36,9 @@ export function MessageDetail({
   }, [message.id, message.readAt, attempt, router]);
 
   return (
-    <article aria-label="Message" className="relative mx-auto max-w-[900px] rounded-[10px] border-2 border-edge bg-surface px-5 pb-10 pt-8 sm:px-[47px] sm:pb-[45px] sm:pt-[45px]">
-      <div className="absolute right-2 top-3 sm:top-3.5">
-        <MessageMenu vertical label="Message options" onDelete={() => ask(message.id)} />
-      </div>
+    <article aria-label="Message" className="mx-auto max-w-[900px] rounded-[10px] border-2 border-edge bg-surface px-5 pb-10 pt-8 sm:px-[47px] sm:pb-[45px] sm:pt-[45px]">
       {!message.readAt && readState?.id === message.id && (
-        <div role="status" className="mb-4 pr-10 text-sm text-danger">
+        <div role="status" className="mb-4 text-sm text-danger">
           {readState.status === "pending" ? "Marking this message as read…" : (
             <>
               <p>We couldn’t mark this message as read. It stays unread until you try again.</p>
@@ -70,7 +57,7 @@ export function MessageDetail({
         </div>
       )}
       {/* Plain text: a hotel's message is never rendered as HTML */}
-      <div className="whitespace-pre-line break-words pr-10 text-base leading-5 text-ink">{message.body}</div>
+      <div className="whitespace-pre-line break-words text-base leading-5 text-ink">{message.body}</div>
       {(regarding || link) && (
         <div className="mt-8 border-t border-edge pt-8">
           {regarding && <p className="text-base leading-5 text-ink">{regarding}</p>}
@@ -82,8 +69,6 @@ export function MessageDetail({
           )}
         </div>
       )}
-      {dialog}
-      <Toast toast={toast} onDismiss={dismiss} />
     </article>
   );
 }

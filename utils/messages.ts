@@ -3,8 +3,8 @@ import { createClient } from '@/utils/supabase/server'
 
 // One-way hotel -> guest messages, one row per recipient (read_at is that recipient's read status).
 // RLS: a guest sees only their own messages, an owner sees only messages from hotels they own.
-// Messages are kept for reference, so nothing is deleted. After sending, a recipient can set read_at
-// (markMessageRead) and hidden_at (hideMessage, their "delete", which only hides it from them).
+// Messages are kept for reference, so there is no update or delete. The only change allowed after
+// sending is read_at, which markMessageRead sets.
 
 // Send one message to one guest. The hotel must be owned by the signed-in user.
 export async function createMessage(message: {
@@ -91,21 +91,6 @@ export async function markMessageRead(id: string) {
     .is('read_at', null)
     .select()
   return { data, error }
-}
-
-// Hides a message from its recipient. Fails until the messages table has a hidden_at column the
-// recipient may update; count 0 means no visible message of theirs has that id. No RETURNING, so the
-// hidden row never has to pass the SELECT policy.
-export async function hideMessage(id: string, recipientId: string) {
-  const cookieStore = await cookies()
-  const supabase = createClient(cookieStore)
-  const { count, error } = await supabase
-    .from('messages')
-    .update({ hidden_at: new Date().toISOString() }, { count: 'exact' })
-    .eq('id', id)
-    .eq('recipient_id', recipientId)
-    .is('hidden_at', null)
-  return { count, error }
 }
 
 // Guests who have a reservation at this hotel, for picking recipients. Empty unless the

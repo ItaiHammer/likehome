@@ -53,7 +53,7 @@ test('business: guests, properties and how they are doing, before the shared sec
       title: 'Ready for your guests.',
       body: 'See who’s arriving and keep your places up to date.',
       shortcuts: [
-        { label: 'Message guests', hint: 'Write to guests who booked', href: '/property-dashboard/messages', icon: 'messages' },
+        { label: 'Message guests', hint: 'Write to guests who booked', href: "/property-dashboard/messages?view=compose", icon: 'messages' },
         { label: 'Add property', hint: 'List a new place', href: '/listings/new', icon: 'add' },
       ],
     },
