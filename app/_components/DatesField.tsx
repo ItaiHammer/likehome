@@ -15,10 +15,12 @@ export function DatesField({
   className = "",
   initialCheckIn = "",
   initialCheckOut = "",
+  fieldLabel,
 }: {
   className?: string;
   initialCheckIn?: string;
   initialCheckOut?: string;
+  fieldLabel?: string;
 }) {
   // Empty during the server render; filled in from the browser after hydration
   const timeZone = useSyncExternalStore(noSubscribe, browserTimeZone, () => "");
@@ -88,10 +90,14 @@ export function DatesField({
         // after: covers the whole segment, padding included, so a click anywhere in it opens the calendar
         className={`min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 focus-visible:outline-hidden ${label ? "text-ink" : "text-slate"}`}
       >
+        {fieldLabel && <span aria-hidden className="mb-0.5 hidden text-sm font-semibold text-ink lg:block lg:text-base">
+          {fieldLabel}
+          {checkIn && checkOut && <span className="ml-2 text-xs font-normal text-slate">· {nights} {nights === 1 ? "night" : "nights"}</span>}
+        </span>}
         {checkIn && checkOut ? (
           <span className="flex min-w-0 flex-col leading-tight">
             <span className="truncate text-base">{dates}</span>
-            <span className="mt-1 text-xs font-medium text-slate">
+            <span className={`mt-1 text-xs font-medium text-slate${fieldLabel ? " lg:hidden" : ""}`}>
               {nights} {nights === 1 ? "night" : "nights"}
             </span>
           </span>

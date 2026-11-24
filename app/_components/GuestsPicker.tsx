@@ -15,10 +15,12 @@ export function GuestsPicker({
   className = "",
   initialAdults = 2,
   initialChildren = 0,
+  fieldLabel,
 }: {
   className?: string;
   initialAdults?: number;
   initialChildren?: number;
+  fieldLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [counts, setCounts] = useState<Counts>({
@@ -74,6 +76,7 @@ export function GuestsPicker({
         className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-base text-ink outline-none after:absolute after:inset-0 focus-visible:outline-hidden"
       >
         <span className="truncate">
+          {fieldLabel && <span aria-hidden className="mb-0.5 hidden text-sm font-semibold text-ink lg:block lg:text-base">{fieldLabel}</span>}
           {total} {total === 1 ? "guest" : "guests"}
         </span>
         <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-slate transition ${open ? "rotate-180" : ""}`} fill="currentColor" aria-hidden>

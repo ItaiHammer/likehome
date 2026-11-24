@@ -349,13 +349,3 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
   ) !important;
   border-image: none !important;
 }
-
-.standard-return-button:hover {
-  background-image: none !important;
-  background-color: color-mix(
-          in srgb,
-          var(--blue) 18%,
-          var(--surface) 82%
-  ) !important;
-  border-image: none !important;
-}

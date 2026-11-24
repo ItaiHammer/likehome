@@ -20,7 +20,6 @@ import { RotatingPlaceholder } from "./placeholders";
 import { DatesField } from "./DatesField";
 import { DestinationInput } from "./DestinationInput";
 import { GuestsPicker } from "./GuestsPicker";
-import { SearchDrift } from "./SearchDrift";
 import { SearchFiltersPicker, type SearchFilterValues } from "./SearchFiltersPicker";
 import { ChevronIcon } from "./ui";
 
@@ -104,7 +103,7 @@ function AskAiButton({
       type="button"
       aria-pressed="false"
       onClick={onClick}
-      className={`flex shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#8B5CF6,#4C79BD,#49B6C8,#F09A8A)] p-[3px] transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#8B5CF6,#4C79BD,#49B6C8,#F09A8A)] p-[3px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${className}`}
       title="Search with AI"
     >
       <span
@@ -131,12 +130,15 @@ export function SearchExperience({
   initialMode = initialValues.aiPrompt ? "ai" : "standard",
   compact = false,
   hideFilters = false,
+  presentation = "default",
 }: {
   initialValues?: SearchInitialValues;
   initialMode?: SearchMode;
   compact?: boolean;
   hideFilters?: boolean;
+  presentation?: "default" | "home";
 }) {
+  const home = presentation === "home" && !compact;
   const [mode, setMode] = useState<SearchMode>(initialMode);
   const [fieldStart, setFieldStart] = useState(() => startFrom(initialValues));
   const router = useRouter();
@@ -261,9 +263,9 @@ export function SearchExperience({
     tags: initialValues.tags,
   };
 
-  const field = compact
+  const field = (compact
     ? "flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 md:px-3.5 md:py-3.5 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:rounded-xl has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-2 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-inset has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-blue"
-    : "flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3 md:py-5 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:rounded-xl has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-2 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-inset has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-blue";
+    : "flex min-w-0 flex-1 items-center gap-2.5 px-4 py-3 md:py-5 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:rounded-xl has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-2 has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-inset has-[[data-trigger]:focus-visible:not([data-pointer-focus])]:ring-blue") + (home ? " lg:py-0.5" : "");
 
   // Desktop: a short line centered on each segment's left edge, between the fields
   const divider =
@@ -271,15 +273,15 @@ export function SearchExperience({
 
   const barPadding = compact ? "p-1.5 md:py-0" : "p-2 md:py-0";
   // On tablets Search and Ask AI sit under the fields, so picked dates and the guest count fit in the row
-  const searchButtonSize = compact ? "h-12 lg:h-auto lg:w-[56px]" : "h-14 lg:h-auto lg:w-[66px]";
-  const toggleSize = compact ? "h-12 lg:h-auto lg:w-[54px]" : "h-14 lg:h-auto lg:w-[58px]";
+  const searchButtonSize = compact ? "h-12 lg:h-auto lg:w-[56px]" : home ? "h-12 lg:h-auto lg:w-[144px] lg:text-lg" : "h-14 lg:h-auto lg:w-[66px]";
+  const toggleSize = compact ? "h-12 lg:h-auto lg:w-[54px]" : home ? "h-12 lg:h-auto lg:w-[58px]" : "h-14 lg:h-auto lg:w-[58px]";
   // Homepage: once the buttons fit beside the fields, the whole form becomes the white bar with Search and
   // Ask AI inside its right end, so it's one piece centered under the title at any width. The compact bar
   // on /search keeps its buttons outside.
   const barSurface = "rounded-2xl border border-(--bar-edge) bg-surface/80 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md";
   const row = compact
     ? "lg:flex-row"
-    : "lg:flex-row lg:gap-2 lg:rounded-2xl lg:border lg:border-(--bar-edge) lg:bg-surface/80 lg:p-2 lg:shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] lg:backdrop-blur-md";
+    : `lg:flex-row lg:gap-2 lg:rounded-2xl lg:border lg:border-(--bar-edge) lg:bg-surface/80 ${home ? "lg:h-20 lg:p-3" : "lg:p-2"} lg:shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] lg:backdrop-blur-md`;
   const barCell = compact ? "" : "lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none";
   const buttonsCell = "lg:contents";
   const insideBar = compact ? "" : "lg:rounded-xl lg:shadow-none";
@@ -310,7 +312,7 @@ export function SearchExperience({
   };
 
   return (
-    <SearchDrift>
+    <div className="theme-fade-keep">
       {mode === "standard" ? (
         <form
           ref={formRef}
@@ -366,7 +368,8 @@ export function SearchExperience({
               }`}
             >
               <DestinationInput
-                className={`${field} sm:col-span-1 sm:border-b sm:border-r sm:border-edge/60 md:flex-[1.45] md:border-0 lg:flex-[1.6] ${
+                fieldLabel={home ? "Where" : undefined}
+                className={`${field} sm:col-span-1 sm:border-b sm:border-r sm:border-edge/60 md:flex-[1.45] md:border-0 ${home ? "lg:flex-[1.4]" : "lg:flex-[1.6]"} ${
                   collapsible ? "max-sm:col-span-2" : ""
                 }`}
                 initialValue={initialValues.where ?? ""}
@@ -376,6 +379,7 @@ export function SearchExperience({
                 recentsOwner={searchOwner}
               />
               <DatesField
+                fieldLabel={home ? "Dates" : undefined}
                 key={`dates-${fieldStart.n}`}
                 className={`${field} ${divider} sm:col-span-1 sm:border-b sm:border-edge/60 md:flex-[1.15] md:border-0 ${
                   collapsible ? `${datesHalf} max-sm:border-t max-sm:border-edge/60` : ""
@@ -384,6 +388,7 @@ export function SearchExperience({
                 initialCheckOut={fieldStart.checkOut}
               />
               <GuestsPicker
+                fieldLabel={home ? "Guests" : undefined}
                 key={`guests-${fieldStart.n}`}
                 className={`${field} ${divider} sm:border-r sm:border-edge/60 md:border-0 ${
                   collapsible ? `${guestsHalf} max-sm:border-t max-sm:border-edge/60` : ""
@@ -400,7 +405,7 @@ export function SearchExperience({
                 </>
               ) : (
                 <SearchFiltersPicker
-                  className={`${field} ${divider} md:flex-none md:justify-center ${compact ? "md:w-[76px]" : "md:w-[88px]"} ${
+                  className={`${field} ${divider} md:flex-none md:justify-center ${compact || home ? "md:w-[76px]" : "md:w-[88px]"} ${
                     collapsible ? filtersBesideWhere : ""
                   }`}
                   initialValues={filters}
@@ -413,10 +418,10 @@ export function SearchExperience({
                 type="submit"
                 aria-label="Search"
                 title="Search"
-                className={`flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue text-base font-semibold text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,translate] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue lg:flex-none ${searchButtonSize} ${insideBar}`}
+                className={`flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue text-base font-semibold text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue lg:flex-none ${searchButtonSize} ${insideBar}`}
               >
                 <SearchIcon className={compact ? "h-5 w-5" : "h-6 w-6"} />
-                <span className="lg:sr-only">Search</span>
+                <span className={home ? "" : "lg:sr-only"}>Search</span>
               </button>
               <AskAiButton
                 // detail is 0 when Enter or Space pressed the button
@@ -476,7 +481,7 @@ export function SearchExperience({
               aria-label={aiBusy ? "Searching with AI" : "Search with AI"}
               title="Search with AI"
               aria-disabled={aiBusy}
-              className={`flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue text-base font-semibold text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] transition-[background-color,translate] duration-200 hover:-translate-y-0.5 hover:bg-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue aria-disabled:cursor-progress lg:flex-none ${searchButtonSize} ${insideBar}`}
+              className={`flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue text-base font-semibold text-on-blue shadow-[0_18px_40px_-22px_rgba(68,115,181,0.9)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue aria-disabled:cursor-progress lg:flex-none ${searchButtonSize} ${insideBar}`}
             >
               {aiBusy ? (
                 <span className={`animate-spin rounded-full border-2 border-on-blue/40 border-t-on-blue ${compact ? "h-5 w-5" : "h-6 w-6"}`} aria-hidden />
@@ -489,7 +494,7 @@ export function SearchExperience({
                 type="button"
                 aria-pressed="true"
                 onClick={(e) => switchMode("standard", e.detail > 0)}
-                className={`standard-return-button flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl text-blue transition-[border-color,color,background-color,translate] duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue lg:flex-none ${toggleSize} ${insideBar}`}
+                className={`standard-return-button flex flex-1 shrink-0 items-center justify-center gap-2 rounded-2xl text-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue lg:flex-none ${toggleSize} ${insideBar}`}
                 title="Return to standard search"
                 aria-label="Return to standard search"
             >
@@ -508,6 +513,6 @@ export function SearchExperience({
         )}
         </>
       )}
-    </SearchDrift>
+    </div>
   );
 }

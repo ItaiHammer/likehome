@@ -110,6 +110,7 @@ export function DestinationInput({
   autoFocusFrom,
   onPickRecent,
   recentsOwner,
+  fieldLabel,
 }: {
   className?: string;
   initialValue?: string;
@@ -118,6 +119,7 @@ export function DestinationInput({
   autoFocusFrom?: "keyboard" | "pointer";
   onPickRecent?: (search: RecentSearch) => void;
   recentsOwner?: SearchOwner;
+  fieldLabel?: string;
 }) {
   const listId = useId();
   const [query, setQuery] = useState(initialValue);
@@ -257,7 +259,8 @@ export function DestinationInput({
     >
       <PinIcon className="h-5 w-5 shrink-0 text-slate" />
       {/* The placeholder is drawn over the empty field so it can roll */}
-      <span className="relative flex min-w-0 flex-1 items-center">
+      <span className={`relative flex min-w-0 flex-1 items-center${fieldLabel ? " lg:mt-6" : ""}`}>
+        {fieldLabel && <span aria-hidden className="absolute bottom-full left-0 mb-1 hidden text-sm font-semibold text-ink lg:block lg:text-base">{fieldLabel}</span>}
         <input
           ref={inputRef}
           name="where"
