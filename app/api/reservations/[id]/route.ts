@@ -122,6 +122,13 @@ export async function PATCH(
     return Response.json({ error: 'Room not found.' }, { status: 404 })
   }
 
+  // A change stays at the booked hotel. room_id comes from the client and the database takes the
+  // hotel from the room, so without this a booking could be moved to any room at any hotel without
+  // paying the difference (QA 4.8.4, from Yoomi's #195).
+  if (room.hotel_id !== curReservation.hotel_id) {
+    return Response.json({ error: 'You can only move to another room at the same hotel.' }, { status: 400 })
+  }
+
   // Capacity
   const capacityError = checkCapacity(input.guests, room)
   if (capacityError) {
