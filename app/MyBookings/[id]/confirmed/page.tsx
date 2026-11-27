@@ -9,7 +9,7 @@ import { countNights } from "@/utils/reservation-logic";
 import { guestToday } from "@/utils/guest-today";
 import { getPaymentsByReservation } from "@/utils/payments";
 import { getPointsBalance } from "@/utils/points";
-import { getPointsUsedOnBooking } from "@/utils/rewards";
+import { getPointsEarnedOnBooking, getPointsUsedOnBooking } from "@/utils/rewards";
 import { getAmountPaid } from "@/utils/transactions";
 import { getHotelStay } from "../../../reserve/[slug]/hotelStay";
 import { HotelPhoto } from "../../_components/HotelPhoto";
@@ -27,15 +27,18 @@ async function loadConfirmation(id: string, today: string) {
   const { userId, reservation: r } = await loadReservation(id, `${PAGE_ROUTES.MY_BOOKINGS}/${id}/confirmed`);
   // A booking whose payment failed is cancelled by /api/checkout, so there's nothing to confirm
   if (r.status === "cancelled") redirect(`${PAGE_ROUTES.MY_BOOKINGS}/${id}`);
-  const [stay, payments, amountPaid, pointsUsed, points] = await Promise.all([
+  const [stay, payments, amountPaid, pointsUsed, pointsEarned, points] = await Promise.all([
     getHotelStay(r.hotel_id),
     getPaymentsByReservation(r.id),
     getAmountPaid(r.id),
     getPointsUsedOnBooking(r.id),
+    getPointsEarnedOnBooking(r.id),
     getPointsBalance(userId),
   ]);
   // The rewards card is extra: if points can't be read, it's left out instead of failing the page
-  const rewards = pointsUsed.error || points.error ? null : { used: pointsUsed.data, balance: points.balance };
+  const rewards = pointsUsed.error || pointsEarned.error || points.error
+    ? null
+    : { used: pointsUsed.data, earned: pointsEarned.data, balance: points.balance };
   // payments.card_number holds only the last 4 digits; there's no card brand column
   const last4 = (payments.data?.[0]?.card_number as string | undefined) ?? null;
   // What was charged, which a later change to the booking doesn't alter (changes aren't charged yet).
@@ -61,7 +64,13 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
         roomName: sampleData.rooms.find((r) => r.id === sampleData.booking.roomId)?.name ?? null,
         last4: "4242",
         paid: Math.max(0, sampleData.booking.total - pointsToDollars(26850)),
-        rewards: { used: 26850, balance: SAMPLE_BALANCE },
+        rewards: {
+          used: 26850,
+          earned: sampleData.booking.checkOut < today
+            ? Math.floor(Math.max(0, sampleData.booking.total - pointsToDollars(26850)))
+            : 0,
+          balance: SAMPLE_BALANCE,
+        },
       }
     : await loadConfirmation(id, today);
   if (!data) notFound();
@@ -145,6 +154,7 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
       {rewards && (
         <RewardsUsed
           used={rewards.used}
+          earned={rewards.earned}
           balance={rewards.balance}
           shortfall={pointsShortfall(shownPointsParam(shownParam), rewards.used)}
           paid={paid}
@@ -163,7 +173,7 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
 }
 
 // Figma frame 07's "Your rewards" card, without "You'll earn": checkout_reservation records points spent, nothing records points earned yet
-function RewardsUsed({ used, balance, shortfall, paid, href }: { used: number; balance: number; shortfall: number; paid: number | null; href: string }) {
+function RewardsUsed({ used, earned, balance, shortfall, paid, href }: { used: number; earned: number; balance: number; shortfall: number; paid: number | null; href: string }) {
   return (
     <Card as="section" tone="tint" className="mt-6">
       <p className="text-sm font-semibold uppercase tracking-[0.08em] text-blue-dark">Your rewards</p>
@@ -171,6 +181,12 @@ function RewardsUsed({ used, balance, shortfall, paid, href }: { used: number; b
         {used > 0 ? `You saved ${money(pointsToDollars(used))} with points` : "Your points"}
       </h2>
       <dl className="mt-4 space-y-2 text-base">
+        {earned > 0 && (
+          <div className="flex justify-between gap-4">
+            <dt className="text-ink">Points earned from this stay</dt>
+            <dd className="font-semibold text-ink">+{formatPoints(earned)}</dd>
+          </div>
+        )}
         {used > 0 && (
           <div className="flex justify-between gap-4">
             <dt className="text-ink">Points used on this stay</dt>

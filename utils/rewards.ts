@@ -52,3 +52,14 @@ export async function getPointsUsedOnBooking(reservationId: string) {
   const used = (data ?? []).reduce((sum, row) => sum - Number(row.points), 0);
   return { data: used, error };
 }
+
+/** Points earned once the stay is over (one earn row per reservation). */
+export async function getPointsEarnedOnBooking(reservationId: string) {
+  const supabase = createClient(await cookies());
+  const { data, error } = await supabase
+    .from("points_transactions")
+    .select("points")
+    .eq("reservation_id", reservationId)
+    .eq("type", "earn");
+  return { data: Number(data?.[0]?.points ?? 0), error };
+}

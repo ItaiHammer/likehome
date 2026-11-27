@@ -556,12 +556,13 @@ export function StayReservation({
       }
 
       const { id, total_price } = body.reservation;
-      router.refresh();
       if (id) {
-        // The points shown here, so the confirmation can say if the server spent fewer
-        router.push(`${PAGE_ROUTES.MY_BOOKINGS}/${id}/confirmed${shownPoints ? `?points=${shownPoints}` : ""}`);
+        window.location.assign(
+          `${PAGE_ROUTES.MY_BOOKINGS}/${id}/confirmed${shownPoints ? `?points=${shownPoints}` : ""}`
+        );
         return;
       }
+      router.refresh();
 
       const savedTotal = Number(total_price);
       setBooking({
