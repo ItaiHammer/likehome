@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AccountTypeRetry } from "@/app/_components/AccountTypeRetry";
 import { AuthCardLayout } from "@/app/_components/AuthCardLayout";
@@ -8,7 +9,7 @@ import { getViewer } from "@/utils/viewer";
 import { AccountTypeForm } from "./AccountTypeForm";
 import styles from "./page.module.css";
 
-export const metadata = { title: "Choose your account type — LikeHome" };
+export const metadata: Metadata = { title: "Choose your account type — LikeHome" };
 
 export default async function AccountTypePage({ searchParams }: PageProps<"/account-type">) {
   const next = safeNext((await searchParams).next);

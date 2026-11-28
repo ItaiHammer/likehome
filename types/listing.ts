@@ -4,18 +4,19 @@ export const PROPERTY_TYPES = ["hotel", "motel", "resort", "inn", "bed_and_break
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
 export const AMENITIES = [
-  "wifi",
-  "parking",
-  "restaurant",
-  "pool",
-  "fitness_center",
-  "air_conditioning",
-  "step_free_entrance",
-  "elevator",
-  "accessible_parking",
+  "wifi", "parking", "restaurant", "pool", "fitness_center",
+  "air_conditioning", "step_free_entrance", "elevator", "accessible_parking",
   "family_rooms",
 ] as const;
 export type Amenity = (typeof AMENITIES)[number];
+
+// Room features can differ between room types. Keep the existing persisted search-tag
+// spelling, including historical values, so existing hotel/room searches still work.
+export const ROOM_AMENITIES = [
+  'Kitchen', 'Refrigerator', 'Microwave', 'ADA Compliant', 'Roll-in shower',
+  'Air conditioning', 'Free Wi-Fi', 'Housekeeping',
+] as const;
+export type RoomAmenity = (typeof ROOM_AMENITIES)[number];
 
 export type ListingPhoto = {
   id: string;
@@ -31,6 +32,7 @@ export type ListingRoom = {
   roomCount: number; // how many rooms of this type the property has
   nightlyRateCents: number; // $189.00 → 18900
   description: string;
+  amenities?: RoomAmenity[]; // optional for older saved listings and mocks
 };
 
 export type Listing = {
@@ -45,6 +47,7 @@ export type Listing = {
   country: string; // ISO code, e.g. "US"
   description: string;
   amenities: Amenity[]; // kept in AMENITIES order
+  idealFor?: string[]; // traveler categories stored as hotel tags; optional for older listings
   photos: ListingPhoto[]; // photos[0] is the cover
   rooms: ListingRoom[];
 };
@@ -56,4 +59,4 @@ export type HotelInfo = Pick<
 >;
 
 // Everything the editor lets the owner change, saved together by "Save changes".
-export type ListingDraft = Omit<Listing, "id" | "ownerId">;
+export type ListingDraft = Omit<Listing, "id" | "ownerId" | "idealFor"> & { idealFor: string[] };

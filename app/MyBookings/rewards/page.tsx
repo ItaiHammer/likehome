@@ -40,8 +40,7 @@ export default async function RewardsPage(props: PageProps<"/MyBookings/rewards"
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
       {showSample && <SampleNotice>Sample rewards, shown only on your local dev server.</SampleNotice>}
 
-      {/* Ink, not blue: lighter text on the sky strip is too faint to read */}
-      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-ink">Your rewards</p>
+      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-blue">Your rewards</p>
       <h1 className="mt-2 text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[48px] sm:leading-[56px]">
         Make every stay more rewarding.
       </h1>
@@ -91,8 +90,7 @@ function UsePoints({ balance }: { balance: number }) {
       <p className="text-ink">
         {balance > 0 ? (
           <>
-            Your <span className="font-semibold">{formatPoints(balance)}</span> are worth {money(pointsToDollars(balance))} toward your next
-            booking. Pick one at checkout:
+            Put your <span className="font-semibold">{formatPoints(balance)} (worth {money(pointsToDollars(balance))})</span> toward your next getaway.
           </>
         ) : (
           "Once you have points, use them at checkout for:"
@@ -107,9 +105,9 @@ function UsePoints({ balance }: { balance: number }) {
           </li>
         ))}
       </ul>
-      <p className="text-sm text-slate">A percent of your booking total, paid with points (100 pts = $1). One per booking.</p>
+      <p className="text-sm text-slate">Redeem one reward per booking at checkout.</p>
       <div className="mt-auto flex justify-end">
-        <Button href="/search" variant="secondary" size="sm">
+        <Button href="/search">
           Find a stay
         </Button>
       </div>

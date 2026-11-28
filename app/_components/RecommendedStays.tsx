@@ -7,6 +7,8 @@ import { liveRatesEnabled } from "@/lib/liteapi/rates";
 import { RECOMMENDED_CARDS, recommendationSubtitle, toRecommendedCards } from "@/lib/recommendations";
 import { getRecommendedStays } from "@/utils/recommended-stays";
 import { TZ_COOKIE } from "@/utils/tz-cookie";
+import { getViewer } from "@/utils/viewer";
+import { RecommendedCarousel } from "./RecommendedCarousel";
 import styles from "./home/HomeLayout.module.css";
 
 const TITLE = "Stays that feel like yours";
@@ -17,12 +19,13 @@ const GRID = "mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3";
 const CARD_WIDTH = "max-sm:w-[280px]";
 
 // Cara's recommendations (US 3.3.2): stays near the guest's latest viewed hotel and price range, else their time zone
-export async function RecommendedStays({ count = RECOMMENDED_CARDS }: { count?: number }) {
+export async function RecommendedStays({ title = TITLE, excludeStayId, count = RECOMMENDED_CARDS }: { title?: string; excludeStayId?: string; count?: number } = {}) {
   const timeZone = (await cookies()).get(TZ_COOKIE)?.value;
+  const { role } = await getViewer();
 
   let result: Awaited<ReturnType<typeof getRecommendedStays>>;
   try {
-    result = await getRecommendedStays(timeZone, count);
+    result = await getRecommendedStays(timeZone, count + (excludeStayId ? 1 : 0));
   } catch (error) {
     console.error("Recommended stays failed", error);
     return null;
@@ -34,14 +37,16 @@ export async function RecommendedStays({ count = RECOMMENDED_CARDS }: { count?: 
     return null;
   }
 
-  const cards = toRecommendedCards(output.results.data, liveRatesEnabled(), count);
+  const cards = toRecommendedCards(output.results.data, liveRatesEnabled(), count + (excludeStayId ? 1 : 0))
+    .filter((card) => !excludeStayId || (card.id !== excludeStayId && card.liteapi_id !== excludeStayId))
+    .slice(0, count);
   const moreHref = `/search?${new URLSearchParams({ where: place.where })}`;
 
   return (
     <section id="stays" aria-labelledby={TITLE_ID} className={`scroll-mt-6 ${styles.stays}`}>
       <SectionHeading
         id={TITLE_ID}
-        title={TITLE}
+        title={title}
         subtitle={recommendationSubtitle(place)}
         action={
           cards.length > 0 && (
@@ -53,15 +58,13 @@ export async function RecommendedStays({ count = RECOMMENDED_CARDS }: { count?: 
         }
       />
       {cards.length > 0 ? (
-        // On phones the padding leaves room for a card's hover lift above and its shadow below, and the
-        // margins take it back so the row doesn't move
-        <ul className={`${GRID} ${swipeRowClass()} max-sm:-mb-8 max-sm:mt-5 max-sm:pb-8 max-sm:pt-1`}>
+        <RecommendedCarousel>
           {cards.map((stay, i) => (
-            <li key={stay.id ?? stay.liteapi_id ?? i} className={`card-in grid ${swipeItemClass} ${CARD_WIDTH}`} style={{ "--i": i } as React.CSSProperties}>
-              <SearchResultCard stay={stay} headingLevel="h3" eager={i < 3} compactOnPhones />
+            <li key={stay.id ?? stay.liteapi_id ?? i} className="card-in min-w-0" style={{ "--i": i } as React.CSSProperties}>
+              <SearchResultCard stay={stay} headingLevel="h3" eager={i < 3} businessAccount={role === "business"} />
             </li>
           ))}
-        </ul>
+        </RecommendedCarousel>
       ) : (
         <NoRecommendations city={place.city} />
       )}

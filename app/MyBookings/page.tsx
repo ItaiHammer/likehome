@@ -20,6 +20,7 @@ import { UpcomingBooking } from "./_components/UpcomingBooking";
 import { getSampleBookings, getSampleQuote } from "./sampleBookings";
 import { getMyBookings, getTransactionHistory, type TransactionHistoryRow } from "@/utils/history";
 import { getPointsBalance } from "@/utils/points";
+import { getViewer } from "@/utils/viewer";
 
 export const metadata: Metadata = { title: "My Bookings — LikeHome" };
 const sectionHeading = "font-serif text-[32px] leading-10 text-ink";
@@ -124,6 +125,9 @@ const price =
     photoUrl: h.photo_urls?.find(Boolean) ?? matchedStay?.photos?.[0] ?? null,
     pricePerNight: price,
     tags: h.tags ?? matchedStay?.tags ?? null,
+    description: h.description ?? null,
+    maxCapacity: h.rooms?.length ? Math.max(...h.rooms.map((room: { capacity?: number | string | null }) => Number(room.capacity) || 0)) || null : null,
+    roomOptions: h.rooms?.length ?? null,
   };
 });
 
@@ -151,6 +155,7 @@ export default async function MyBookingsPage({
 }) {
   // The guest's today (from their time zone cookie), not UTC's
   const today = await guestToday();
+  const businessAccount = (await getViewer()).role === "business";
   // Dev only: ?sample (or ?sample=empty) fills the page without signing in, see sampleBookings.ts
   const { sample, tab } = await searchParams;
   const activeTab: AccountTab =
@@ -184,8 +189,7 @@ export default async function MyBookingsPage({
           </SampleNotice>
         )}
 
-      {/* Ink, not blue or slate: lighter text on the sky strip is too faint to read */}
-      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-ink">Your account</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-blue">Your account</p>
       <h1 id="page-heading" className="mt-2 font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px]">
         {activeTab === "saved"
           ? "Saved hotels"
@@ -195,9 +199,9 @@ export default async function MyBookingsPage({
               ? `Welcome back, ${first}`
               : "Welcome back"}
       </h1>
-      <p className="mt-2 text-lg leading-7 text-ink">
+      <p className="mt-2 text-lg leading-7 text-slate">
         {activeTab === "saved"
-          ? "Places you'd like to come back to."
+          ? "Your favorites, ready whenever you plan your next trip."
           : activeTab === "account"
             ? "Manage your details, rewards and payments."
             : "Your upcoming and past reservations."}
@@ -273,7 +277,9 @@ export default async function MyBookingsPage({
 
             {activeTab === "saved" && (
                 <section aria-labelledby="page-heading">
-                  {savedError ? (
+                  {businessAccount ? (
+                    <p className="rounded-2xl border border-edge bg-surface p-6 text-slate">Business accounts cannot save favorite stays.</p>
+                  ) : savedError ? (
                     <FormError message="We couldn't load your saved hotels. Try again later." />
                   ) : (
                     <SavedHotelsList hotels={savedHotels} />

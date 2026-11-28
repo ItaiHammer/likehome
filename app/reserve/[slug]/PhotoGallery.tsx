@@ -46,7 +46,7 @@ export function PhotoGallery({ stayName, photos = [] }: { stayName: string; phot
   }
 
   const slide = (i: number, large?: boolean) =>
-    photos.length ? <Photo src={photos[i]} /> : <Placeholder n={i + 1} large={large} />;
+    photos.length ? <Photo key={photos[i]} src={photos[i]} /> : <Placeholder n={i + 1} large={large} />;
 
   return (
     <>
@@ -86,12 +86,12 @@ export function PhotoGallery({ stayName, photos = [] }: { stayName: string; phot
         onClose={() => setIndex(null)}
         onKeyDown={onKey}
         onClick={(e) => e.target === e.currentTarget && setIndex(null)}
-        className="m-auto h-dvh max-h-none w-screen max-w-none bg-transparent p-0 outline-none backdrop:bg-[rgba(30,44,90,0.95)]"
+        className="m-auto h-dvh max-h-none w-screen max-w-none bg-transparent p-0 outline-none backdrop:bg-black/80"
       >
         {open && (
           <div className="pointer-events-none flex h-full flex-col items-center justify-center gap-4 px-4 py-6 sm:px-20">
             <div className="pointer-events-auto relative aspect-[3/2] w-full max-w-5xl max-h-[calc(100dvh-8rem)] overflow-hidden rounded-2xl border border-edge bg-surface">
-              {photos.length ? <Photo src={photos[index]} alt={`Photo ${index + 1} of ${stayName}`} /> : <Placeholder n={index + 1} large />}
+              {photos.length ? <Photo key={photos[index]} src={photos[index]} alt={`Photo ${index + 1} of ${stayName}`} /> : <Placeholder n={index + 1} large />}
             </div>
             <p className="pointer-events-auto text-base font-semibold tabular-nums text-white" aria-live="polite">
               {index + 1} / {count}
@@ -135,10 +135,39 @@ export function PhotoGallery({ stayName, photos = [] }: { stayName: string; phot
 
 // The gallery buttons carry the label, so tile photos have empty alt text.
 function Photo({ src, alt = "" }: { src: string; alt?: string }) {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    setLoaded(false);
+    setFailed(false);
+    const image = imageRef.current;
+    if (image?.complete) {
+      if (image.naturalWidth > 0) setLoaded(true);
+      else setFailed(true);
+    }
+  }, [src]);
   return (
-    // A plain <img>: next.config doesn't list the photo hosts yet (same as the search cards).
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={alt} decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+    <span key={src} className="absolute inset-0 block overflow-hidden bg-surface">
+      {!loaded && !failed && (
+        <span role="status" aria-label="Loading photo" className="absolute inset-0 flex items-center justify-center bg-edge/40">
+          <span className="h-7 w-7 animate-spin rounded-full border-2 border-blue/20 border-t-blue" />
+        </span>
+      )}
+      {failed ? (
+        <span className="absolute inset-0 flex items-center justify-center text-sm text-slate">Photo unavailable</span>
+      ) : (
+        // A plain img supports the existing external photo hosts.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={src} ref={(node) => {
+          imageRef.current = node;
+          if (node?.complete) {
+            if (node.naturalWidth > 0) setLoaded(true);
+            else setFailed(true);
+          }
+        }} src={src} alt={alt} decoding="async" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${loaded ? "opacity-100" : "opacity-0"}`} />
+      )}
+    </span>
   );
 }
 

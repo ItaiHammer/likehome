@@ -1,16 +1,30 @@
-import { Button, Field, inputClass, labelClass, Stepper, TextArea } from "@/app/_components/ui";
-import { checkRoomForm, type RoomForm as RoomFormValues, type RoomFormErrors } from "@/lib/validation/listing";
-import type { ListingRoom } from "@/types/listing";
+import { Button, Field, inputClass, labelClass, Stepper } from "@/app/_components/ui";
+import { checkRoomForm, type RoomForm as RoomFormValues, type RoomFormErrors, type RoomTextField } from "@/lib/validation/listing";
+import { ROOM_AMENITIES, type ListingRoom, type RoomAmenity } from "@/types/listing";
+import { displayAmenityLabel } from "@/app/search/types";
+import { Checkbox } from "./Checkbox";
 import type { RoomEditor } from "./editor-state";
 import { FormSection } from "./FormSection";
 import { PanelHeading } from "./PanelHeading";
 
-const FIELD_ORDER: (keyof RoomFormValues)[] = ["roomType", "bedConfiguration", "maxGuests", "roomCount", "nightlyRate", "description"];
-const inputId = (field: keyof RoomFormValues) => `room-${field}`;
+const FIELD_ORDER: RoomTextField[] = ["roomType", "bedConfiguration", "maxGuests", "roomCount", "nightlyRate", "description"];
+const inputId = (field: RoomTextField) => `room-${field}`;
+
+// Only these patterns survive the current room storage format unchanged.
+// This is an editor-only check; no server action or database validation changes.
+const supportedBeds = /^\s*[1-9]\d*\s+(?:Twin XL|Twin|Double|Queen|King)\s+bed(?:s)?\s*$/i;
+// A legacy saved room with no bed size reopens as "1 bed bed". Let owners edit it without
+// forcing an unrelated bed change; new rooms still require a recognized bed size.
+const legacyUnknownBed = /^\s*1\s+bed\s+bed\s*$/i;
+const bedFormatError = (value: string, editing: boolean) => value.trim() &&
+  !supportedBeds.test(value) && !(editing && legacyUnknownBed.test(value))
+  ? "Use a count and supported bed size (for example, 2 Queen beds)."
+  : undefined;
 
 type Props = {
   editor: RoomEditor;
-  onChange: (field: keyof RoomFormValues, value: string) => void;
+  onChange: (field: RoomTextField, value: string) => void;
+  onToggleAmenity: (amenity: RoomAmenity, checked: boolean) => void;
   onInvalid: (errors: RoomFormErrors) => void;
   onApply: (room: ListingRoom) => void;
   onCancel: () => void;
@@ -18,22 +32,28 @@ type Props = {
 };
 
 // "Apply changes" only updates the draft; the property's "Save changes" is what saves it.
-export function RoomForm({ editor, onChange, onInvalid, onApply, onCancel, onRemove }: Props) {
+export function RoomForm({ editor, onChange, onToggleAmenity, onInvalid, onApply, onCancel, onRemove }: Props) {
   const { form, errors, roomId } = editor;
 
-  const control = (field: keyof RoomFormValues) => ({
+  const control = (field: RoomTextField) => ({
     id: inputId(field),
     value: form[field],
     error: errors[field],
-    onBlur: () => onInvalid({ ...errors, [field]: checkRoomForm(form).errors[field] }),
+    onBlur: () => {
+      const checked = checkRoomForm(form).errors[field];
+      onInvalid({ ...errors, [field]: field === "bedConfiguration" ? checked ?? bedFormatError(form.bedConfiguration, roomId !== null) : checked });
+    },
     onChange: (e: { target: { value: string } }) => onChange(field, e.target.value),
   });
 
   function apply() {
     const result = checkRoomForm(form);
-    if (!result.room) {
-      onInvalid(result.errors);
-      const first = FIELD_ORDER.find((field) => result.errors[field]);
+    const checkedErrors = { ...result.errors };
+    const unsupportedBeds = bedFormatError(form.bedConfiguration, roomId !== null);
+    if (unsupportedBeds) checkedErrors.bedConfiguration = unsupportedBeds;
+    if (!result.room || Object.keys(checkedErrors).length > 0) {
+      onInvalid(checkedErrors);
+      const first = FIELD_ORDER.find((field) => checkedErrors[field]);
       if (first) document.getElementById(inputId(first))?.focus();
       return;
     }
@@ -45,13 +65,13 @@ export function RoomForm({ editor, onChange, onInvalid, onApply, onCancel, onRem
       <PanelHeading title={roomId ? "Edit room" : "Add room"} subtitle="Changes are applied to your property before you save." />
       <form
         noValidate
-        className="mt-8"
+        className="mt-8 space-y-10"
         onSubmit={(e) => {
           e.preventDefault();
           apply();
         }}
       >
-        <FormSection title="Room details" description="Describe this room type and its availability.">
+        <FormSection title="Room details" description="Add at least one room type. All fields shown here are required.">
           <div className="grid gap-6">
             <Field label="Room type" maxLength={60} hint="For example, Garden double." {...control("roomType")} />
             <div className="grid gap-6 sm:grid-cols-2">
@@ -95,26 +115,40 @@ export function RoomForm({ editor, onChange, onInvalid, onApply, onCancel, onRem
                 />
               </div>
             </div>
-            <TextArea
-              label="Room description"
-              hint={`${form.description.length} / 1000`}
-              rows={3}
-              maxLength={1000}
-              {...control("description")}
-            />
-            <div className="flex flex-wrap gap-3">
-              <Button variant="secondary" onClick={onCancel}>
-                Cancel
-              </Button>
-              <Button type="submit">{roomId ? "Apply changes" : "Add room"}</Button>
-              {onRemove && (
-                <Button variant="ghost" onClick={onRemove} className="sm:ml-auto">
-                  Remove room
-                </Button>
-              )}
-            </div>
           </div>
         </FormSection>
+
+        <FormSection
+          title="Room-specific amenities (optional)"
+          description="Only select amenities available in this room type. Property-wide amenities belong in the Amenities tab."
+          group
+        >
+          <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+            {ROOM_AMENITIES.map((amenity) => (
+              <Checkbox
+                key={amenity}
+                id={`room-amenity-${amenity.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                label={displayAmenityLabel(amenity)}
+                checked={form.amenities.includes(amenity)}
+                onChange={(checked) => onToggleAmenity(amenity, checked)}
+              />
+            ))}
+          </div>
+        </FormSection>
+
+        <div className="grid gap-4 lg:grid-cols-[13rem_1fr] lg:gap-10">
+          <div className="flex flex-wrap gap-3 lg:col-start-2">
+            <Button variant="secondary" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit">{roomId ? "Apply changes" : "Add room"}</Button>
+            {onRemove && (
+              <Button variant="ghost" onClick={onRemove} className="sm:ml-auto">
+                Remove room
+              </Button>
+            )}
+          </div>
+        </div>
       </form>
     </>
   );

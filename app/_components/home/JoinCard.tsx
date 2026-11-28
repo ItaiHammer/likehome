@@ -1,9 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import coastalRoom from "@/app/_assets/coastal-room.webp";
-import { authLinkClass, Button, Icon, tintBox, tintLink } from "@/app/_components/ui";
+import { authLinkClass, Button, Icon, tintBox } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { CardAction, MembersLabel } from "./ShortcutTile";
+import { MembersLabel } from "./ShortcutTile";
 
 const TITLE_ID = "join-title";
 
@@ -15,25 +15,8 @@ const pitches = [
   { title: "Have a place?", body: "List it, manage rooms and photos, and message your guests.", action: "List your place", variant: "secondary" },
 ] as const;
 
-const features = [
-  {
-    title: "Stay more, save more",
-    body: "Members earn points on every stay and can use them for up to a free stay.",
-    link: "Join to start earning",
-    href: PAGE_ROUTES.LOGIN,
-    icon: <path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.4l-5.2 2.8 1-5.9L3.5 9.2l5.9-.8z" strokeLinejoin="round" />,
-  },
-  {
-    title: "Homes that bend with your plans",
-    body: "Kitchens and space to unpack, and you can change your dates, room or guests in My Bookings up to the day before check-in.",
-    link: "Browse stays",
-    href: PAGE_ROUTES.SEARCH,
-    icon: <path d="M4 11l8-6 8 6v9H4v-9z M10 20v-5h4v5" strokeLinejoin="round" />,
-  },
-];
-
-// Signed out: the sign-up card with its two pitches, the coastal room beside it (under it on phones),
-// and the two feature cards (from sm up). The card switches to two columns by its own width, as the
+// Signed out: the sign-up card with its two pitches and the coastal room beside it (under it on phones).
+// The card switches to two columns by its own width, as the
 // picture beside it leaves it less room than the window suggests.
 export function JoinCard() {
   return (
@@ -107,21 +90,6 @@ export function JoinCard() {
           {/* Dim it a little in dark mode so it doesn't glare */}
           <div className="absolute inset-0 bg-[#070D2F]/40 opacity-0 dark:opacity-100" />
         </div>
-      </div>
-
-      {/* Feature cards: the whole card is the link. The link text uses blue-dark because plain blue drops
-          under 4.5:1 contrast on the tint. Left out on phones, where the page is long enough. */}
-      <div className="hidden gap-4 sm:grid md:grid-cols-2">
-        {features.map((f) => (
-          <Link key={f.title} href={f.href} className={`${tintLink} flex flex-col p-6 sm:p-7`}>
-            <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue text-on-blue transition-colors duration-200 group-hover:bg-blue-dark">
-              <Icon className="h-6 w-6">{f.icon}</Icon>
-            </span>
-            <h3 className="mt-5 text-xl font-semibold leading-7 text-ink">{f.title}</h3>
-            <p className="mt-2 flex-1 text-base leading-6 text-slate">{f.body}</p>
-            <CardAction className="mt-6 text-base">{f.link}</CardAction>
-          </Link>
-        ))}
       </div>
     </div>
   );

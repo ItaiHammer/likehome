@@ -1,6 +1,20 @@
 /* The opening follows the reference's spacing. Destination photos keep their
    natural landscape proportions; all remaining content continues below them. */
 @media (min-width: 1024px) {
+  /* Put destination tabs beside the heading for ALL homepage roles, not just personal. */
+  .destinationHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 24px;
+  }
+  .destinationSubtitle { grid-column: 1 / -1; }
+  .destinationControls {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+    margin-top: 0;
+  }
   /* Leave the tilted corners inside the side gutters without exposing the next slide. */
   .destinationTile:hover {
     --pop: 1.02;
@@ -52,58 +66,37 @@
   .personal .destinationControls { grid-column: 2; grid-row: 1; margin-top: 0; gap: 16px; }
   .personal .destinationControls [role="tab"] {
     height: 40px;
-    padding-inline: 12px;
     border: 0;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-    background: transparent;
-    color: var(--slate);
+    border-radius: 8px;
     font-size: 14px;
   }
   .personal .destinationControls [role="tab"][aria-selected="true"] {
-    border-bottom-color: var(--blue);
-    color: var(--ink);
+    background: color-mix(in srgb, var(--blue) 12%, var(--surface));
+    color: var(--blue-dark);
+    box-shadow: 0 1px 4px rgba(7,13,47,0.12);
   }
   .personal .destinationPanel { margin-top: 24px; }
   .personal .destinationPhoto,
-  .personal .hotelRow li > a > div:first-child > div,
+  .personal .hotelRow article > div:first-of-type,
   .personal .stays article > div:first-child {
     aspect-ratio: 16 / 9;
     height: auto;
   }
-  .personal .hotelRow > ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .personal .hotelRow li > a,
-  .personal .stays article { border-radius: var(--radius-lg); }
-  .personal .stays article { box-shadow: none; }
-  .personal .hotelRow li > a > div:last-child {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    padding: 12px 16px;
-  }
-  .personal .hotelRow h3 { max-width: 60%; }
-  .personal .hotelRow li > a > div:last-child > p { flex: 1; min-width: 0; text-align: right; }
-  .personal .stays > ul,
-  .personal .stays > div[aria-hidden] > ul { gap: 16px; }
+  /* Hotel history and saved cards share the search-card look and sizing. */
+  .personal .hotelRow article { border-radius: var(--radius-lg); box-shadow: none; }
+  .personal .hotelRow article > div:last-child { padding: 16px; }
+  .personal .hotelRow h3 { font-family: var(--font-inter), Arial, sans-serif; }
+  .personal .stays article { border-radius: var(--radius-lg); box-shadow: none; }
   .personal .stays article > div:last-child { padding: 16px; }
-  .personal .hotelRow h3,
-  .personal .stays article h3 {
-    font-family: var(--font-dm-serif), Georgia, serif;
-    font-size: 24px;
-    font-weight: 400;
-    line-height: 32px;
-  }
+  .personal .stays article h3 { font-family: var(--font-inter), Arial, sans-serif; font-weight: 600; font-size: 18px; line-height: 28px; }
   .personal .destinationCaption {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: baseline;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     column-gap: 12px;
     padding: 12px 16px;
   }
-  .personal .destinationCaption > div { display: contents; }
-  .personal .destinationCaption > div > p:first-child { grid-column: 1; grid-row: 1; }
-  .personal .destinationCaption > div > p:last-child { grid-column: 3; grid-row: 1; }
-  .personal .destinationRegion { grid-column: 2; grid-row: 1; margin-top: 0; text-align: right; }
+  .personal .destinationRegion { margin-top: 0; text-align: right; }
   .personal .destinationFooter { margin-top: 8px; }
   .personal .stays > div[aria-hidden] > ul > li { border-radius: var(--radius-lg); }
   .personal .stays > div[aria-hidden] > ul > li > div:first-child { aspect-ratio: 16 / 9; }
@@ -124,6 +117,6 @@
   .personal .welcomeContent { padding-block: 8px; }
   .personal .welcomeTitle { font-size: 28px; line-height: 36px; }
   .personal .destinationCaption { padding-block: 8px; }
-  .personal .hotelRow li > a > div:last-child { padding-block: 8px; }
+  .personal .hotelRow article > div:last-child { padding-block: 14px; }
   .personal .destinationFooter { margin-top: 8px; }
 }

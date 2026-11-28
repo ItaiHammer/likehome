@@ -13,7 +13,9 @@ export function ListingRow({ listing, index, isSample = false, headingLevel: Hea
   isSample?: boolean;
   headingLevel?: "h2" | "h3";
 }) {
-  const editHref = `/listings/${listing.id}/edit`;
+  const editHref = isSample
+    ? `/listings/mock/${encodeURIComponent(listing.id)}/edit`
+    : `/listings/${listing.id}/edit`;
   const rate = lowestRate(listing.rooms);
   const cardHref = isSample
     ? `/listings?sample=preview&id=${encodeURIComponent(listing.id)}`
@@ -21,7 +23,7 @@ export function ListingRow({ listing, index, isSample = false, headingLevel: Hea
 
   return (
     <li className="tile-in" style={{ "--i": index } as React.CSSProperties}>
-      <article className="group relative flex flex-col gap-5 rounded-lg border border-edge bg-surface p-4 transition-[border-color,box-shadow] duration-300 hover:border-blue/50 hover:shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] focus-within:border-blue sm:flex-row sm:p-5">
+      <article className="group relative flex flex-col gap-5 rounded-lg border border-edge bg-surface p-4 hover:bg-blue/5 transition-[border-color,box-shadow] duration-300 hover:border-blue/50 hover:shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] focus-within:border-blue sm:flex-row sm:p-5">
         {/* The full card is clickable; action links sit above this overlay. */}
         <Link
           href={cardHref}
@@ -30,13 +32,13 @@ export function ListingRow({ listing, index, isSample = false, headingLevel: Hea
         />
         <ListingCover photo={listing.photos[0]} sizes="(min-width: 640px) 256px, 100vw" zoom eager={index === 0} className="aspect-[3/2] w-full border border-edge sm:w-64" />
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <div className="grid min-w-0 grid-cols-1 items-start gap-x-6 gap-y-2 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div className="min-w-0">
-              <Heading className="font-serif text-[32px] leading-[38px] text-ink">{listing.name}</Heading>
+              <Heading className="break-words [overflow-wrap:anywhere] text-balance text-[24px] font-semibold leading-[32px] text-ink" title={listing.name}>{listing.name}</Heading>
               <p className="mt-1 text-slate">{formatLocation(listing)}</p>
             </div>
             {rate !== null && (
-              <p className="text-ink">
+              <p className="whitespace-nowrap text-ink lg:text-right">
                 <span className="font-semibold">From {formatPrice(rate)}</span>
                 <span className="text-slate"> / night</span>
               </p>
@@ -69,16 +71,14 @@ export function ListingRow({ listing, index, isSample = false, headingLevel: Hea
             ))}
           </ul>
 
-          {!isSample && (
-            <div className="mt-5 border-t border-edge pt-4 sm:mt-auto">
+          <div className="mt-5 flex justify-end border-t border-edge pt-4 sm:mt-auto">
               <Link href={editHref} className="group/edit relative z-20 inline-flex items-center gap-1.5 font-semibold text-blue hover:text-blue-dark">
                 Edit property<span className="sr-only">: {listing.name}</span>
                 <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform duration-200 group-hover/edit:translate-x-1" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M5 12h14M13 6l6 6-6 6" />
                 </svg>
               </Link>
-            </div>
-          )}
+          </div>
         </div>
       </article>
     </li>

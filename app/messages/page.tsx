@@ -23,7 +23,7 @@ export default async function MessagesPage(props: PageProps<"/messages">) {
   const traveler = await requireTraveler(back);
 
   const frame = (children: React.ReactNode) => (
-    <MessagesFrame eyebrow="Messages" title="Your messages" subtitle="Updates from your stays.">
+    <MessagesFrame eyebrow="Stay connected" title="Your messages" subtitle="Conversations, announcements, and updates in one place.">
       {children}
     </MessagesFrame>
   );

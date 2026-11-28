@@ -43,6 +43,7 @@ export function toBooking(row: BookingHistoryRow): Booking {
     guests: row.guests,
     status: row.status ?? "confirmed",
     hotelName: row.hotel_name ?? "Hotel no longer listed",
+    hotelId: row.hotel_id,
     city: row.city,
     photoUrl: row.photo_url,
     roomType: row.room_type,

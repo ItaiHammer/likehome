@@ -1,4 +1,5 @@
 "use client";
+
 import { type Provider } from "@supabase/supabase-js"
 import { createClient } from "@/utils/supabase/client";
 import { API_ROUTES } from "@/constants/routes";

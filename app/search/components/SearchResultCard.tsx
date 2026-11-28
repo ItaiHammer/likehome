@@ -1,3 +1,4 @@
+import { stayDisplayName } from "@/app/_components/stayDisplayName";
 import Link from "next/link";
 import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
 import { cardLiftClass, photoZoomClass } from "@/app/_components/ui";
@@ -17,6 +18,8 @@ export type HotelSearchResult = {
   min_price?: number | string | null;
   max_capacity?: number | string | null;
   available_rooms?: number | string | null;
+  /** Number of listed room types, not a date-specific availability claim. */
+  room_options?: number | string | null;
   rating?: number | string | null;
   tags?: string[] | null;
   num_beds?: number | string | null;
@@ -64,6 +67,7 @@ function formatLocation(stay: HotelSearchResult) {
 }
 
 function asNumber(value: HotelSearchResult["min_price"]) {
+  if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -76,19 +80,27 @@ export function SearchResultCard({
   eager = false,
   search = "",
   headingLevel: Heading = "h2",
+  businessAccount = false,
+  hideDescription = false,
   compactOnPhones = false,
+  initiallySaved = false,
+  showFavorites = true,
 }: {
   stay: HotelSearchResult;
   eager?: boolean;
   search?: string;
   headingLevel?: "h2" | "h3";
+  businessAccount?: boolean;
+  hideDescription?: boolean;
   compactOnPhones?: boolean;
+  initiallySaved?: boolean;
+  showFavorites?: boolean;
 }) {
   const photo = stay.photo_urls?.find(Boolean);
   const price = asNumber(stay.min_price);
   const capacity = asNumber(stay.max_capacity);
   const availableRooms = asNumber(stay.available_rooms);
-  const rating = asNumber(stay.rating);
+  const roomOptions = asNumber(stay.room_options);
   // A LiteAPI hotel that isn't saved yet opens by its LiteAPI id
   const slug = stay.id ?? stay.liteapi_id;
   const href = slug ? `/reserve/${slug}${search ? `?${search}` : ""}` : null;
@@ -112,21 +124,17 @@ export function SearchResultCard({
 
   return (
       <article className={`group relative flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface shadow-[0_18px_45px_-34px_rgba(7,13,47,0.45)] ${cardLiftClass}`}>
+        {href && <Link href={href} aria-label={`View ${stay.name || "stay"}`} className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue" />}
         <div className="relative aspect-[16/10] overflow-hidden bg-blue/10">
-          {href ? (
-              <Link href={href} tabIndex={-1} aria-hidden className="relative block h-full w-full">
-                {media}
-              </Link>
-          ) : (
-              media
-          )}
+          {media}
 
-          {/* Only hotels saved in the database have an id; an unsaved LiteAPI hotel (liteapi_id only) gets no heart */}
-          {stay.id && (
+          {/* Account-based favorites from dev; only database hotels can be saved. */}
+          {stay.id && !businessAccount && showFavorites && (
               <SaveHotelButton
                   hotelId={stay.id}
                   hotelName={stay.name}
-                  className="absolute top-3 right-3 z-10"
+                  saved={initiallySaved}
+                  className="absolute top-3 right-3 z-20"
               />
           )}
         </div>
@@ -135,39 +143,30 @@ export function SearchResultCard({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <Heading className="truncate text-lg font-semibold text-ink">
-                {stay.name || "LikeHome stay"}
+                {stayDisplayName(stay.name || "LikeHome stay")}
               </Heading>
               <p className="mt-1 flex items-start gap-1.5 text-sm leading-5 text-slate">
                 <PinIcon />
                 <span>{formatLocation(stay)}</span>
               </p>
             </div>
-            {rating !== null && (
-              <span className="shrink-0 rounded-full bg-blue/10 px-2.5 py-1 text-xs font-semibold text-blue-dark">
-                ★ {rating.toFixed(1)}
-              </span>
-            )}
+
           </div>
-        {stay.description && <p className={`mt-4 line-clamp-2 text-sm leading-6 text-slate${phoneHidden}`}>{stay.description}</p>}
-        {stay.tags && stay.tags.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {stay.tags.slice(0, 3).map((tag) => (
-              <span key={tag} className="rounded-full border border-blue/20 bg-blue/5 px-2.5 py-1 text-xs font-medium text-blue-dark">
-                {tag}
-              </span>
-            ))}
-          </div>
+        {!hideDescription && (
+          <p className={`mt-4 min-h-12 line-clamp-2 text-sm leading-6 text-slate${phoneHidden}`}>
+            {stay.description?.trim() || "Explore room options and property details."}
+          </p>
         )}
 
-        <div className={`mt-4 flex flex-wrap gap-2 text-xs font-medium text-slate${phoneHidden}`}>
+        <div className={`mt-4 flex min-h-8 flex-wrap content-start gap-2 text-xs font-medium text-slate${phoneHidden}`}>
           {capacity !== null && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-paper/40 px-2.5 py-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-blue/5 px-2.5 py-1.5">
               <UsersIcon /> Up to {capacity} guests
             </span>
           )}
-          {availableRooms !== null && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-paper/40 px-2.5 py-1.5">
-              <BedIcon /> {availableRooms} available
+          {(availableRooms !== null || roomOptions !== null) && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-blue/5 px-2.5 py-1.5">
+              <BedIcon /> {availableRooms !== null ? `${availableRooms} available` : `${roomOptions} room ${roomOptions === 1 ? "type" : "types"}`}
             </span>
           )}
         </div>
@@ -189,12 +188,7 @@ export function SearchResultCard({
               </div>
             )}
             {href ? (
-              <Link
-                href={href}
-                className="rounded-control text-sm font-semibold text-blue hover:text-blue-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
-              >
-                View stay<span className="sr-only"> at {stay.name || "this hotel"}</span>
-              </Link>
+              <span className="rounded-control text-sm font-semibold text-blue group-hover:text-blue-dark">View stay</span>
             ) : (
               <span className="text-sm font-semibold text-slate">Sample stay</span>
             )}

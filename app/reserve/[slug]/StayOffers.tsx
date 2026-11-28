@@ -1,4 +1,5 @@
 import type { Offer } from "../../_data/stays";
+import { displayAmenityLabel } from "@/app/search/types";
 
 // What the stay has, straight from its tags (the same names as the search filters). Only what it
 // offers is listed, never what it doesn't.
@@ -9,14 +10,13 @@ export function StayOffers({ offers, goodFor }: { offers: Offer[]; goodFor: stri
   return (
     <section aria-label="What this stay offers" className="mt-6">
       {offers.length > 0 && (
-        <ul className="flex flex-wrap gap-2">
+        <ul className="grid grid-cols-1 gap-x-7 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
           {offers.map((o) => (
-            <li key={o.label} className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface px-3 py-1 text-sm text-ink">
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 text-blue" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <li key={o.label} className="flex items-start gap-2 text-sm leading-6 text-ink">
+              <svg viewBox="0 0 24 24" className="mt-1 h-4 w-4 shrink-0 text-blue" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M5 12.5l4.5 4.5L19 7.5" />
               </svg>
-              {o.label}
-              {o.someRooms && <span className="text-slate">· some rooms</span>}
+              <span>{displayAmenityLabel(o.label)}{o.someRooms && <span className="text-slate"> · some rooms</span>}</span>
             </li>
           ))}
         </ul>

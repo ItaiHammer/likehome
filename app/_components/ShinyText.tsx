@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 // Shiny Text from React Bits (https://reactbits.dev/text-animations/shiny-text), TS + Tailwind variant,
 // copied as-is apart from this header and a small lint fix. It can only use real color values (not CSS variables);

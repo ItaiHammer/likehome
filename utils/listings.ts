@@ -9,7 +9,7 @@ import {
 import { PROPERTY_TYPES, type PropertyType } from "@/types/listing";
 import { groupRoomRows, parseBedConfiguration, planRoomChanges, type RoomRow } from "@/lib/listing-rooms";
 import { removedPhotoPaths } from "@/lib/listing-photos";
-import { amenitiesFromTags, countryFromStored, countryToStored, mergeAmenityTags } from "@/lib/listing-storage";
+import { amenitiesFromTags, countryFromStored, countryToStored, mergeAmenityTags, idealForFromTags, mergeIdealForTags } from "@/lib/listing-storage";
 
 type HotelRow = {
   id: string;
@@ -62,6 +62,7 @@ function toListing(hotel: HotelRow, rooms: RoomRow[]): Listing {
 
     // Stored as the tags search filters on ("Free Wi-Fi"); older saves used raw ids ("wifi")
     amenities: amenitiesFromTags(tags),
+    idealFor: idealForFromTags(tags),
 
     photos: (hotel.photo_urls ?? []).map((url, index) => ({
       id: `${hotel.id}-photo-${index}`,
@@ -109,7 +110,7 @@ async function saveListing(hotelId: string | null, draft: ListingDraft, existing
     property_type: draft.propertyType,
     postal_code: draft.postalCode,
     // Keep tags the editor doesn't manage (e.g. imported "EV Charging")
-    tags: mergeAmenityTags(existingTags, draft.amenities),
+    tags: mergeIdealForTags(mergeAmenityTags(existingTags, draft.amenities), draft.idealFor),
     photo_urls: draft.photos.map((photo) => photo.url),
   };
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useId, useRef, useState } from "react";
 
 type Option = { value: string; label: string };
@@ -10,6 +8,7 @@ type PropertyPickerProps = {
   options: Option[];
   value: string;
   onChange: (value: string) => void;
+  error?: string;
 };
 
 /** Styled, keyboard-accessible alternative to native select option menus.
@@ -21,6 +20,7 @@ export function PropertyPicker({
   options,
   value,
   onChange,
+  error,
 }: PropertyPickerProps) {
   const [open, setOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -77,7 +77,7 @@ export function PropertyPicker({
 
   return (
     <div ref={root} className="relative min-w-0 font-sans">
-      <label htmlFor={id} className="mb-1.5 block text-sm font-normal text-ink">
+      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-ink">
         {label}
       </label>
       <button
@@ -86,6 +86,8 @@ export function PropertyPicker({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-error` : undefined}
         aria-controls={menuId}
         onClick={toggleMenu}
         onKeyDown={(event) => {
@@ -104,6 +106,7 @@ export function PropertyPicker({
           <path d="m5 7 5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
+      {error && <p id={`${id}-error`} role="alert" className="mt-1.5 text-sm text-danger">{error}</p>}
       {open && options.length > 0 && (
         <div
           id={menuId}

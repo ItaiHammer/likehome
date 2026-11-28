@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { useMediaQuery } from "./useMediaQuery";
+import { createPortal } from "react-dom";
 import {
   bedSizes,
+  displayAmenityLabel,
   propertyAmenities,
   roomAmenities,
   travelerTypes,
@@ -32,9 +33,6 @@ const AMENITY_TAGS = [
 const TRAVELER_TAGS = travelerTypes;
 type PriceField = "min" | "max";
 
-// Tailwind's sm breakpoint, where the dropdown takes over
-const PHONE_QUERY = "(width < 40rem)";
-
 const isWholeNumber = (value: string) => /^\d+$/.test(value);
 
 function SlidersIcon() {
@@ -53,47 +51,28 @@ function ChevronIcon() {
   );
 }
 
-// On phones a bottom sheet, so Apply filters is always on screen
+// Portal avoids the search bar's clipping and stacking context. On desktop the
+// panel is anchored below the *entire* search form; on narrow screens it remains
+// a native modal bottom sheet with keyboard focus management.
 function FiltersPanel({
-  phone,
-  open,
-  panelRef,
   sheetRef,
   onClose,
   children,
 }: {
-  phone: boolean;
-  open: boolean;
-  panelRef: React.RefObject<HTMLDivElement | null>;
   sheetRef: React.RefObject<HTMLDialogElement | null>;
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  if (phone) {
-    return (
-      <dialog
-        ref={sheetRef}
-        aria-label="Search filters"
-        onClose={onClose}
-        // The content wrapper fills the dialog, so a click landing on the dialog itself is on the backdrop
-        onClick={(event) => event.target === event.currentTarget && onClose()}
-        className="mb-0 mt-auto max-h-[85dvh] w-full max-w-none overflow-y-auto overscroll-contain rounded-t-2xl border-0 border-t border-edge bg-surface p-0 text-ink shadow-[0_-20px_50px_-15px_rgba(10,20,50,0.45)] transition-[translate] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] backdrop:bg-[#070d2f]/50 starting:open:translate-y-full"
-      >
-        <div className="px-4 pt-4">{children}</div>
-      </dialog>
-    );
-  }
-
   return (
-    <div
-      ref={panelRef}
-      data-open={open}
-      role="dialog"
+    <dialog
+      ref={sheetRef}
       aria-label="Search filters"
-      className="dropdown absolute left-0 top-full z-40 mt-3 max-h-[70vh] w-full overflow-y-auto overscroll-contain rounded-2xl border border-edge bg-surface p-4 pb-0 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)] sm:left-auto sm:right-0 sm:w-[min(92vw,42rem)] sm:p-5 sm:pb-0"
+      onClose={onClose}
+      onClick={(event) => event.target === event.currentTarget && onClose()}
+      className="fixed bottom-0 left-0 right-0 top-auto z-[100] m-0 max-h-[84dvh] w-full max-w-none overflow-y-auto overscroll-contain rounded-t-2xl border border-edge bg-surface p-0 text-ink shadow-[0_18px_65px_-20px_rgba(7,13,47,0.4)] backdrop:bg-[#070d2f]/55 sm:bottom-auto sm:right-auto sm:rounded-2xl sm:max-h-[70dvh]"
     >
-      {children}
-    </div>
+      <div className="px-5 pt-5 sm:px-7 sm:pt-7">{children}</div>
+    </dialog>
   );
 }
 
@@ -105,6 +84,7 @@ export function SearchFiltersPicker({
   initialValues?: SearchFilterValues;
 }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [minPrice, setMinPrice] = useState(initialValues.minPrice ?? "");
   const [maxPrice, setMaxPrice] = useState(initialValues.maxPrice ?? "");
   const [minRating, setMinRating] = useState(initialValues.minRating ?? "");
@@ -112,15 +92,12 @@ export function SearchFiltersPicker({
   const [bedSize, setBedSize] = useState(initialValues.bedSize ?? "");
   const [tags, setTags] = useState<string[]>(initialValues.tags ?? []);
   const [rangeError, setRangeError] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const minRef = useRef<HTMLInputElement>(null);
   const maxRef = useRef<HTMLInputElement>(null);
   const errorId = useId();
-  const isPhone = useMediaQuery(PHONE_QUERY);
 
   const minInvalid = minPrice !== "" && !isWholeNumber(minPrice);
   const maxInvalid = maxPrice !== "" && !isWholeNumber(maxPrice);
@@ -128,34 +105,67 @@ export function SearchFiltersPicker({
   const validMax = maxInvalid ? "" : maxPrice;
   const priceError = minInvalid || maxInvalid ? "Please enter a number" : rangeError;
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (panelRef.current?.contains(document.activeElement)) triggerRef.current?.focus({ preventScroll: true });
-      setOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  useEffect(() => setMounted(true), []);
 
-  // showModal() lifts the sheet out of the frosted bar onto the top layer and keeps focus inside it
+  // The dialog lives outside the search form in document.body. Desktop uses
+  // show() so the bar stays visible and usable; mobile uses a modal bottom sheet.
   useEffect(() => {
-    const sheet = sheetRef.current;
-    if (!sheet) return;
-    if (open && !sheet.open) {
-      sheet.showModal();
-      closeRef.current?.focus();
+    const dialog = sheetRef.current;
+    if (!dialog || !mounted) return;
+    if (!open) {
+      if (dialog.open) dialog.close();
+      return;
     }
-    if (!open && sheet.open) sheet.close();
-  }, [open, isPhone]);
+
+    const reposition = () => {
+      const mobile = window.innerWidth < 640;
+      if (mobile) {
+        dialog.style.removeProperty("top");
+        dialog.style.removeProperty("left");
+        dialog.style.removeProperty("right");
+        dialog.style.removeProperty("width");
+        dialog.style.removeProperty("bottom");
+        dialog.style.removeProperty("max-height");
+      } else {
+        const bar = triggerRef.current?.closest<HTMLFormElement>("form[data-search-bar]");
+        const rect = (bar ?? triggerRef.current)?.getBoundingClientRect();
+        if (!rect) return;
+        const top = Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 180));
+        const left = Math.max(8, rect.left);
+        const width = Math.max(250, Math.min(rect.width, window.innerWidth - left - 8));
+        dialog.style.top = `${top}px`;
+        dialog.style.left = `${left}px`;
+        dialog.style.right = "auto";
+        dialog.style.bottom = "auto";
+        dialog.style.width = `${width}px`;
+        dialog.style.maxHeight = `${Math.min(680, Math.max(160, window.innerHeight - top - 12))}px`;
+      }
+    };
+    reposition();
+    if (!dialog.open) {
+      if (window.innerWidth < 640) dialog.showModal();
+      else dialog.show();
+      closeRef.current?.focus({ preventScroll: true });
+    }
+    const outside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (!dialog.contains(target) && !triggerRef.current?.contains(target)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", escape);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open, mounted]);
 
   const activeCount = useMemo(
     () =>
@@ -200,15 +210,11 @@ export function SearchFiltersPicker({
 
     setRangeError("");
     setOpen(false);
-    ref.current?.closest("form")?.requestSubmit();
+    triggerRef.current?.closest("form")?.requestSubmit();
   };
 
   return (
     <div
-      ref={ref}
-      onBlur={(event) => {
-        if (event.relatedTarget && !ref.current?.contains(event.relatedTarget)) setOpen(false);
-      }}
       className={`relative ${className}`}
     >
       <button
@@ -249,19 +255,18 @@ export function SearchFiltersPicker({
         <input key={tag} type="hidden" name="tags" value={tag} />
       ))}
 
-      <FiltersPanel phone={isPhone} open={open} panelRef={panelRef} sheetRef={sheetRef} onClose={() => setOpen(false)}>
+      {mounted && createPortal(
+      <FiltersPanel sheetRef={sheetRef} onClose={() => setOpen(false)}>
         <div className="cascade flex items-start justify-between gap-4" style={{ "--i": 1 } as React.CSSProperties}>
           <div>
             <p className="text-base font-semibold text-ink">Filters</p>
-            <p className="mt-1 text-sm text-slate">Narrow the results without leaving the search bar.</p>
+            <p className="mt-1 text-sm text-slate">Refine your stay by price, room features, and amenities.</p>
           </div>
-          {isPhone && (
-            <button ref={closeRef} type="button" aria-label="Close filters" onClick={() => setOpen(false)} className={iconButtonClass("sm")}>
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          )}
+          <button ref={closeRef} type="button" aria-label="Close filters" onClick={() => setOpen(false)} className={iconButtonClass("sm")}>
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
         </div>
 
         <div className="cascade mt-5 grid gap-5 sm:grid-cols-2" style={{ "--i": 2 } as React.CSSProperties}>
@@ -269,7 +274,7 @@ export function SearchFiltersPicker({
             <legend className="text-sm font-semibold text-ink">Price per night</legend>
             <div className="mt-2 grid grid-cols-2 gap-2">
               <label
-                className={`rounded-xl border bg-paper/40 px-3 py-2.5 focus-within:ring-1 ${
+                className={`rounded-xl border bg-surface px-3 py-2.5 focus-within:ring-1 ${
                   minInvalid || rangeError ? "border-danger focus-within:border-danger focus-within:ring-danger" : "border-edge focus-within:border-blue focus-within:ring-blue"
                 }`}
               >
@@ -297,7 +302,7 @@ export function SearchFiltersPicker({
                 </span>
               </label>
               <label
-                className={`rounded-xl border bg-paper/40 px-3 py-2.5 focus-within:ring-1 ${
+                className={`rounded-xl border bg-surface px-3 py-2.5 focus-within:ring-1 ${
                   maxInvalid ? "border-danger focus-within:border-danger focus-within:ring-danger" : "border-edge focus-within:border-blue focus-within:ring-blue"
                 }`}
               >
@@ -381,7 +386,7 @@ export function SearchFiltersPicker({
                     active={tags.includes(tag)}
                     onClick={() => toggleTag(tag)}
                 >
-                  {tag}
+                  {displayAmenityLabel(tag)}
                 </Chip>
             ))}
           </div>
@@ -409,7 +414,7 @@ export function SearchFiltersPicker({
         </section>
 
         <div
-          className="cascade sticky bottom-0 -mx-4 mt-5 flex items-center justify-between gap-4 border-t border-edge bg-surface px-4 py-4 sm:-mx-5 sm:px-5 sm:pb-5"
+          className="cascade sticky bottom-0 -mx-5 mt-5 flex items-center justify-between gap-4 border-t border-edge bg-surface px-5 py-4 sm:-mx-7 sm:px-7 sm:pb-6"
           style={{ "--i": 5 } as React.CSSProperties}
         >
           <div>
@@ -427,7 +432,7 @@ export function SearchFiltersPicker({
             Apply filters
           </button>
         </div>
-      </FiltersPanel>
+      </FiltersPanel>, document.body)}
     </div>
   );
 }

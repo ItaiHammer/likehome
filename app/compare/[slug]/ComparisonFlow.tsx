@@ -1,5 +1,6 @@
 "use client";
 
+import { stayDisplayName } from "@/app/_components/stayDisplayName";
 import Link from "next/link";
 import {
     useRouter,
@@ -53,16 +54,13 @@ function formatPrice(price: number) {
     );
 }
 
-function formatRating(
-    rating: number | null,
-) {
-    if (rating === null) {
-        return null;
-    }
-
-    return Number.isInteger(rating)
-        ? String(rating)
-        : rating.toFixed(1);
+function listingTypeLabel(type: string | null): string | null {
+    if (!type) return null;
+    const names: Record<string, string> = {
+        hotel: "Hotel", motel: "Motel", resort: "Resort", inn: "Inn",
+        bed_and_breakfast: "Bed and breakfast", apartment: "Apartment",
+    };
+    return names[type.toLowerCase()] ?? type.replace(/_/g, " ");
 }
 
 function StayPhoto({
@@ -77,7 +75,7 @@ function StayPhoto({
             // eslint-disable-next-line @next/next/no-img-element
             <img
                 src={stay.photo}
-                alt={`${stay.name} photo`}
+                alt={`${stayDisplayName(stay.name)} photo`}
                 className={className}
             />
         );
@@ -100,8 +98,7 @@ function CurrentStaySummary({
                             }: {
     stay: ComparisonListing;
 }) {
-    const rating =
-        formatRating(stay.rating);
+    const propertyType = listingTypeLabel(stay.propertyType);
 
     return (
         <section className="mt-7">
@@ -114,7 +111,7 @@ function CurrentStaySummary({
 
                 <div className="min-w-0 flex-1">
                     <h2 className="text-xl font-semibold text-ink">
-                        {stay.name}
+                        {stayDisplayName(stay.name)}
                     </h2>
 
                     <p className="mt-1 text-sm text-slate">
@@ -122,12 +119,10 @@ function CurrentStaySummary({
                     </p>
 
                     <p className="mt-1 text-sm text-slate">
-                        {rating && (
+                        {propertyType && (
                             <>
-                                ★ {rating}
-                                <span className="mx-2">
-                                    ·
-                                </span>
+                                Listing type: {propertyType}
+                                <span className="mx-2">·</span>
                             </>
                         )}
 
@@ -166,8 +161,7 @@ function RecentStayRow({
     disabled: boolean;
     onToggle: () => void;
 }) {
-    const rating =
-        formatRating(stay.rating);
+    const propertyType = listingTypeLabel(stay.propertyType);
 
     return (
         <label
@@ -196,18 +190,16 @@ function RecentStayRow({
 
             <div className="min-w-0 flex-1">
                 <h3 className="truncate text-base font-semibold text-ink">
-                    {stay.name}
+                    {stayDisplayName(stay.name)}
                 </h3>
 
                 <p className="mt-1 truncate text-sm text-slate">
                     {stay.location}
 
-                    {rating && (
+                    {propertyType && (
                         <>
-                            <span className="mx-2">
-                                ·
-                            </span>
-                            ★ {rating}
+                            <span className="mx-2">·</span>
+                            Listing type: {propertyType}
                         </>
                     )}
 
@@ -253,8 +245,7 @@ function ComparisonCard({
     onRemove?: () => void;
     reserveHref: string;
 }) {
-    const rating =
-        formatRating(stay.rating);
+    const propertyType = listingTypeLabel(stay.propertyType);
 
     const goodFor =
         GOOD_FOR_ORDER.filter(
@@ -307,16 +298,16 @@ function ComparisonCard({
                             stay.name
                         }
                     >
-                        {stay.name}
+                        {stayDisplayName(stay.name)}
                     </h2>
 
                     <p className="mt-1 truncate text-sm text-slate">
                         {stay.location}
                     </p>
 
-                    {rating && (
+                    {propertyType && (
                         <p className="mb-2 mt-1 text-sm text-slate">
-                            ★ {rating}
+                            Listing type: {propertyType}
                         </p>
                     )}
                 </div>
@@ -690,7 +681,7 @@ export function ComparisonFlow({
                     ← Change selection
                 </button>
 
-                <header className="mt-4 flex flex-col gap-[15px]">
+                <header className="mt-4 flex flex-col gap-2">
                     <h1 className="font-serif text-4xl leading-none text-ink sm:text-5xl">
                         Compare stays
                     </h1>
@@ -785,8 +776,8 @@ export function ComparisonFlow({
                 {currentStay.name}
             </Link>
 
-            <header className="mt-4 flex flex-col gap-[15px]">
-                <p className="text-sm font-semibold uppercase tracking-wide text-blue">
+            <header className="mt-4 flex flex-col gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-blue">
                     FIND YOUR PERFECT
                     STAY
                 </p>

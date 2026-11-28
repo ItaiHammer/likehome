@@ -19,7 +19,7 @@ export async function getRecentlyViewedHotels(accountId: string, limit?: number)
   const supabase = createClient(cookieStore)
   const query = supabase
     .from('recently_viewed_hotels')
-    .select('viewed_at, hotels(*)')
+    .select('viewed_at, hotels(*, rooms(price_per_night, capacity))')
     .eq('account_id', accountId)
     .order('viewed_at', { ascending: false })
   const { data, error } = await (limit ? query.limit(limit) : query)

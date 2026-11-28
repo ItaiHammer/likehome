@@ -10,7 +10,7 @@ export const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
 };
 
 export const AMENITY_LABELS: Record<Amenity, string> = {
-  wifi: "Wi-Fi",
+  wifi: "Free Wi-Fi",
   parking: "Parking",
   restaurant: "Restaurant",
   pool: "Pool",
@@ -22,7 +22,7 @@ export const AMENITY_LABELS: Record<Amenity, string> = {
   family_rooms: "Family rooms",
 };
 
-// How the Amenities tab groups the checkboxes.
+// Keep the existing editor amenities rather than expanding the catalog now.
 export const AMENITY_GROUPS: { title: string; description: string; amenities: Amenity[] }[] = [
   {
     title: "Property amenities",
@@ -58,7 +58,7 @@ export function formatLocation(listing: Pick<Listing, "city" | "region" | "count
   return [listing.city, listing.region || countryLabel(listing.country)].filter(Boolean).join(", ");
 }
 
-// Every physical room across the listing's room types
+// Every physical room across the listing's room types. Used by the owner calendar.
 export function totalRooms(rooms: Pick<Listing["rooms"][number], "roomCount">[]) {
   return rooms.reduce((sum, room) => sum + room.roomCount, 0);
 }

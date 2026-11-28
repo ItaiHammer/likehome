@@ -100,38 +100,29 @@ export const sorts = [
 ] as const;
 export type Sort = typeof sorts[number];
 
+// Existing search/filter values stay unchanged for database compatibility.
+// Only their visible labels are normalized (e.g. Gym -> Fitness center).
 export const propertyAmenities = [
-    "Washer & Dryer",
-    "Parking",
-    "EV Charging",
-    "Free Meals",
-    "Pool",
-    "Gym",
-    "Gift Shops",
-    "Cribs",
+    'Washer & Dryer', 'Parking', 'EV Charging', 'Free Meals',
+    'Pool', 'Gym', 'Gift Shops', 'Cribs',
 ] as const;
 export type ProperyAmenity = typeof propertyAmenities[number];
 
 export const roomAmenities = [
-    "ADA Compliant",
-    "Kitchen",
-    "Free Wi-Fi",
-    "Housekeeping",
+    'ADA Compliant', 'Kitchen', 'Free Wi-Fi', 'Housekeeping',
 ] as const;
 export type RoomAmenity = typeof roomAmenities[number];
 
-export const travelerTypes = [
-    "Families",
-    "Kids",
-    "Pets",
-    "Couples",
-    "Friends",
-] as const;
+export const travelerTypes = ['Families', 'Kids', 'Pets', 'Couples', 'Friends'] as const;
 export type TravelerType = typeof travelerTypes[number];
 
-export const tags = [
-    ...propertyAmenities,
-    ...roomAmenities,
-    ...travelerTypes,
-] as const;
+export const tags = [...propertyAmenities, ...roomAmenities, ...travelerTypes] as const;
 export type Tag = typeof tags[number];
+
+const VISIBLE_AMENITIES: Record<string, string> = {
+    'Gym': 'Fitness center',
+    'ADA Compliant': 'Accessible',
+};
+export function displayAmenityLabel(tag: string): string {
+    return VISIBLE_AMENITIES[tag] ?? tag;
+}

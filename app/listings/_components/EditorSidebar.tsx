@@ -58,20 +58,22 @@ type Props = {
   tab: EditorTab;
   changed: EditorTab[]; // tabs with unsaved changes
   infoErrors: number; // invalid fields on Hotel information
+  missingPhotos?: boolean;
+  missingRooms?: boolean;
   onSelectTab: (tab: EditorTab) => void;
   backLink?: React.ReactNode;
-  mode?: "mobile" | "desktop";
+  mode?: "mobile" | "desktop" | "steps";
 };
 
-export function EditorSidebar({ tab, changed, infoErrors, onSelectTab, backLink, mode = "desktop" }: Props) {
+export function EditorSidebar({ tab, changed, infoErrors, missingPhotos = false, missingRooms = false, onSelectTab, backLink, mode = "desktop" }: Props) {
   const mobileMenu = useRef<HTMLDetailsElement>(null);
   const selected = TABS.find((item) => item.id === tab)!;
 
   function tabButton(item: (typeof TABS)[number], compact: boolean) {
     const active = item.id === tab;
-    const errors = item.id === "info" ? infoErrors : 0;
+    const errors = item.id === "info" ? infoErrors : item.id === "photos" && missingPhotos ? 1 : item.id === "rooms" && missingRooms ? 1 : 0;
     return (
-      <li key={item.id}>
+      <li key={item.id} className={mode === "steps" ? "flex min-w-0" : undefined}>
         <button
           type="button"
           aria-current={active ? "page" : undefined}
@@ -79,21 +81,29 @@ export function EditorSidebar({ tab, changed, infoErrors, onSelectTab, backLink,
             onSelectTab(item.id);
             if (compact) mobileMenu.current?.removeAttribute("open");
           }}
-          className={`group flex w-full items-center gap-2 rounded-control border px-2.5 py-2 text-left text-sm leading-5 transition-colors focus-visible:outline-2 focus-visible:outline-blue ${
-            active ? "border-edge bg-blue/5 font-semibold text-ink" : "border-transparent text-slate hover:bg-blue/5 hover:text-ink"
+          className={`group flex h-full min-h-[52px] w-full min-w-0 items-center gap-2 rounded-control border px-2.5 py-2 text-left text-sm leading-5 transition-colors focus-visible:outline-2 focus-visible:outline-blue ${
+            active ? "border-blue bg-surface font-semibold text-ink" : "border-edge bg-surface text-slate hover:border-blue hover:text-ink"
           }`}
         >
           <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${active ? "bg-blue text-on-blue" : "bg-blue/10 text-blue"}`}>
             {item.icon}
           </span>
-          <span className="min-w-0 flex-1">{item.label}</span>
+          <span className={`min-w-0 flex-1 ${mode === "steps" ? "whitespace-normal break-normal" : "truncate"}`} title={item.label}>{item.label}</span>
           {errors > 0 ? (
             <span className="rounded-full border border-danger px-1.5 text-xs text-danger" aria-label={`${errors} invalid fields`}>{errors}</span>
-          ) : changed.includes(item.id) ? (
-            <span className="h-2 w-2 shrink-0 rounded-full bg-blue" aria-label="Unsaved changes" />
           ) : null}
         </button>
       </li>
+    );
+  }
+
+  if (mode === "steps") {
+    return (
+      <nav aria-label="Property sections" className="mt-7">
+        <ul className="grid auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-4">
+          {TABS.map((item) => tabButton(item, false))}
+        </ul>
+      </nav>
     );
   }
 
@@ -102,7 +112,7 @@ export function EditorSidebar({ tab, changed, infoErrors, onSelectTab, backLink,
   // stays in its original left column.
   if (mode === "mobile") {
     return (
-      <details ref={mobileMenu} className="group mt-5 w-full min-w-0 rounded-lg border border-edge bg-surface lg:hidden">
+      <details ref={mobileMenu} className="group mt-5 w-full min-w-0 rounded-lg border border-edge bg-surface">
         <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2.5 text-sm font-semibold text-ink focus-visible:outline-2 focus-visible:outline-blue [&::-webkit-details-marker]:hidden">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue text-on-blue">{selected.icon}</span>
           <span className="min-w-0 flex-1 truncate">{selected.label}</span>
@@ -112,7 +122,7 @@ export function EditorSidebar({ tab, changed, infoErrors, onSelectTab, backLink,
           </svg>
         </summary>
         <nav aria-label="Property sections" className="border-t border-edge p-2">
-          <ul className="grid gap-1 sm:grid-cols-2">{TABS.map((item) => tabButton(item, true))}</ul>
+          <ul className="grid gap-1">{TABS.map((item) => tabButton(item, true))}</ul>
         </nav>
       </details>
     );
@@ -121,7 +131,7 @@ export function EditorSidebar({ tab, changed, infoErrors, onSelectTab, backLink,
   return (
     <aside className="hidden w-48 shrink-0 self-start lg:sticky lg:top-6 lg:block">
       {backLink && <div>{backLink}</div>}
-      <nav aria-label="Property sections" className="mt-6">
+      <nav aria-label="Property sections" className="mt-[320px]">
         <ul className="space-y-1">{TABS.map((item) => tabButton(item, false))}</ul>
       </nav>
     </aside>

@@ -29,6 +29,11 @@ test('an amenity on the hotel or every room is available, on some rooms is "some
   assert.equal(statusOf(listing, 'Pool'), 'not-offered')
 })
 
+test('comparison displays stored property type without inferring star rating', () => {
+  assert.equal(toComparisonListing(hotel({ property_type: 'resort', rating: 4 })).propertyType, 'resort')
+  assert.equal(toComparisonListing(hotel({ property_type: null, rating: 4 })).propertyType, null)
+})
+
 test('every listing has the same amenities in the filters’ order', () => {
   const order = [...propertyAmenities, ...roomAmenities]
   assert.deepEqual(toComparisonListing(hotel({ tags: ['Pool'] })).amenities.map((a) => a.label), order)

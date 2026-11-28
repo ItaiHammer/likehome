@@ -59,6 +59,7 @@ export function Pagination({
 }) {
   if (pages <= 1) return null;
 
+
   const visible = visiblePages(current, pages);
   const look = looks[size];
   const compact = size === "sm";

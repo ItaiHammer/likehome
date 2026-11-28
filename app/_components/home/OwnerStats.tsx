@@ -30,7 +30,7 @@ export async function OwnerStats() {
         {stats.map((s) => (
           <Card key={s.label} as="li" padding="none" className="p-5 sm:px-[22px]">
             <h3 className={cardLabel}>{s.label}</h3>
-            <p className="mt-2 font-serif text-[32px] leading-9 text-ink [overflow-wrap:anywhere] sm:mt-1.5 sm:text-[40px] sm:leading-[44px]">{s.value}</p>
+            <p className="mt-2 font-bold text-[32px] leading-9 text-ink [overflow-wrap:anywhere] sm:mt-1.5 sm:text-[40px] sm:leading-[44px]">{s.value}</p>
             <p className="mt-2 text-[15px] leading-6 text-slate sm:mt-1">{s.detail}</p>
           </Card>
         ))}

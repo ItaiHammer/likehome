@@ -25,6 +25,7 @@ export function EditorHeader({ saved, cover, isNew }: { saved: HotelInfo; cover?
     <div className="flex min-w-0 items-center gap-5">
       {!isNew && <ListingCover photo={cover} sizes="128px" className="hidden aspect-[16/10] w-32 border border-edge sm:block" />}
       <div className="min-w-0">
+        {isNew && <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-blue">Property setup</p>}
         <h1 className="truncate font-serif text-[40px] leading-[48px] text-ink">{isNew ? "New property" : saved.name}</h1>
         <p className="mt-1 text-slate">{isNew ? "Add your property details" : formatLocation(saved)}</p>
       </div>
@@ -61,9 +62,11 @@ export function SaveBar({ status, saveLabel, isSaving, canDiscard, onSave, onPre
     <>
       <div className="sticky top-3 z-20 mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-(--bar-edge) bg-surface/80 p-3 shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop-blur-md">
         <p role="status" className={`flex min-w-0 flex-1 basis-0 items-center gap-2 pl-2 text-sm sm:basis-48 ${STATUS_COLORS[status.kind]}`}>
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            {STATUS_ICONS[status.kind]}
-          </svg>
+          {status.kind !== "unsaved" && (
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              {STATUS_ICONS[status.kind]}
+            </svg>
+          )}
           <span className={status.kind === "problem" ? "" : "text-slate"}>{status.text}</span>
         </p>
         <div className="flex flex-wrap items-center gap-2">

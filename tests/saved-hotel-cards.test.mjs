@@ -33,12 +33,12 @@ test('gone and delisted hotels are skipped and not counted', () => {
   assert.equal(toSavedHotelCards(rows).more, false)
 })
 
-test('the row shows the newest 3, and the "see all" tile only when there are more', () => {
-  assert.equal(SAVED_HOTEL_CARDS, 3)
+test('the carousel shows up to 12 latest saved hotels and indicates if more exist', () => {
+  assert.equal(SAVED_HOTEL_CARDS, 12)
   assert.deepEqual(ids(toSavedHotelCards(favorites(3)).cards), ['h0', 'h1', 'h2'])
   assert.equal(toSavedHotelCards(favorites(3)).more, false)
   const twenty = toSavedHotelCards(favorites(20))
-  assert.deepEqual(ids(twenty.cards), ['h0', 'h1', 'h2'])
+  assert.deepEqual(ids(twenty.cards), Array.from({ length: 12 }, (_, i) => `h${i}`))
   assert.equal(twenty.more, true)
 })
 

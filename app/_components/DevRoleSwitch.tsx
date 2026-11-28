@@ -29,7 +29,7 @@ export function DevRoleSwitch({
       aria-label="Dev role switch"
       className="fixed bottom-4 right-4 z-50 rounded-lg border border-edge bg-surface/95 p-3 text-xs text-slate shadow-[0_12px_32px_-16px_rgba(7,13,47,0.45)] backdrop-blur"
     >
-      <p className="mb-2 font-semibold uppercase tracking-[0.08em] text-blue-dark">Dev role</p>
+      <p className="mb-2 font-semibold uppercase tracking-[0.08em] text-blue">Dev role</p>
       <div className="flex flex-wrap gap-1">
         {CHOICES.map((c) => (
           <button

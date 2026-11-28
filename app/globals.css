@@ -100,7 +100,14 @@
 
 body {
   color: var(--ink);
-  background: var(--paper);
+  /* A subtle blue-to-paper fallback for routes without a full SkyBackground hero.
+     Pages with a sky keep their stronger, locally rendered gradient. */
+  background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--blue) 13%, var(--paper)) 0,
+      var(--paper) 380px
+    ) no-repeat,
+    var(--paper);
 }
 
 /* Tailwind v4 resets buttons to the arrow cursor; bring back the pointer for anything clickable.
@@ -348,4 +355,19 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
           var(--edge) 55%
   ) !important;
   border-image: none !important;
+}
+
+.standard-return-button:hover {
+  background-image: none !important;
+  background-color: color-mix(
+          in srgb,
+          var(--blue) 18%,
+          var(--surface) 82%
+  ) !important;
+  border-image: none !important;
+}
+/* Native property-type menus should use the same UI font as their controls.
+   Browser/OS popup rendering can still override option styling. */
+select, select option {
+  font-family: var(--font-sans), sans-serif;
 }

@@ -21,12 +21,12 @@ export interface HotelRecipient {
 
 // Preview-only records. These are never submitted to LikeHome's API or Supabase.
 export const previewProperties = [
-    {id: "mock-harbor", name: "Harbor House"},
-    {id: "mock-terrace", name: "Pacific Terrace"},
+    {id: "mock-harbor-house", name: "Harbor House"},
+    {id: "mock-pacific-terrace", name: "Pacific Terrace"},
 ];
 
 export const previewRecipientsByHotel: Record<string, HotelRecipient[]> = {
-    "mock-harbor": [
+    "mock-harbor-house": [
         {
             account_id: "mock-sarah",
             full_name: "Sarah Chen",
@@ -42,7 +42,7 @@ export const previewRecipientsByHotel: Record<string, HotelRecipient[]> = {
             last_status: "completed"
         },
     ],
-    "mock-terrace": [
+    "mock-pacific-terrace": [
         {
             account_id: "mock-maya",
             full_name: "Maya Patel",
@@ -56,7 +56,7 @@ export const previewRecipientsByHotel: Record<string, HotelRecipient[]> = {
 export const previewSentMessages: Message[] = [
     {
         id: "mock-message-1",
-        hotel_id: "mock-harbor",
+        hotel_id: "mock-harbor-house",
         recipient_id: "mock-sarah",
         subject: "Your stay is coming up",
         body: "Hi Sarah,\n\nWe look forward to welcoming you to Harbor House in December! Check-in starts at 3 PM. We hope you have a wonderful stay.\n\nHarbor House Team",
@@ -66,7 +66,7 @@ export const previewSentMessages: Message[] = [
     },
     {
         id: "mock-message-2",
-        hotel_id: "mock-harbor",
+        hotel_id: "mock-harbor-house",
         recipient_id: "mock-daniel",
         subject: "Thank you for staying with us!",
         body: "Hi Daniel,\n\nThank you for visiting Harbor House! We hope you enjoyed your stay. We would love to welcome you back again soon.\n\nHarbor House Team",
@@ -76,7 +76,7 @@ export const previewSentMessages: Message[] = [
     },
     {
         id: "mock-message-3",
-        hotel_id: "mock-terrace",
+        hotel_id: "mock-pacific-terrace",
         recipient_id: "mock-maya",
         subject: "Preparing for your upcoming stay",
         body: "Hi Maya,\n\nYour reservation at Pacific Terrace is approaching. We'll send more details before arrival. We look forward to hosting you!\n\nPacific Terrace Team",
@@ -86,7 +86,7 @@ export const previewSentMessages: Message[] = [
     },
     {
         id: "mock-message-4",
-        hotel_id: "mock-terrace",
+        hotel_id: "mock-pacific-terrace",
         recipient_id: "mock-maya",
         subject: "A winter getaway awaits",
         body: "Hi Maya,\n\nWinter is a lovely time to visit the coast. We'd be happy to welcome you again!\n\nPacific Terrace Team",

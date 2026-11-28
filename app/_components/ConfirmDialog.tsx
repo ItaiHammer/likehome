@@ -47,7 +47,7 @@ export function ConfirmDialog({
       {request && (
         <>
           <div className="flex items-start justify-between gap-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.09em] text-blue-dark">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-blue">
               {request.eyebrow ?? "Please confirm"}
             </p>
             <button

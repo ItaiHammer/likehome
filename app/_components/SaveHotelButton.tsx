@@ -51,6 +51,7 @@ export function SaveHotelButton({ hotelId, hotelName, saved, className = "" }: S
         const result = await toggleSavedHotel(hotelId, isSaved);
         setPending(false);
         if (result === "signed-out") signIn();
+        else if (result === "saved" || result === "removed") router.refresh();
     };
 
     // Only personal accounts save hotels
@@ -67,20 +68,27 @@ export function SaveHotelButton({ hotelId, hotelName, saved, className = "" }: S
         >
             {/* The ::before is a 44px tap area around the 32px circle that takes no room in the layout */}
             <span className="relative flex h-8 w-8 items-center justify-center rounded-full border border-edge bg-surface text-ink shadow-md transition-transform before:absolute before:-inset-1.5 before:rounded-full group-hover/heart:scale-110 group-focus-visible/heart:ring-2 group-focus-visible/heart:ring-blue group-active/heart:scale-95">
-                <svg
-                    aria-hidden
-                    className={`h-4 w-4 transition-colors ${isSaved ? "text-danger" : ""}`}
-                    viewBox="0 0 24 24"
-                    fill={isSaved ? "currentColor" : "none"}
-                    stroke="currentColor"
-                    strokeWidth={2}
-                >
-                    <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                    />
-                </svg>
+                {pending ? (
+                    <svg viewBox="0 0 24 24" className="h-4 w-4 animate-spin text-blue motion-reduce:animate-none" fill="none" aria-hidden>
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+                        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
+                ) : (
+                    <svg
+                        aria-hidden
+                        className={`h-4 w-4 transition-colors ${isSaved ? "text-danger" : ""}`}
+                        viewBox="0 0 24 24"
+                        fill={isSaved ? "currentColor" : "none"}
+                        stroke="currentColor"
+                        strokeWidth={2}
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                        />
+                    </svg>
+                )}
             </span>
         </button>
     );

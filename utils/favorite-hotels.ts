@@ -34,7 +34,7 @@ export async function getFavoriteHotels(accountId: string) {
   const supabase = createClient(cookieStore)
   const { data, error } = await supabase
     .from('favorite_hotels')
-    .select('created_at, hotels(*)')
+    .select('created_at, hotels(*, rooms(price_per_night, capacity))')
     .eq('account_id', accountId)
     .order('created_at', { ascending: false })
   return { data, error }

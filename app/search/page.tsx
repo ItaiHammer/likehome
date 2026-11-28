@@ -17,11 +17,12 @@ import { catalogEnabled, facilityNames, findPlace, hotelsInPlace } from "@/lib/l
 import { savedLiteapiIds } from "@/utils/liteapi-hotels";
 import {countNights, MAX_NIGHTS, parseDate, todayInTimeZone} from "@/utils/reservation-logic";
 import { tags as filterTags } from "./types";
+import { getViewer } from "@/utils/viewer";
 
 type RawParams = Record<string, string | string[] | undefined>;
 type SortValue = "recommended" | "price-low" | "price-high";
 
-const PAGE_SIZE = 21;
+const PAGE_SIZE = 20;
 
 function pageHref(params: RawParams, page: number) {
   const query = new URLSearchParams();
@@ -59,6 +60,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<RawParams> }) {
   const raw = await searchParams;
+  const businessAccount = (await getViewer()).role === "business";
   const params = normalizeParams(raw);
   const aiPrompt = params.aiPrompt?.trim();
   // An AI search arrives as normal filters plus the assistant's summary (aiReply):
@@ -177,7 +179,6 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
         <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 lg:px-10">
           <div className={barColumn}>
-            <p className="mb-3 text-sm font-semibold text-ink">Find your next stay</p>
             {/* Keyed by the search, so a new search (e.g. from AI mode) refills the bar */}
             <SearchExperience
               key={searchKey(navigationParams)}
@@ -266,11 +267,11 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               ) : (
                 <>
                   {quoted ? (
-                    <Suspense key={resultsKey} fallback={<ResultsGrid rows={data} search={stayLinkSearch} />}>
-                      <QuotedResultsGrid rows={quoted} search={stayLinkSearch} />
+                    <Suspense key={resultsKey} fallback={<ResultsGrid rows={data} search={stayLinkSearch} businessAccount={businessAccount} />}>
+                      <QuotedResultsGrid rows={quoted} search={stayLinkSearch} businessAccount={businessAccount} />
                     </Suspense>
                   ) : (
-                    <ResultsGrid key={resultsKey} rows={data} search={stayLinkSearch} />
+                    <ResultsGrid key={resultsKey} rows={data} search={stayLinkSearch} businessAccount={businessAccount} />
                   )}
                   <Pagination
                     current={currentPage}
@@ -539,20 +540,20 @@ function clearFiltersHref(params: SearchParams) {
 }
 
 // `cascade` plays the cards' entrance. Prices streaming in replace cards already on screen, so those skip it.
-function ResultsGrid({ rows, search, cascade = true }: { rows: HotelSearchResult[]; search: string; cascade?: boolean }) {
+function ResultsGrid({ rows, search, cascade = true, businessAccount = false }: { rows: HotelSearchResult[]; search: string; cascade?: boolean; businessAccount?: boolean }) {
   return (
     <div className="grid gap-5 sm:grid-cols-2 2xl:grid-cols-3">
       {rows.map((stay, index) => (
         <div key={String(stay.id ?? stay.liteapi_id ?? index)} className={cascade ? "card-in grid" : "grid"} style={{ "--i": Math.min(index, 8) } as React.CSSProperties}>
-          <SearchResultCard stay={stay} eager={index < 3} search={search} />
+          <SearchResultCard stay={stay} eager={index < 3} search={search} businessAccount={businessAccount} />
         </div>
       ))}
     </div>
   );
 }
 
-async function QuotedResultsGrid({ rows, search }: { rows: Promise<HotelSearchResult[]>; search: string }) {
-  return <ResultsGrid rows={await rows} search={search} cascade={false} />;
+async function QuotedResultsGrid({ rows, search, businessAccount = false }: { rows: Promise<HotelSearchResult[]>; search: string; businessAccount?: boolean }) {
+  return <ResultsGrid rows={await rows} search={search} cascade={false} businessAccount={businessAccount} />;
 }
 
 // null without a LiteAPI key, or when LiteAPI can't find the place or list its hotels: the search then runs on

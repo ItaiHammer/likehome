@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { API_ROUTES, PAGE_ROUTES } from "@/constants/routes";
 import { bellSummary, mailBadge, relativeTime, toInboxMessages, type BellSummary, type InboxMessage } from "@/lib/messages";
-import { ArrowIcon, arrowSlideClass, headerIconButtonClass as bellClass, Popover, sectionLinkClass } from "./ui";
+import { ArrowIcon, arrowSlideClass, headerIconButtonClass as bellClass, sectionLinkClass } from "./ui";
 import { useCurrentMinute } from "./useCurrentMinute";
 import { getAccountSnapshot, subscribeAccount, UNKNOWN_ACCOUNT } from "./accountChange";
 
@@ -49,6 +49,9 @@ type Request = { from: BellSummary | null };
 // server props (after router.refresh()) always replace it. A failed read keeps what's shown.
 function InboxBell({ summary }: { summary: BellSummary | null }) {
   const pathname = usePathname();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerRef = useRef<HTMLDialogElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const [seenPath, setSeenPath] = useState(pathname);
   const [request, setRequest] = useState<Request | null>(null);
   const [settled, setSettled] = useState<Request | null>(null);
@@ -86,43 +89,63 @@ function InboxBell({ summary }: { summary: BellSummary | null }) {
   const badge = mailBadge(shown ?? NO_MESSAGES);
   const reload = () => setRequest({ from: summary });
 
-  // Popover doesn't say when it opens: a click on its trigger while still collapsed is an open
-  function onClickCapture(event: React.MouseEvent<HTMLDivElement>) {
-    const trigger = event.target instanceof Element ? event.target.closest("[aria-expanded]") : null;
-    if (trigger?.getAttribute("aria-expanded") === "false" && event.currentTarget.contains(trigger)) reload();
-  }
+  useEffect(() => {
+    const drawer = drawerRef.current;
+    if (!drawer) return;
+    if (drawerOpen && !drawer.open) {
+      drawer.showModal();
+      closeRef.current?.focus({ preventScroll: true });
+    } else if (!drawerOpen && drawer.open) {
+      drawer.close();
+    }
+  }, [drawerOpen]);
 
+  // Close the drawer on navigation. The existing request effect then fetches
+  // the latest inbox state without exposing data from another account.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
+
+  const close = () => setDrawerOpen(false);
   return (
-    // display: contents, so the wrapper adds no box to the header row. On phones the Popover's root
-    // is made static so the panel hangs from the header (which is relative) and scrolls away with it.
-    <div className="contents max-sm:[&>div]:static" onClickCapture={onClickCapture}>
-      <Popover
-        label="Messages"
-        align="right"
-        // Phones: the icon sits mid-header, so a panel hung from it would run off the left edge
-        panelClassName="w-[min(300px,calc(100vw-2rem))] !px-[25px] !pb-3 !pt-3 max-sm:inset-x-4 max-sm:max-h-[calc(100dvh-5rem)] max-sm:w-auto max-sm:overflow-y-auto"
-        // The last rule hides the chevron Popover adds to every trigger
-        triggerClassName={`${bellClass} aria-expanded:bg-ink/5 dark:aria-expanded:bg-white/10 [&>svg:last-child]:hidden`}
-        trigger={
-          <>
-            <MailIcon />
-            {badge.count && (
-              <span
-                aria-hidden
-                className="absolute -right-0.5 -top-0.5 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-blue px-[3px] text-xs leading-none tabular-nums text-on-blue ring-2 ring-surface forced-colors:border"
-              >
-                {badge.count}
-              </span>
-            )}
-            <span className="sr-only">{badge.label}</span>
-          </>
-        }
+    <>
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={drawerOpen}
+        aria-label={`Messages. ${badge.label}`}
+        onClick={() => { reload(); setDrawerOpen(true); }}
+        className={`${bellClass} relative`}
       >
-        {/* The header lives in the root layout, so links close the panel themselves */}
-        {(close) => <InboxPanel summary={shown} loading={loading} onRetry={reload} close={close} />}
-      </Popover>
-    </div>
+        <MailIcon />
+        {badge.count && (
+          <span aria-hidden className="absolute -right-0.5 -top-0.5 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-blue px-[3px] text-xs leading-none tabular-nums text-on-blue ring-2 ring-surface forced-colors:border">
+            {badge.count}
+          </span>
+        )}
+      </button>
+      <dialog
+        ref={drawerRef}
+        aria-label="Messages"
+        onClose={close}
+        onClick={(event) => event.target === event.currentTarget && close()}
+        className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-dvh w-[min(100vw,22rem)] max-w-none overflow-y-auto rounded-none border-0 border-l border-edge bg-surface p-0 text-ink shadow-[-20px_0_55px_-20px_rgba(7,13,47,0.45)] backdrop:bg-[#070d2f]/55 sm:rounded-l-2xl"
+      >
+        <div className="flex min-h-full flex-col px-5 pt-5 sm:px-7 sm:pt-7">
+          <div className="mb-5 flex items-center justify-between gap-4 border-b border-edge pb-4">
+            <h2 className="text-xl font-semibold text-ink">Your messages</h2>
+            <button ref={closeRef} type="button" onClick={close} aria-label="Close messages" className="flex h-11 w-11 items-center justify-center rounded-control border border-edge text-ink hover:border-blue focus-visible:outline-2 focus-visible:outline-blue">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+          <InboxPanel summary={shown} loading={loading} onRetry={reload} close={close} />
+        </div>
+      </dialog>
+    </>
   );
+
 }
 
 // Its own component so each open re-renders it and reads a fresh "now"
@@ -130,17 +153,9 @@ function InboxPanel({ summary, loading, onRetry, close }: { summary: BellSummary
   const now = useCurrentMinute();
 
   return (
-    <div className="flex flex-col">
-      <div className="cascade flex items-center justify-between gap-3 pb-2" style={cascadeAt(0)}>
-        <h2 className="text-sm text-ink">Messages</h2>
-        <Link href={PAGE_ROUTES.MESSAGES} onClick={close} className={`${sectionLinkClass} text-sm`}>
-          View all
-          <ArrowIcon className={arrowSlideClass} />
-        </Link>
-      </div>
-
+    <div className="flex flex-1 flex-col">
       {loading ? (
-        <div className="border-t border-edge py-3">
+        <div className="py-3">
           <p role="status" className="sr-only">
             Loading your messages…
           </p>
@@ -155,7 +170,7 @@ function InboxPanel({ summary, loading, onRetry, close }: { summary: BellSummary
           </div>
         </div>
       ) : !summary ? (
-        <div role="alert" className="cascade border-t border-edge py-4" style={cascadeAt(1)}>
+        <div role="alert" className="cascade py-4" style={cascadeAt(1)}>
           <p className="text-sm text-ink">We couldn’t load your messages.</p>
           <button
             type="button"
@@ -166,11 +181,11 @@ function InboxPanel({ summary, loading, onRetry, close }: { summary: BellSummary
           </button>
         </div>
       ) : summary.latest.length === 0 ? (
-        <p className="cascade border-t border-edge py-6 text-sm text-slate" style={cascadeAt(1)}>
+        <p className="cascade py-6 text-sm text-slate" style={cascadeAt(1)}>
           No messages yet.
         </p>
       ) : (
-        <ul aria-label="Latest messages" className="cascade border-t border-edge pb-1 pt-2" style={cascadeAt(1)}>
+        <ul aria-label="Latest messages" className="cascade pb-1 pt-2" style={cascadeAt(1)}>
           {summary.latest.map((message) => (
             <li key={message.id}>
               <MessageLink message={message} now={now} onOpen={close} />
@@ -178,6 +193,11 @@ function InboxPanel({ summary, loading, onRetry, close }: { summary: BellSummary
           ))}
         </ul>
       )}
+      <div className="mt-auto flex justify-end border-b border-edge pb-4 pt-4">
+        <Link href={PAGE_ROUTES.MESSAGES} onClick={close} className={`${sectionLinkClass} text-sm`}>
+          View all<ArrowIcon className={arrowSlideClass} />
+        </Link>
+      </div>
     </div>
   );
 }

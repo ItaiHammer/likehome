@@ -262,7 +262,7 @@ export function AccountTabContent({
         }
 
         if (zip && !/^\d{5}$/.test(zip.trim())) {
-            setAccountError("ZIP code must be exactly 5 numeric digits.");
+            setAccountError("Postal code must be exactly 5 numeric digits.");
             return;
         }
 
@@ -304,7 +304,7 @@ export function AccountTabContent({
                     <h2 className="font-serif text-[32px] leading-9 font-bold text-ink">Account details</h2>
 
                     <div className="flex items-center gap-4 pt-1">
-                        <span aria-hidden className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-edge bg-paper text-sm font-semibold text-blue-dark">
+                        <span aria-hidden className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#3d66a6] text-sm font-semibold text-white">
                           {initials}
                         </span>
                         <div className="min-w-0">
@@ -379,7 +379,7 @@ export function AccountTabContent({
                                 </div>
 
                                 <div className="col-span-1">
-                                    <label className="text-[11px] text-slate uppercase tracking-wider font-semibold block mb-1">ZIP</label>
+                                    <label className="text-[11px] text-slate uppercase tracking-wider font-semibold block mb-1">Postal Code</label>
                                     <input
                                         type="text"
                                         placeholder="95112"
@@ -458,7 +458,7 @@ export function AccountTabContent({
                     <h2 className="font-serif text-[32px] leading-9 font-bold text-ink">Payment methods</h2>
 
                     {isAddingCard ? (
-                        <form onSubmit={handleAddCardSubmit} className="space-y-3 rounded-xl border border-edge bg-paper/50 p-3.5">
+                        <form onSubmit={handleAddCardSubmit} className="space-y-3 rounded-xl border border-edge bg-blue/5 p-3.5">
                             <div className="flex items-center justify-between">
                                 <p className="text-xs font-semibold text-ink">Add New Card</p>
                                 <span className="text-[11px] font-bold text-blue-dark">{detectedBrand}</span>
@@ -612,7 +612,7 @@ export function AccountTabContent({
                                             <img
                                                 src={tx.image}
                                                 alt={tx.title}
-                                                className="h-10 w-14 shrink-0 rounded-lg object-cover bg-paper border border-edge"
+                                                className="h-10 w-14 shrink-0 rounded-lg object-cover bg-surface border border-edge"
                                             />
                                         )}
                                         <div className="min-w-0">
@@ -671,7 +671,7 @@ export function AccountTabContent({
                                                 <img
                                                     src={tx.image}
                                                     alt={tx.title}
-                                                    className="h-10 w-14 shrink-0 rounded-lg object-cover bg-paper border border-edge"
+                                                    className="h-10 w-14 shrink-0 rounded-lg object-cover bg-surface border border-edge"
                                                 />
                                             )}
                                             <div className="min-w-0">
@@ -695,7 +695,7 @@ export function AccountTabContent({
                             <button
                                 type="button"
                                 onClick={() => setShowAllTransactions(false)}
-                                className="rounded-md border border-edge px-4 py-1.5 text-xs font-semibold text-slate hover:bg-paper"
+                                className="rounded-md border border-edge px-4 py-1.5 text-xs font-semibold text-slate hover:bg-blue/5"
                             >
                                 Close
                             </button>

@@ -27,6 +27,7 @@ import {
 } from "./editor-state";
 import { EditorSidebar } from "./EditorSidebar";
 import { EditorHeader, SaveBar, type SaveStatus } from "./EditorTopBar";
+import { PageBackdrop } from "@/app/_components/PageBackdrop";
 import { fieldId, HotelInfoForm } from "./HotelInfoForm";
 import { ListingPreview } from "./ListingPreview";
 import { OfflineNotice } from "./OfflineNotice";
@@ -35,6 +36,7 @@ import { PhotosPanel } from "./PhotosPanel";
 import { RoomsPanel } from "./RoomsPanel";
 import { useLeaveGuard } from "./useLeaveGuard";
 import { usePhotoUploads } from "./usePhotoUploads";
+import { saveSampleListing } from "./sample-listings";
 
 const arrowLink = "inline-flex items-center gap-2 text-sm font-semibold text-blue hover:text-blue-dark";
 const backArrow = (
@@ -56,13 +58,14 @@ export function PropertyEditor({
   showCreatedToast?: boolean; // Legacy edit-page prop; creation now redirects to My Listings.
 }) {
   const isNew = !listing;
-  const isSample = isNew && sampleMode && process.env.NODE_ENV === "development";
+  const isSample = sampleMode && process.env.NODE_ENV === "development";
 
   const [state, dispatch] = useReducer(editorReducer, { listing, tab: initialTab }, initEditorState);
   const [isSaving, startSaving] = useTransition();
   const [previewing, setPreviewing] = useState(initialPreview);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [failMessage, setFailMessage] = useState<string | null>(null);
+  const [attemptedSave, setAttemptedSave] = useState(false);
 
   const uploads = usePhotoUploads((photo) => dispatch({ type: "addPhoto", photo }));
 
@@ -113,7 +116,7 @@ export function PropertyEditor({
 
   function startSafePhotoUploads(items: { source: File | string; caption: string }[]) {
     // Existing properties retain their original upload behavior.
-    if (!isNew) {
+    if (!isNew && !isSample) {
       uploads.start(items);
       return;
     }
@@ -178,7 +181,7 @@ export function PropertyEditor({
       showTab("photos");
       return false;
     }
-    if (isNew) {
+    {
       const issue = publicationProblem(state.draft);
       if (issue) {
         setFailMessage(issue.message);
@@ -197,9 +200,35 @@ export function PropertyEditor({
     const sent = state.draft;
     startSaving(async () => {
       if (isSample) {
-        // Same confirmation / redirect / toast as a real creation, but NO API write.
+        // Mock edits are local development-only state. Never call Supabase or server actions.
+        try {
+          // Sample creation and editing use the same draft validation and form flow
+          // as real properties, but store only in this browser (never Supabase).
+          const photos = await Promise.all(sent.photos.map(async (photo) => {
+            const pending = pendingPhotos.current.get(photo.id);
+            if (!pending) return photo;
+            const url = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result));
+              reader.onerror = () => reject(new Error("Could not read image"));
+              reader.readAsDataURL(pending.file);
+            });
+            return {...photo, url};
+          }));
+          const id = listing?.id ?? `mock-created-${crypto.randomUUID()}`;
+          saveSampleListing({
+            ...sent,
+            photos,
+            id,
+            ownerId: listing?.ownerId ?? "mock-preview-only",
+          }, !listing);
+        } catch {
+          setFailMessage("Unable to save sample changes in this browser. Check available storage and try again.");
+          dispatch({ type: "saveFailed", reason: "failed" });
+          return;
+        }
         await guard.release();
-        guard.replace("/listings?sample=1&created=sample");
+        guard.replace(listing ? "/listings?sample=1" : "/listings?sample=1&created=sample");
         return;
       }
 
@@ -252,6 +281,7 @@ export function PropertyEditor({
   }
 
   function save() {
+    setAttemptedSave(true);
     if (isSaving || !checkBeforeSave()) return;
 
     if (isNew) {
@@ -259,10 +289,10 @@ export function PropertyEditor({
         eyebrow: isSample ? "SAMPLE CREATION" : "PUBLISH PROPERTY",
         title: "Publish this property?",
         description: isSample
-          ? "This will simulate creating a public listing. No property will be saved or made available for booking."
+          ? "This creates a sample property in your browser only. It will not be published or available for booking."
           : "Creating this property will make it visible on LikeHome and available for reservations.",
         cancelLabel: "Keep editing",
-        confirmLabel: isSample ? "Test creation" : "Create property",
+        confirmLabel: isSample ? "Create sample property" : "Create property",
         onConfirm: performSave,
       });
       return;
@@ -342,23 +372,11 @@ export function PropertyEditor({
           : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:flex-row lg:gap-8 lg:py-12">
-      <EditorSidebar
-        mode="desktop"
-        tab={state.tab}
-        changed={changedTabs(state)}
-        infoErrors={infoErrors}
-        onSelectTab={showTab}
-        backLink={
-          <Link href={isSample ? "/listings?sample=1" : "/listings"} className={arrowLink}>
-            {backArrow}
-            Back to My listings
-          </Link>
-        }
-      />
-
+    <div className="relative isolate w-full flex-1">
+      <PageBackdrop />
+      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
       <main className="min-w-0 flex-1">
-        <div className="mb-5 lg:hidden">
+        <div className="mb-7">
           <Link href={isSample ? "/listings?sample=1" : "/listings"} className={arrowLink}>
             {backArrow}
             Back to My listings
@@ -367,24 +385,17 @@ export function PropertyEditor({
         {isSample && (
           <p className="mb-5 text-sm text-slate">
             <span className="font-semibold text-blue-dark">Sample mode:</span>{" "}
-            Creation is simulated; computer photos stay on this device. Nothing is uploaded or published.
+            {isNew ? "Creation is simulated." : "Edits are saved in this browser only."} Nothing is uploaded or published.
           </p>
         )}
 
         <EditorHeader saved={state.saved} cover={cover} isNew={isNew} />
-        <EditorSidebar
-          mode="mobile"
-          tab={state.tab}
-          changed={changedTabs(state)}
-          infoErrors={Object.keys(state.errors).length}
-          onSelectTab={showTab}
-        />
         <SaveBar
           status={status}
           saveLabel={
             state.problem === "failed" || state.problem === "unreachable"
               ? "Retry"
-              : isSample
+              : isSample && isNew
                 ? "Test create listing"
                 : isNew
                   ? "Create listing"
@@ -396,6 +407,28 @@ export function PropertyEditor({
           onPreview={() => togglePreview(true)}
           onDiscard={discardChanges}
         />
+        <div className="hidden sm:block">
+        <EditorSidebar
+          mode="steps"
+          tab={state.tab}
+          changed={changedTabs(state)}
+          infoErrors={Object.keys(state.errors).length}
+          missingPhotos={attemptedSave && state.draft.photos.length === 0}
+          missingRooms={attemptedSave && state.draft.rooms.length === 0}
+          onSelectTab={showTab}
+        />
+        </div>
+        <div className="sm:hidden">
+        <EditorSidebar
+          mode="mobile"
+          tab={state.tab}
+          changed={changedTabs(state)}
+          infoErrors={Object.keys(state.errors).length}
+          missingPhotos={attemptedSave && state.draft.photos.length === 0}
+          missingRooms={attemptedSave && state.draft.rooms.length === 0}
+          onSelectTab={showTab}
+        />
+        </div>
         <OfflineNotice />
 
         {notice && <p role="alert" className="mt-6 text-sm text-danger">{notice}</p>}
@@ -409,15 +442,18 @@ export function PropertyEditor({
                   info={state.draft}
                   errors={state.errors}
                   onChange={(field, value) => dispatch({ type: "edit", field, value })}
+                  idealFor={state.draft.idealFor}
+                  onToggleIdealFor={(category, checked) => dispatch({ type: "toggleIdealFor", category, checked })}
                 />
               </div>
             </>
           )}
           {state.tab === "photos" && (
             <>
+
               <PhotosPanel
                 photos={state.draft.photos}
-                instantPhotos={isNew}
+                instantPhotos={isNew || isSample}
                 uploads={uploads.uploads}
                 onStartUploads={startSafePhotoUploads}
                 onRetryUpload={uploads.retry}
@@ -426,6 +462,7 @@ export function PropertyEditor({
                 onMove={(id, by) => dispatch({ type: "movePhoto", id, by })}
                 onRemove={removePhoto}
               />
+              {attemptedSave && state.draft.photos.length === 0 && <p role="alert" className="mt-6 rounded-control border border-danger/50 p-3 text-sm text-danger">Add at least one property photo before saving.</p>}
             </>
           )}
           {state.tab === "amenities" && (
@@ -440,11 +477,14 @@ export function PropertyEditor({
             </>
           )}
           {state.tab === "rooms" && (
+            <>
+
             <RoomsPanel
               rooms={state.draft.rooms}
               editor={state.roomEditor}
               onOpen={(room) => dispatch({ type: "openRoom", room })}
               onChange={(field, value) => dispatch({ type: "editRoom", field, value })}
+              onToggleAmenity={(amenity, checked) => dispatch({ type: "toggleRoomAmenity", amenity, checked })}
               onInvalid={(errors) => dispatch({ type: "roomInvalid", errors })}
               onApply={(room) => dispatch({ type: "saveRoom", room })}
               onCancel={() => dispatch({ type: "closeRoom" })}
@@ -457,10 +497,13 @@ export function PropertyEditor({
                 onConfirm: () => dispatch({ type: "removeRoom", id: room.id }),
               })}
             />
+            {attemptedSave && state.draft.rooms.length === 0 && <p role="alert" className="mt-6 rounded-control border border-danger/50 p-3 text-sm text-danger">Add at least one room type before saving.</p>}
+            </>
           )}
         </Card>
       </main>
       {dialog}
+      </div>
     </div>
   );
 }

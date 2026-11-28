@@ -34,13 +34,12 @@ export function MessagesFrame({
       <PageBackdrop />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
         {typeof eyebrow === "string" ? (
-          // Ink, not blue or slate: lighter text on the sky strip is too faint to read
-          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-ink">{eyebrow}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-blue">{eyebrow}</p>
         ) : (
           eyebrow
         )}
         <h1 className="mt-2 break-words font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px]">{title}</h1>
-        <p className="mt-2 break-words text-lg leading-7 text-ink">{subtitle}</p>
+        <p className="mt-2 break-words text-lg leading-7 text-slate">{subtitle}</p>
         <div className="mt-8 sm:mt-10">{children}</div>
       </main>
     </div>

@@ -8,7 +8,7 @@ import { Popover } from "./ui";
 
 function Avatar({ name, email }: { name: string | null; email: string | null }) {
   return (
-    <span aria-hidden className="flex h-[25px] w-[25px] shrink-0 items-center justify-center rounded-full bg-ink text-[11px] font-semibold text-surface">
+    <span aria-hidden className="flex h-[25px] w-[25px] shrink-0 items-center justify-center rounded-full bg-[#3d66a6] text-[11px] font-semibold text-white">
       {initials(name, email)}
     </span>
   );

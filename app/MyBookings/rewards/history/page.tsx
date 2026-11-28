@@ -67,12 +67,12 @@ export default async function RewardsHistoryPage(props: PageProps<"/MyBookings/r
 
       <Link
         href={`${PAGE_ROUTES.REWARDS}${showSample ? "?sample" : ""}`}
-        className="group inline-flex items-center gap-1 text-base font-semibold text-ink"
+        className="group inline-flex items-center gap-1 text-base font-semibold text-blue hover:text-blue-dark"
       >
         <ArrowIcon className="h-4 w-4 -scale-x-100 transition-transform duration-200 group-hover:-translate-x-1" />
         Back to rewards
       </Link>
-      <p className="mt-4 text-sm font-semibold uppercase tracking-[0.08em] text-ink">Your rewards</p>
+      <p className="mt-4 text-sm font-semibold uppercase tracking-[0.08em] text-blue">Your rewards</p>
       <h1 className="mt-2 font-serif text-[40px] leading-[48px] text-ink sm:text-[48px] sm:leading-[56px]">Rewards history</h1>
       <p className="mt-2 text-base text-slate">See how you’ve earned and used your points.</p>
 

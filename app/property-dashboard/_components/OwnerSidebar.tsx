@@ -32,7 +32,7 @@ export function OwnerSidebar({
               className={`block rounded-control px-3 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-blue ${
                 selected
                   ? "bg-blue/10 text-blue-dark"
-                  : "text-slate hover:bg-paper hover:text-ink"
+                  : "text-slate hover:bg-blue/5 hover:text-ink"
               }`}
             >
               {section.label}

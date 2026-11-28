@@ -25,7 +25,7 @@ export function SavedHotelsRow({ saved }: { saved: SavedHotelCards }) {
       }
       cards={saved.cards}
       saveable
-      more={saved.more ? { href: PAGE_ROUTES.MY_BOOKINGS_SAVED, label: "See all saved hotels" } : undefined}
+      carousel
     />
   );
 }

@@ -317,10 +317,10 @@ export const DESTINATIONS: readonly (readonly [string, string])[] = [
   ["Tahiti", "French Polynesia"],
 ];
 
-// Homepage "Find your next escape": eight ranked places per tab, each with its photo (sources in
+// Homepage "Find your next escape": nine ranked places per tab, each with its photo (sources in
 // app/_assets/destinations/CREDITS.md). "Near you" is a fixed California list until the site knows
 // where the guest is.
-export type PopularDestination = { name: string; region: string; photo: StaticImageData };
+export type PopularDestination = { name: string; region: string; photo: StaticImageData | string };
 export type DestinationTab = "near" | "national" | "international";
 
 export const POPULAR_TABS: { id: DestinationTab; label: string }[] = [
@@ -339,6 +339,7 @@ export const POPULAR_DESTINATIONS: Record<DestinationTab, PopularDestination[]> 
     { name: "Carmel-by-the-Sea", region: "California, United States", photo: carmelByTheSea },
     { name: "Yosemite", region: "California, United States", photo: yosemite },
     { name: "Mendocino", region: "California, United States", photo: mendocino },
+    { name: "Napa Valley", region: "California, United States", photo: "https://images.unsplash.com/photo-1656873592841-8ae63d15be24?auto=format&fit=crop&w=1200&q=80" },
   ],
   national: [
     { name: "New York", region: "New York, United States", photo: newYork },
@@ -349,6 +350,7 @@ export const POPULAR_DESTINATIONS: Record<DestinationTab, PopularDestination[]> 
     { name: "Miami", region: "Florida, United States", photo: miami },
     { name: "Sedona", region: "Arizona, United States", photo: sedona },
     { name: "Chicago", region: "Illinois, United States", photo: chicago },
+    { name: "New Orleans", region: "Louisiana, United States", photo: "https://images.unsplash.com/photo-1647180745449-a19b776f8761?auto=format&fit=crop&w=1200&q=80" },
   ],
   international: [
     { name: "Positano", region: "Italy", photo: positano },
@@ -359,5 +361,6 @@ export const POPULAR_DESTINATIONS: Record<DestinationTab, PopularDestination[]> 
     { name: "Lisbon", region: "Portugal", photo: lisbon },
     { name: "Bali", region: "Indonesia", photo: bali },
     { name: "Banff", region: "Alberta, Canada", photo: banff },
+    { name: "Tokyo", region: "Japan", photo: "https://images.unsplash.com/photo-1513407030348-c983a97b98d8?auto=format&fit=crop&w=1200&q=80" },
   ],
 };

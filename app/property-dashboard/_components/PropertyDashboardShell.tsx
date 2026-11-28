@@ -58,7 +58,7 @@ export async function PropertyDashboardShell({
           </div>
 
           <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-            <p className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-blue">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-blue">
               {eyebrow}
             </p>
 
@@ -66,7 +66,7 @@ export async function PropertyDashboardShell({
               {title}
             </h1>
 
-            <p className="mt-2 text-base leading-6 text-slate">
+            <p className="mt-2 text-lg leading-7 text-slate">
               {description}
             </p>
           </div>

@@ -21,5 +21,5 @@ export async function RecentlyViewed({ accountId }: { accountId: string }) {
   const cards = toRecentlyViewedCards(result.data);
   if (cards.length === 0) return null;
 
-  return <HotelCardRow titleId="recently-viewed-title" title="Recently viewed" subtitle="Pick up where you left off." cards={cards} />;
+  return <HotelCardRow titleId="recently-viewed-title" title="Recently viewed" subtitle="Pick up where you left off." cards={cards} carousel showFavorites />;
 }

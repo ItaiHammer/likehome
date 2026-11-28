@@ -6,7 +6,7 @@ import { Toast, useToast, type ToastMessage } from "@/app/_components/Toast";
 type CreationKind = "created" | "sample" | null;
 
 const COPY: Record<Exclude<CreationKind, null>, ToastMessage> = {
-  sample: { title: "Sample creation tested", body: "Test successful. No property was saved or published." },
+  sample: { title: "Sample property created", body: "Saved in this browser only. Your property is not published or bookable." },
   created: { title: "Property created", body: "Your property is now on My listings." },
 };
 

@@ -9,6 +9,8 @@ export type Booking = {
   guests: number | null
   status: string
   hotelName: string
+  /** Existing hotel ID from booking-history RPC; for the shared saved-stays heart. */
+  hotelId?: string | null
   city: string | null
   photoUrl: string | null
   roomType: string | null

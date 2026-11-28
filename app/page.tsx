@@ -69,7 +69,7 @@ export default async function Home() {
   };
 
   return (
-    <main className={`flex flex-1 flex-col ${personal ? styles.personal : ""}`}>
+    <main data-home className={`flex flex-1 flex-col ${personal ? styles.personal : ""}`}>
       <div className={personal ? styles.opening : undefined}>
       {/* Hero: z-20 so the search bar's dropdowns open over the sections below. Popular
           destinations is isolated too, so its hovered tile's z-10 stays inside the carousel */}

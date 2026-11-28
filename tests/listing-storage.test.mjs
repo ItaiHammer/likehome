@@ -19,7 +19,7 @@ test('stored countries load back as the editor ISO code, including older saves',
 
 test('amenities become the tags search filters on', () => {
   assert.deepEqual(amenitiesToTags(['pool', 'wifi', 'parking']), ['Free Wi-Fi', 'Parking', 'Pool'])
-  assert.deepEqual(amenitiesToTags(['fitness_center', 'family_rooms']), ['Gym', 'Families'])
+  assert.deepEqual(amenitiesToTags(['fitness_center', 'family_rooms']), ['Gym', 'Family rooms'])
 })
 
 test('tags load back as editor amenities, including raw ids from older saves', () => {
