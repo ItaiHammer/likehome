@@ -4,10 +4,13 @@
 // is free for the guest's nights. Nights are YYYY-MM-DD; a stay covers check-in up to, not
 // including, check-out (the check-out day is free for the next guest).
 
+import { addDays, nightsBetween } from '../app/_components/dates.ts';
+import { roomFits } from './stay-filters.ts';
+
 export type RoomUnit = { id: string; bookedNights: string[] };
 type WithUnits = { id: string; units?: RoomUnit[] };
 
-const coversNight = (checkIn: string, checkOut: string) => (night: string) => night >= checkIn && night < checkOut;
+export const coversNight = (checkIn: string, checkOut: string) => (night: string) => night >= checkIn && night < checkOut;
 
 /**
  * The room id to book for these dates: the first identical room that's free every night, or null
@@ -106,4 +109,59 @@ export function cardsForBooking<R extends WithUnits>(rooms: R[], unitId: string)
     const own = r.units?.find((u) => u.id === unitId);
     return own && r.units ? { ...r, id: unitId, units: [own, ...r.units.filter((u) => u !== own)] } : r;
   });
+}
+
+/**
+ * Nights (from `from` on) the calendar crosses out: every room that fits the party is booked, or the
+ * guest is staying at another hotel. A night only the chosen room has taken stays open, so picking it
+ * moves the guest to a free room. Pass no rooms when more may turn up (LiteAPI hotels).
+ */
+export function blockedNights(fittingRooms: WithUnits[], otherStays: { checkIn: string; checkOut: string }[], from: string): string[] {
+  const nights = new Set(fittingRooms.length ? soldOutNights(fittingRooms) : []);
+  for (const stay of otherStays) {
+    for (let night = stay.checkIn; night < stay.checkOut; night = addDays(night, 1)) nights.add(night);
+  }
+  return [...nights].filter((night) => night >= from).sort();
+}
+
+/**
+ * The calendar's crossed-out nights as days from `today`, for the rooms that fit the party.
+ * `today` is "" while rendering on the server, which gives none.
+ */
+export function blockedOffsets(
+  rooms: (WithUnits & Parameters<typeof roomFits>[0])[],
+  party: { adults: number; children: number },
+  otherStays: { checkIn: string; checkOut: string }[],
+  today: string,
+  { moreRoomsMayAppear = false }: { moreRoomsMayAppear?: boolean } = {},
+): number[] {
+  if (!today) return [];
+  const { adults, children } = party;
+  const fitting = moreRoomsMayAppear ? [] : rooms.filter((r) => roomFits(r, adults + children, adults, children));
+  return blockedNights(fitting, otherStays, today).map((night) => nightsBetween(today, night));
+}
+
+export const BLOCKED_NOTE = 'Struck-through dates have no room free for your party, or overlap another stay of yours.';
+
+/** Why the chosen room can't be booked for the chosen dates, or null when it can. */
+export function roomProblem(room: { name: string; soldOut?: boolean; bookedForDates?: boolean }): string | null {
+  if (room.bookedForDates) return `${room.name} is booked for those dates. Pick another room or change your dates.`;
+  if (room.soldOut) return `${room.name} is sold out. Pick another room.`;
+  return null;
+}
+
+/**
+ * True when get_booked_nights rows show the room taken on a night of the stay. `own` is the booking
+ * being changed, whose nights in its own room don't count against it.
+ */
+export function roomTaken(
+  rows: { room_id: string; night: string }[],
+  roomId: string,
+  checkIn: string,
+  checkOut: string,
+  own?: { roomId: string; checkIn: string; checkOut: string },
+): boolean {
+  const inStay = coversNight(checkIn, checkOut);
+  const mine = own && own.roomId === roomId ? coversNight(own.checkIn, own.checkOut) : () => false;
+  return (nightsByRoom(rows).get(roomId) ?? []).some((night) => inStay(night) && !mine(night));
 }

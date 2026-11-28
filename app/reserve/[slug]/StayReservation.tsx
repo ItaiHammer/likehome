@@ -4,12 +4,12 @@ import { stayDisplayName } from "@/app/_components/stayDisplayName";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { PAGE_ROUTES } from "@/constants/routes";
 import type { ComparisonListing } from "@/lib/comparison";
-import { findOverlap, money, overlapMessage, type OtherStay } from "@/lib/bookings";
-import { freeUnitId, markBookedRooms, mergeBookedNights, soldOutNights } from "@/lib/room-availability";
+import { findOverlap, guestLabel, money, overlapMessage, type OtherStay } from "@/lib/bookings";
+import { blockedOffsets as calendarBlockedOffsets, BLOCKED_NOTE, freeUnitId, markBookedRooms, mergeBookedNights, roomProblem } from "@/lib/room-availability";
 import { matchingRoom, roomFits } from "@/lib/stay-filters";
 import { cardBrandLabel, cardErrors, typedCardBrand, type CardBrandLabel } from "@/lib/card";
 import { PRICE_CHANGED_ERROR, discountPoints, findDiscount, formatPoints, pointsToDollars } from "@/lib/rewards";
@@ -25,7 +25,7 @@ import type { ViewerRole } from "@/lib/account/role";
 import { TAX_RATE, type Room, type Stay } from "../../_data/stays";
 import { checkoutRequest } from "./checkoutRequest";
 import { DateRangePicker } from "./DateRangePicker";
-import { GuestsField, guestLabel } from "./GuestsField";
+import { GuestsField } from "./GuestsField";
 import { PhotoGallery } from "./PhotoGallery";
 import { RewardsSection, RewardsUnavailable } from "./RewardsSection";
 import { RoomOptions } from "./RoomOptions";
@@ -207,18 +207,11 @@ export function StayReservation({
   const dueAtProperty = nights ? (room.dueAtProperty ?? 0) : 0;
   // Today is "" while rendering on the server, so the server and the browser agree on first render
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
-  // Nights the guest already has booked at other hotels, as days from today, so the calendar crosses
-  // them out. Derived from `today` (empty on the server), so it fills in once the page is in the browser.
-  const userBookingBlockedOffsets = useMemo(() => {
-    if (!today) return [];
-    return otherStays.flatMap((booking) => {
-      const bookingOffsets: number[] = [];
-      for (let night = booking.checkIn; night < booking.checkOut; night = addDays(night, 1)) {
-        if (night >= today) bookingOffsets.push(nightsBetween(today, night));
-      }
-      return bookingOffsets;
-    });
-  }, [otherStays, today]);
+  // Nights the calendar crosses out, as days from today: no room that fits the party is free, or the
+  // guest is at another hotel. Derived from `today` (empty on the server), so it fills in once in the browser.
+  const blockedOffsets = [
+    ...new Set([...stay.blockedNights, ...calendarBlockedOffsets(rooms, { adults, children }, otherStays, today, { moreRoomsMayAppear: !!stay.liteapiId })]),
+  ];
 
   useEffect(() => {
     if (!priceKey || priceKey === initialKey || priceKey === liveKey) return;
@@ -251,17 +244,6 @@ export function StayReservation({
       request.abort();
     };
   }, [priceKey, initialKey, liveKey, stay.slug]);
-
-  // Nights when every room here is booked. Also from `today`, so it fills in once in the browser.
-  // Not for LiteAPI hotels: LiteAPI can offer a party rooms the hotel hasn't saved yet.
-  const soldOutOffsets = useMemo(
-    () => (today ? soldOutNights(stay.liteapiId ? [] : stay.rooms).filter((night) => night >= today).map((night) => nightsBetween(today, night)) : []),
-    [stay.rooms, stay.liteapiId, today],
-  );
-
-  const blockedOffsets = [
-    ...new Set([...stay.blockedNights, ...soldOutOffsets, ...userBookingBlockedOffsets]),
-  ];
 
 
   const detectedBrand = typedCardBrand(cardNumber);
@@ -348,18 +330,17 @@ export function StayReservation({
   function stayProblem(): StayProblem | null {
     if (!nights) return { field: "dates", message: "" };
     if (nights > MAX_NIGHTS) return { field: "dates", message: `Stays can be up to ${MAX_NIGHTS} nights.` };
+    const clash = stay.bookable ? findOverlap(otherStays, checkIn, checkOut) : null;
+    if (clash) return { field: "dates", message: overlapMessage(clash) };
     const booked = blockedOffsets.map((offset) => addDays(todayISO(), offset));
     if (booked.some((night) => night >= checkIn && night < checkOut)) return { field: "dates", message: "Some of those nights are already booked." };
     if (lookingUp) return { field: "dates", message: "Still checking which rooms are free on those dates. Try again in a moment." };
     // The booking API judges "today" in the guest's time zone (sent with the booking), so this uses the local date
     if (stay.bookable && checkIn < todayISO()) return { field: "dates", message: "That check-in date is too soon to book. Pick a later date." };
-    const clash = stay.bookable ? findOverlap(otherStays, checkIn, checkOut) : null;
-    if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     if (!roomFits(room, guests, adults, children)) return { field: "guests", message: `${room.name} is too small for ${guestLabel(adults, children)}. Pick another room.` };
-    if (room.bookedForDates) return { field: "guests", message: `${displayRoomName(room.name)} is booked for those dates. Pick another room or change your dates.` };
-    if (room.soldOut) return { field: "guests", message: `${room.name} is sold out. Pick another room.` };
-    return null;
+    const taken = roomProblem(room);
+    return taken ? { field: "guests", message: taken } : null;
   }
 
   function goTo(next: Step) {
@@ -828,7 +809,8 @@ export function StayReservation({
                           setCheckOut(b);
                           clear("dates");
                         }}
-                        blockedOffsets={stay.blockedNights}
+                        blockedOffsets={blockedOffsets}
+                        blockedNote={BLOCKED_NOTE}
                         open={popover === "dates"}
                         onOpenChange={setDatesOpen}
                         onDone={foldDates}
@@ -937,7 +919,7 @@ export function StayReservation({
         <div className="mt-7">
           <div className="flex items-start justify-between gap-4">
             <h1 className="min-w-0 flex-1 break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[52px] sm:leading-[60px]">{stayDisplayName(stay.name)}</h1>
-            {!businessAccount && <div className="shrink-0 pt-2"><SaveHotelButton hotelId={stay.slug} /></div>}
+            {stay.bookable && !businessAccount && <div className="shrink-0 pt-2"><SaveHotelButton hotelId={stay.slug} hotelName={stay.name} /></div>}
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-base text-slate">
             <p>{stay.location}</p>
@@ -1005,6 +987,7 @@ export function StayReservation({
                   clear("dates");
                 }}
                 blockedOffsets={blockedOffsets}
+                blockedNote={BLOCKED_NOTE}
                 open={popover === "dates"}
                 onOpenChange={setDatesOpen}
                 error={errors.dates}

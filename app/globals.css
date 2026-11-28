@@ -162,7 +162,9 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
     opacity 0.25s ease,
     transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.dropdown[data-open="true"] .cascade {
+/* The :not() skips rows of a closed dropdown nested in an open one (the search bar's fields inside its
+   phone panel), so they stay hidden until their own dropdown opens and still drop in then */
+.dropdown[data-open="true"] .cascade:not(:where(.dropdown[data-open="true"] .dropdown:not([data-open="true"]) .cascade)) {
   opacity: 1;
   transform: none;
   transition-delay: calc(60ms + var(--i, 0) * 40ms);
@@ -220,6 +222,59 @@ html.theme-fading *:not(.theme-fade-keep, .dropdown, .cascade)::after {
   from { opacity: 0; transform: translateY(12px); }
 }
 [data-motion="reduce"] .card-in {
+  animation: none;
+}
+
+/* Homepage clouds (SkyClouds) cross the sky left to right, each at its own pace; the negative delay
+   starts them spread across it. The widest is 660px x 1.2, so they start that far off the left. */
+.sky-cloud {
+  position: absolute;
+  left: 0;
+  width: 660px;
+  height: 440px;
+  transform-origin: 0 0;
+  will-change: translate;
+  animation: cloud-drift var(--drift) linear var(--delay) infinite;
+}
+.sky-cloud-body,
+.sky-cloud-shade {
+  position: absolute;
+  top: -320px;
+  left: -320px;
+  width: 500px;
+  height: 275px;
+  border-radius: 50%;
+}
+.sky-cloud-body {
+  filter: url(#sky-cloud-body);
+  box-shadow: 400px 400px 22px 0 #fff;
+}
+.sky-cloud-shade {
+  filter: url(#sky-cloud-shade);
+  box-shadow: 400px 430px 30px -12px rgba(110, 142, 192, 0.5);
+}
+@keyframes cloud-drift {
+  from { translate: -800px 0; }
+  to { translate: calc(100vw + 40px) 0; }
+}
+[data-motion="reduce"] .sky-cloud {
+  animation: none;
+  translate: var(--rest) 0;
+}
+.sky-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #e9eeff;
+  animation: star-twinkle 5s ease-in-out infinite;
+}
+.sky-star-bright {
+  box-shadow: 0 0 5px rgba(200, 215, 255, 0.7);
+}
+/* From each star's own brightness (inline opacity) down to a glimmer and back */
+@keyframes star-twinkle {
+  50% { opacity: 0.12; }
+}
+[data-motion="reduce"] .sky-star {
   animation: none;
 }
 

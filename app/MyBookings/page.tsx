@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Button } from "@/app/_components/ui";
+import { Button, FormError } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import { firstName, groupBookings, toCancellationQuote, money, type Booking, type CancellationQuote } from "@/lib/bookings";
+import { isListedHotel } from "@/lib/recently-viewed";
 import { getAccount } from "@/utils/accounts";
-import { getHotels } from "@/utils/hotels";
+import { getFavoriteHotels } from "@/utils/favorite-hotels";
 import { guestToday } from "@/utils/guest-today";
 import { getCancellationQuote } from "@/utils/reservations";
 import { getUserId } from "@/utils/user";
@@ -32,13 +33,13 @@ async function loadMyBookings() {
     account,
     bookingHistory,
     transactionHistory,
-    hotelsResult,
+    favoritesResult,
     pointsResult,
   ] = await Promise.all([
     getAccount(userId),
     getMyBookings(),
     getTransactionHistory(),
-    getHotels(),
+    getFavoriteHotels(userId).catch((error: unknown) => ({ data: null, error })),
     getPointsBalance(userId),
   ]);
 
@@ -53,9 +54,9 @@ async function loadMyBookings() {
   if (transactionHistory.error) {
     throw new Error(transactionHistory.error.message);
   }
-  if (hotelsResult.error) {
-    throw new Error(hotelsResult.error.message);
-  }
+  // Only the Saved tab needs these, so a failed read leaves the rest of the page working
+  const savedError = Boolean(favoritesResult.error);
+  if (savedError) console.error("getFavoriteHotels failed:", favoritesResult.error);
 
   if (pointsResult.error) {
     throw new Error(pointsResult.error.message);
@@ -88,7 +89,8 @@ async function loadMyBookings() {
     STAYS.map((stay) => [stay.name.toLowerCase().trim(), stay])
   );
 
-  const allHotels = (hotelsResult.data ?? []).map((h) => {
+  // Newest saved first
+  const savedHotels = (favoritesResult.data ?? []).flatMap((row) => [row.hotels ?? []].flat()).filter(isListedHotel).map((h) => {
   const matchedStay = staysByName.get(h.name.toLowerCase().trim());
 
 const staticPrices =
@@ -126,7 +128,7 @@ const price =
   };
 });
 
-  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, transactions, allHotels, pointsBalance: pointsResult.balance };
+  return { name: account.data?.full_name ?? null, email: account.data?.email ?? null, bookings, transactions, savedHotels, savedError, pointsBalance: pointsResult.balance };
 }
 // What cancelling each upcoming stay would cost. A quote that fails only leaves that cancel button unavailable.
 async function loadQuotes(bookings: Booking[]) {
@@ -161,10 +163,11 @@ export default async function MyBookingsPage({
         : "reservations";
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
 
-  const { name, email, bookings, transactions, allHotels, pointsBalance } = showSample
+  const { name, email, bookings, transactions, savedHotels, savedError, pointsBalance } = showSample
     ? {
         ...getSampleBookings(today, sample === "empty"),
-        allHotels: [],
+        savedHotels: [],
+        savedError: false,
         transactions: [],
         pointsBalance: 0,
       }
@@ -185,7 +188,7 @@ export default async function MyBookingsPage({
 
       {/* Ink, not blue or slate: lighter text on the sky strip is too faint to read */}
       <p className="text-sm font-semibold uppercase tracking-[0.08em] text-ink">Your account</p>
-      <h1 className="mt-2 font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px]">
+      <h1 id="page-heading" className="mt-2 font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px]">
         {activeTab === "saved"
           ? "Saved hotels"
           : activeTab === "account"
@@ -271,17 +274,19 @@ export default async function MyBookingsPage({
             )}
 
             {activeTab === "saved" && (
-                <section aria-labelledby="saved-heading">
+                <section aria-labelledby="page-heading">
                   {businessAccount ? (
                     <p className="rounded-2xl border border-edge bg-surface p-6 text-slate">Business accounts cannot save favorite stays.</p>
+                  ) : savedError ? (
+                    <FormError message="We couldn't load your saved hotels. Try again later." />
                   ) : (
-                    <SavedHotelsList allHotels={allHotels} />
+                    <SavedHotelsList hotels={savedHotels} />
                   )}
                 </section>
             )}
 
             {activeTab === "account" && (
-                <section aria-labelledby="account-heading">
+                <section aria-labelledby="page-heading">
                   <AccountTabContent name={name} email={email} transactions={transactions} pointsBalance={pointsBalance} />
                 </section>
             )}

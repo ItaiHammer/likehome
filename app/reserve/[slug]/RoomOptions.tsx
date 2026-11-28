@@ -1,7 +1,8 @@
-import { money } from "@/lib/bookings";
+"use client";
+
+import { guestLabel, money } from "@/lib/bookings";
 import { roomFits } from "@/lib/stay-filters";
 import type { Room } from "../../_data/stays";
-import { guestLabel } from "./GuestsField";
 import { displayRoomName, displayRoomOptions } from "./roomDisplay";
 
 // The room list as radio cards, shared by the stay page and the change-booking page.

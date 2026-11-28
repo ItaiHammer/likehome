@@ -1,4 +1,5 @@
 // No Supabase / Next.js imports here so it can be unit tested with `npm test`.
+import { pageCount as pagesFor, pageParam } from './pagination.ts'
 
 /** Same rate as points_to_dollars.sql and dollars_to_points (credit_to_points.sql) */
 export const POINTS_PER_DOLLAR = 100
@@ -82,12 +83,9 @@ export function historyFilter(param: string | string[] | undefined): HistoryFilt
   return param === 'earned' || param === 'redeemed' ? param : 'all'
 }
 
-export function historyPage(param: string | string[] | undefined): number {
-  const page = typeof param === 'string' && /^\d{1,6}$/.test(param) ? Number(param) : 1
-  return page >= 1 ? page : 1
-}
+export const historyPage = pageParam
 
-export const pageCount = (total: number) => Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE))
+export const pageCount = (total: number) => pagesFor(total, HISTORY_PAGE_SIZE)
 
 // Earning and refunds are always positive and redeeming always negative (points_storage.sql)
 export function matchesFilter(activity: PointsActivity, filter: HistoryFilter): boolean {

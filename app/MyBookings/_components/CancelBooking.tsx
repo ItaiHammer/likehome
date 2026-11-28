@@ -19,7 +19,7 @@ const signInHref = `${PAGE_ROUTES.LOGIN}?next=${encodeURIComponent(PAGE_ROUTES.M
 const OpenCancelDialog = createContext<((target: Target) => void) | null>(null);
 
 // One dialog for the whole Upcoming list, so it keeps showing the result after the refresh removes the cancelled card.
-// A native <dialog> opened with showModal(), like the listings ConfirmDialog: the browser traps focus,
+// A native <dialog> opened with showModal(), like the shared ConfirmDialog (app/_components/ConfirmDialog.tsx): the browser traps focus,
 // closes it on Escape and makes the page behind it inert. The database works out the refund; this only shows it.
 export function CancelBookingDialog({
   returnFocusTo,
@@ -99,7 +99,7 @@ export function CancelBookingDialog({
         onClose={onClose}
         aria-labelledby={titleId}
         aria-describedby={done ? undefined : termsId}
-        // Same look as the listings ConfirmDialog
+        // Same look as the shared ConfirmDialog (app/_components/ConfirmDialog.tsx)
         className="m-auto w-[min(30rem,calc(100%-2rem))] rounded-lg border border-edge bg-surface p-6 text-ink shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] backdrop:bg-disabled/90 dark:backdrop:bg-black/60"
       >
         {outcome ? (

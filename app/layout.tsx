@@ -4,6 +4,7 @@ import { getViewer } from "@/utils/viewer";
 import { AccountTypeRetryNotice } from "./_components/AccountTypeRetry";
 import { ChoiceGate } from "./_components/ChoiceGate";
 import { DevRoleSwitch } from "./_components/DevRoleSwitch";
+import { HeartsAccess, SaveFailureAnnouncer } from "./_components/SaveHotelButton";
 import { SiteFooter, SiteHeader } from "./_components/SiteChrome";
 import { TimeZoneCookie } from "./_components/TimeZoneCookie";
 import { buttonClass } from "./_components/ui";
@@ -59,9 +60,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <div id="content" className="flex flex-1 flex-col">
           {viewer.role === "unknown" && <AccountTypeRetryNotice />}
           {/* No Suspense around or above the gate: its redirect must happen before the page streams */}
-          {viewer.role === "unchosen" ? <ChoiceGate>{children}</ChoiceGate> : children}
+          <HeartsAccess allowed={viewer.role === "personal" || viewer.role === "signed-out"}>
+            {viewer.role === "unchosen" ? <ChoiceGate>{children}</ChoiceGate> : children}
+          </HeartsAccess>
         </div>
         <SiteFooter />
+        <SaveFailureAnnouncer />
         {process.env.NODE_ENV === "development" && (
           <DevRoleSwitch devRole={viewer.devRole} realType={viewer.realType} readFailed={viewer.readFailed} signedIn={viewer.role !== "signed-out"} />
         )}

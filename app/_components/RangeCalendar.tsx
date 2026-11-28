@@ -1,22 +1,17 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { addDays, formatLong, formatRange, formatShort, nightsBetween, todayISO } from "./dates";
-import { buttonPrimary, buttonSecondary, iconButton } from "./ui";
+"use client";
+
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { quickDateRanges, type QuickDates } from "@/lib/quick-dates";
+import { addDays, formatDate, formatLong, formatMonth, formatRange, formatShort, monthCells, monthOf, nightsBetween, shiftMonth, todayISO, type Month } from "./dates";
+import { buttonPrimary, buttonSecondary, Chip, iconButton } from "./ui";
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const ARROW_STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
 const NO_BLOCKED: number[] = [];
-
-type Month = { y: number; m: number };
-const monthOf = (iso: string): Month => {
-  const [y, m] = iso.split("-").map(Number);
-  return { y, m: m - 1 };
-};
-const shiftMonth = ({ y, m }: Month, delta: number): Month => {
-  const t = y * 12 + m + delta;
-  return { y: Math.floor(t / 12), m: t % 12 };
-};
-const isoOf = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+const FIELD_TABS = [
+  { id: "in", label: "Check-in" },
+  { id: "out", label: "Check-out" },
+] as const;
 
 const noSubscribe = () => () => {};
 
@@ -28,7 +23,8 @@ export type RangeField = "in" | "out";
  * entrance. `field` says which end the next pick fills; the parent owns it so
  * its own fields can highlight to match. Change `resetKey` on open to jump
  * back to the month of the field being filled. (Not a remount: rows that
- * mount already open can't cascade in.)
+ * mount already open can't cascade in.) `tabs` shows that field as Check-in /
+ * Check-out tabs, for a parent with no date fields of its own beside it.
  */
 export function RangeCalendar({
   checkIn,
@@ -39,6 +35,9 @@ export function RangeCalendar({
   onDone,
   resetKey,
   blockedOffsets = NO_BLOCKED,
+  blockedNote = "Struck-through dates are already booked.",
+  tabs = false,
+  quickPicks = false,
 }: {
   checkIn: string;
   checkOut: string;
@@ -49,6 +48,11 @@ export function RangeCalendar({
   resetKey: number;
   /** Booked nights, as days from today */
   blockedOffsets?: number[];
+  blockedNote?: string;
+  /** Check-in / Check-out tabs choosing which date the next pick changes */
+  tabs?: boolean;
+  /** "This weekend", "Next weekend" and "Next week" shortcuts above the month */
+  quickPicks?: boolean;
 }) {
   // Empty during the static render, so the page never bakes in a build-time "today".
   const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
@@ -56,6 +60,8 @@ export function RangeCalendar({
   const [hover, setHover] = useState("");
   const [notice, setNotice] = useState<{ tone: "info" | "error"; text: string } | null>(null);
   const [seenReset, setSeenReset] = useState(resetKey);
+  const uid = useId();
+  const tabId = (f: RangeField) => `${uid}-tab-${f}`;
   const gridRef = useRef<HTMLDivElement>(null);
   // A date to focus once its month has rendered (arrow keys can cross months)
   const pendingFocus = useRef("");
@@ -75,6 +81,9 @@ export function RangeCalendar({
   const atFirstMonth = !!shown && !!firstMonth && shown.y * 12 + shown.m <= firstMonth.y * 12 + firstMonth.m;
   const crossesBooked = (from: string, to: string) => [...booked].some((b) => b >= from && b < to);
   const rangeEnd = checkOut || (pickingOut && !!checkIn && hover > checkIn && !crossesBooked(checkIn, hover) ? hover : "");
+  const shortcuts = quickPicks && today ? quickDateRanges(today).filter((r) => !crossesBooked(r.checkIn, r.checkOut)) : [];
+  // Rows above the month header, for the cascade order
+  const lead = Number(tabs) + Number(shortcuts.length > 0);
 
   // Whether a day can't be picked right now: past, or booked (a booked night
   // can still be a check-out morning). Check-out needs at least one night before it.
@@ -133,6 +142,27 @@ export function RangeCalendar({
     onChange(checkIn, day);
   }
 
+  function pickShortcut(range: QuickDates) {
+    setNotice(null);
+    onChange(range.checkIn, range.checkOut);
+    setView(monthOf(range.checkIn));
+  }
+
+  // A tab jumps to the month of the date it changes
+  function selectField(next: RangeField) {
+    onFieldChange(next);
+    setView(null);
+  }
+
+  function onTabKey(e: React.KeyboardEvent<HTMLButtonElement>) {
+    const next =
+      e.key === "Home" ? "in" : e.key === "End" ? "out" : e.key === "ArrowLeft" || e.key === "ArrowRight" ? (pickingOut ? "in" : "out") : null;
+    if (!next) return;
+    e.preventDefault();
+    selectField(next);
+    document.getElementById(tabId(next))?.focus();
+  }
+
   // Earliest check-in on or after `from` whose `nights` are all free, looking up to a year ahead.
   function findOpenStart(from: string, nights: number) {
     for (let i = 0, start = from; i < 365; i++, start = addDays(start, 1)) {
@@ -163,13 +193,7 @@ export function RangeCalendar({
     }
   }
 
-  const cells: (string | null)[] = [];
-  if (shown) {
-    const lead = new Date(Date.UTC(shown.y, shown.m, 1)).getUTCDay();
-    const count = new Date(Date.UTC(shown.y, shown.m + 1, 0)).getUTCDate();
-    for (let i = 0; i < lead; i++) cells.push(null);
-    for (let d = 1; d <= count; d++) cells.push(isoOf(shown.y, shown.m, d));
-  }
+  const cells = shown ? monthCells(shown) : [];
   const weeks = Array.from({ length: Math.ceil(cells.length / 7) }, (_, w) => cells.slice(w * 7, w * 7 + 7));
   const cascadeAt = (i: number) => ({ "--i": i }) as React.CSSProperties;
 
@@ -186,7 +210,46 @@ export function RangeCalendar({
 
   return (
     <>
-      <div className="cascade flex items-center justify-between" style={cascadeAt(0)}>
+      {tabs && (
+        <div role="tablist" aria-label="Which date to change" className="cascade mb-3 grid grid-cols-2 gap-2" style={cascadeAt(0)}>
+          {FIELD_TABS.map((t) => {
+            const selected = field === t.id;
+            const date = t.id === "in" ? checkIn : checkOut;
+            return (
+              <button
+                key={t.id}
+                id={tabId(t.id)}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                aria-controls={`${uid}-grid`}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => selectField(t.id)}
+                onKeyDown={onTabKey}
+                // forced-colors: the ring vanishes in Windows high contrast, so the selected tab gets an outline
+                className={`min-w-0 rounded-control border bg-surface px-3 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue forced-colors:aria-selected:outline-2 ${
+                  selected ? "border-blue ring-1 ring-blue" : "border-edge hover:border-blue"
+                }`}
+              >
+                <span className={`block text-xs font-semibold ${selected ? "text-blue-dark" : "text-slate"}`}>{t.label}</span>
+                <span className={`block truncate text-sm ${date ? "text-ink" : "text-slate"}`}>{date ? formatDate(date) : "Add date"}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {shortcuts.length > 0 && (
+        <div role="group" aria-label="Quick dates" className="cascade mb-3 flex flex-wrap gap-2" style={cascadeAt(Number(tabs))}>
+          {shortcuts.map((r) => (
+            <Chip key={r.label} active={r.checkIn === checkIn && r.checkOut === checkOut} onClick={() => pickShortcut(r)} className="max-sm:min-h-11">
+              {r.label}
+            </Chip>
+          ))}
+        </div>
+      )}
+
+      <div className="cascade flex items-center justify-between" style={cascadeAt(lead)}>
         <button
           type="button"
           aria-label="Previous month"
@@ -198,22 +261,30 @@ export function RangeCalendar({
           <Chevron d="M15 6l-6 6 6 6" />
         </button>
         <p className="text-base font-semibold text-ink" aria-live="polite">
-          {shown ? `${MONTHS[shown.m]} ${shown.y}` : ""}
+          {shown ? formatMonth(shown) : ""}
         </p>
         <button type="button" aria-label="Next month" disabled={!shown} onClick={() => shown && setView(shiftMonth(shown, 1))} className={iconButton}>
           <Chevron d="M9 6l6 6-6 6" />
         </button>
       </div>
 
-      <div className="cascade mt-3 grid grid-cols-7 text-center text-sm text-slate" style={cascadeAt(1)} aria-hidden>
+      <div className="cascade mt-3 grid grid-cols-7 text-center text-sm text-slate" style={cascadeAt(lead + 1)} aria-hidden>
         {WEEKDAYS.map((w) => (
           <span key={w}>{w}</span>
         ))}
       </div>
 
-      <div ref={gridRef} onKeyDown={onGridKey} onPointerLeave={() => setHover("")} className="mt-1 flex flex-col gap-y-1">
+      <div
+        ref={gridRef}
+        id={`${uid}-grid`}
+        role={tabs ? "tabpanel" : undefined}
+        aria-labelledby={tabs ? tabId(field) : undefined}
+        onKeyDown={onGridKey}
+        onPointerLeave={() => setHover("")}
+        className="mt-1 flex flex-col gap-y-1"
+      >
         {weeks.map((week, w) => (
-          <div key={w} className="cascade grid grid-cols-7" style={cascadeAt(2 + w)}>
+          <div key={w} className="cascade grid grid-cols-7" style={cascadeAt(lead + 2 + w)}>
             {week.map((day, i) => {
               if (!day) return <span key={`pad-${i}`} aria-hidden />;
               const isBooked = booked.has(day);
@@ -271,11 +342,11 @@ export function RangeCalendar({
         </p>
       )}
 
-      <div className="cascade mt-3 border-t border-edge pt-3" style={cascadeAt(2 + weeks.length)}>
+      <div className="cascade mt-3 border-t border-edge pt-3" style={cascadeAt(lead + 2 + weeks.length)}>
         <p className="text-sm text-ink" aria-live="polite">
           {hint}
         </p>
-        {blockedOffsets.length > 0 && <p className="text-sm text-slate">Struck-through dates are already booked.</p>}
+        {blockedOffsets.length > 0 && <p className="text-sm text-slate">{blockedNote}</p>}
         <div className="mt-3 grid grid-cols-2 gap-3">
           <button
             type="button"

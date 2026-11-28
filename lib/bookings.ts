@@ -1,5 +1,6 @@
 // No Supabase / Next.js imports here so it can be unit tested with `npm test`.
 import { countNights, MAX_NIGHTS } from '../utils/reservation-logic.ts'
+import type { BookingStage } from './hotel-customers.ts'
 
 export type Booking = {
   id: string
@@ -17,15 +18,22 @@ export type Booking = {
   unlisted?: boolean
 }
 
+export function bookingStage(b: { status: string; checkIn: string; checkOut: string }, today: string): BookingStage {
+  if (b.status === 'cancelled') return 'cancelled'
+  if (b.status === 'completed' || b.checkOut <= today) return 'past'
+  return b.checkIn <= today ? 'in-stay' : 'upcoming'
+}
+
 // A stay that's under way (checked in, check-out still ahead) counts as upcoming
 export function groupBookings(bookings: Booking[], today: string) {
   const upcoming: Booking[] = []
   const past: Booking[] = []
   const cancelled: Booking[] = []
   for (const booking of bookings) {
-    if (booking.status === 'cancelled') cancelled.push(booking)
-    else if (booking.status !== 'completed' && booking.checkOut > today) upcoming.push(booking)
-    else past.push(booking)
+    const stage = bookingStage(booking, today)
+    if (stage === 'cancelled') cancelled.push(booking)
+    else if (stage === 'past') past.push(booking)
+    else upcoming.push(booking)
   }
   upcoming.sort((a, b) => a.checkIn.localeCompare(b.checkIn))
   past.sort((a, b) => b.checkIn.localeCompare(a.checkIn))
@@ -54,6 +62,16 @@ export function formatStayDates(checkIn: string, checkOut: string): string {
 export function bookingCode(id: string): string {
   return `LH-${id.replace(/-/g, '').slice(0, 8).toUpperCase()}`
 }
+
+/** "2 adults", "2 adults, 1 child" */
+export function guestLabel(adults: number, children: number) {
+  const parts = [`${adults} ${adults === 1 ? 'adult' : 'adults'}`]
+  if (children) parts.push(`${children} ${children === 1 ? 'child' : 'children'}`)
+  return parts.join(', ')
+}
+
+/** The same from a booking's guest count, of which `children` are children */
+export const partyLabel = (guests: number, children: number) => guestLabel(guests - children, children)
 
 export function bookingSummary(booking: Booking): string {
   const guests = booking.guests ? `${booking.guests} ${booking.guests === 1 ? 'guest' : 'guests'}` : null

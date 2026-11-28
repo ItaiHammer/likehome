@@ -5,6 +5,8 @@ export const ROUTE_PREFIXES = {
 
 export const API_ROUTES = {
     AUTH_CALLBACK: '/api/auth/callback',
+    MESSAGES: '/api/messages',
+    FAVORITES: '/api/favorites',
 }
 
 export const PAGE_ROUTES = {
@@ -15,10 +17,14 @@ export const PAGE_ROUTES = {
     AUTHORIZATION_ERROR: '/auth/z/error',
     LOGIN: '/auth/login',
     MY_BOOKINGS: '/MyBookings',
+    MY_BOOKINGS_SAVED: '/MyBookings?tab=saved',
     MY_BOOKINGS_ACCOUNT: '/MyBookings?tab=account',
     REWARDS: '/MyBookings/rewards',
     REWARDS_HISTORY: '/MyBookings/rewards/history',
     ACCOUNT_TYPE: '/account-type',
+    MESSAGES: '/messages',
+    OWNER_MESSAGES: '/property-dashboard/messages',
+    OWNER_CUSTOMERS: '/property-dashboard/customers',
 } as const;
 
 export const ROUTE_ACCESS = {

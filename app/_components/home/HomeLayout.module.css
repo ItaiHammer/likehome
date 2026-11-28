@@ -1,0 +1,129 @@
+/* The opening follows the reference's spacing. Destination photos keep their
+   natural landscape proportions; all remaining content continues below them. */
+@media (min-width: 1024px) {
+  /* Leave the tilted corners inside the side gutters without exposing the next slide. */
+  .destinationTile:hover {
+    --pop: 1.02;
+    box-shadow: 0 12px 16px -12px rgba(7, 13, 47, 0.25);
+  }
+
+  .personal .opening {
+    display: flex;
+    flex-direction: column;
+  }
+  .personal .intro {
+    justify-content: flex-start;
+    gap: 48px;
+    padding-top: 20px;
+  }
+  .personal .hero {
+    padding-top: 40px;
+    padding-bottom: 20px;
+  }
+
+  .personal .title {
+    font-size: clamp(48px, 6.7svh, 60px);
+    font-weight: 400;
+    -webkit-text-stroke: 0.6px currentColor;
+    letter-spacing: -0.02em;
+    line-height: clamp(56px, 7.5svh, 68px);
+  }
+  .personal .subtitle { margin-top: 8px; font-size: 24px; line-height: 32px; }
+  .personal .search { margin-top: 32px; max-width: 1104px; }
+  .personal .content { gap: 48px; padding-top: 48px; }
+
+  .personal .welcomeImage { align-self: stretch; height: auto; min-height: 104px; width: 200px; }
+  .personal .welcomeImage img { mask-image: linear-gradient(to right, #000 72%, transparent 100%); }
+  .personal .welcomeContent {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-width: 0;
+    padding: 16px 32px;
+  }
+  .personal .welcomeTitle { font-size: 32px; line-height: 40px; }
+
+  .personal .destinationHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 24px;
+  }
+  .personal .destinationSubtitle { grid-column: 1 / -1; }
+  .personal .destinationControls { grid-column: 2; grid-row: 1; margin-top: 0; gap: 16px; }
+  .personal .destinationControls [role="tab"] {
+    height: 40px;
+    padding-inline: 12px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--slate);
+    font-size: 14px;
+  }
+  .personal .destinationControls [role="tab"][aria-selected="true"] {
+    border-bottom-color: var(--blue);
+    color: var(--ink);
+  }
+  .personal .destinationPanel { margin-top: 24px; }
+  .personal .destinationPhoto,
+  .personal .hotelRow li > a > div:first-child > div,
+  .personal .stays article > div:first-child {
+    aspect-ratio: 16 / 9;
+    height: auto;
+  }
+  .personal .hotelRow > ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .personal .hotelRow li > a,
+  .personal .stays article { border-radius: var(--radius-lg); }
+  .personal .stays article { box-shadow: none; }
+  .personal .hotelRow li > a > div:last-child {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+  .personal .hotelRow h3 { max-width: 60%; }
+  .personal .hotelRow li > a > div:last-child > p { flex: 1; min-width: 0; text-align: right; }
+  .personal .stays > ul,
+  .personal .stays > div[aria-hidden] > ul { gap: 16px; }
+  .personal .stays article > div:last-child { padding: 16px; }
+  .personal .hotelRow h3,
+  .personal .stays article h3 {
+    font-family: var(--font-dm-serif), Georgia, serif;
+    font-size: 24px;
+    font-weight: 400;
+    line-height: 32px;
+  }
+  .personal .destinationCaption {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: baseline;
+    column-gap: 12px;
+    padding: 12px 16px;
+  }
+  .personal .destinationCaption > div { display: contents; }
+  .personal .destinationCaption > div > p:first-child { grid-column: 1; grid-row: 1; }
+  .personal .destinationCaption > div > p:last-child { grid-column: 3; grid-row: 1; }
+  .personal .destinationRegion { grid-column: 2; grid-row: 1; margin-top: 0; text-align: right; }
+  .personal .destinationFooter { margin-top: 8px; }
+  .personal .stays > div[aria-hidden] > ul > li { border-radius: var(--radius-lg); }
+  .personal .stays > div[aria-hidden] > ul > li > div:first-child { aspect-ratio: 16 / 9; }
+  .personal .stays > div[aria-hidden] > ul > li > div:last-child { padding: 16px; }
+}
+
+@media (min-width: 1024px) and (min-height: 900px) {
+  .personal .hero { padding-top: 40px; padding-bottom: 20px; }
+  .personal .title { font-size: 60px; line-height: 68px; }
+}
+
+@media (min-width: 1024px) and (max-height: 760px) {
+  .personal .hero { padding-top: clamp(16px, 2.5svh, 24px); padding-bottom: clamp(12px, 2svh, 20px); }
+  .personal .subtitle { margin-top: 8px; font-size: 22px; line-height: 30px; }
+  .personal .search { margin-top: 28px; }
+  .personal .intro { padding-top: 8px; }
+  .personal .welcomeImage { min-height: 80px; }
+  .personal .welcomeContent { padding-block: 8px; }
+  .personal .welcomeTitle { font-size: 28px; line-height: 36px; }
+  .personal .destinationCaption { padding-block: 8px; }
+  .personal .hotelRow li > a > div:last-child { padding-block: 8px; }
+  .personal .destinationFooter { margin-top: 8px; }
+}

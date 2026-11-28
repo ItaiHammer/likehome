@@ -4,11 +4,11 @@ import { roomAmenityList, stayOffers } from "@/lib/stay-filters";
 import { getRoomRates, liveRatesEnabled, quoteForRoom, type StayQuery } from "@/lib/liteapi/rates";
 import { saveOfferedRooms } from "@/lib/liteapi/save";
 import { nightsByRoom } from "@/lib/room-availability";
+import { isUuid } from "@/lib/ids";
+import { hotelLocation } from "@/lib/comparison";
 import { addDays } from "@/app/_components/dates";
 import { todayUTC } from "@/utils/reservation-logic";
 import type { Room, Stay } from "../../_data/stays";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type HotelRow = {
   id: string;
@@ -60,7 +60,7 @@ const roomOf = (r: RoomRow): Room => ({
 /** A database hotel and its rooms, shaped like the sample stays so the same page can show it. */
 export async function getHotelStay(id: string): Promise<Stay | null> {
   // Anything that isn't a hotel id would only make the database query fail
-  if (!UUID.test(id)) return null;
+  if (!isUuid(id)) return null;
 
   const [hotelResult, roomsResult] = await Promise.all([getHotel(id), getRoomsByHotel(id)]);
   // Only a missing hotel (.single() found no row: PGRST116) is "not found". Any other failure throws, so
@@ -108,7 +108,7 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
   const stay: Stay = {
     slug: hotel.id,
     name: hotel.name,
-    location: [hotel.city, hotel.region, hotel.country].filter(Boolean).join(", "),
+    location: hotelLocation(hotel),
     type: "Hotel",
     tags,
     rating: Number.isFinite(rating) ? rating : null,

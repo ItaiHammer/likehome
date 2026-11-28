@@ -2,19 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PAGE_ROUTES } from "@/constants/routes";
-import { bookingCode, changeBlocker, datesProblem, findOverlap, formatStayDates, money, overlapMessage, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
+import { bookingCode, changeBlocker, datesProblem, findOverlap, formatStayDates, money, overlapMessage, partyLabel, TOO_CLOSE_TO_CHANGE, type OtherStay } from "@/lib/bookings";
 import { calculateTotalPrice, MAX_NIGHTS, todayInTimeZone } from "@/utils/reservation-logic";
-import { browserTimeZone, formatDate, nightsBetween } from "../../_components/dates";
+import { browserTimeZone, formatDate, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, FormError, Stepper } from "../../_components/ui";
 import type { Room } from "../../_data/stays";
 import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
-import { GuestsField, guestLabel } from "../../reserve/[slug]/GuestsField";
+import { GuestsField } from "../../reserve/[slug]/GuestsField";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
 import { useBookedNightsLookup } from "../../reserve/[slug]/useBookedNightsLookup";
-import { freeUnitId, markBookedRooms, mergeBookedNights, withoutStay, type BookedWindow } from "@/lib/room-availability";
+import { blockedOffsets as calendarBlockedOffsets, BLOCKED_NOTE, freeUnitId, markBookedRooms, mergeBookedNights, roomProblem, withoutStay, type BookedWindow } from "@/lib/room-availability";
 import { HotelPhoto } from "../_components/HotelPhoto";
 import { PhotoGallery } from "../../reserve/[slug]/PhotoGallery";
 import { displayRoomName } from "../../reserve/[slug]/roomDisplay";
@@ -43,8 +43,8 @@ type Stay = { checkIn: string; checkOut: string; guests: number; children: numbe
 type LivePrices = { key: string; byId: Record<string, Partial<Room>> };
 type Errors = { dates?: string; guests?: string; form?: string; signIn?: boolean };
 
+const noSubscribe = () => () => {};
 const nightsLabel = (n: number) => `${n} ${n === 1 ? "night" : "nights"}`;
-const guestsLabel = (s: Pick<Stay, "guests" | "children">) => guestLabel(s.guests - s.children, s.children);
 
 // Change the dates, room or guests of a booking through PATCH /api/reservations/[id].
 // The API reprices the stay (nights × nightly price); no difference is charged or refunded yet.
@@ -134,6 +134,10 @@ export function ChangeBooking({
   const mine = withoutStay(known, booking.roomId, booking.checkIn, booking.checkOut);
   const rooms = markBookedRooms(mine, checkIn, checkOut);
   const room = rooms.find((r) => r.id === roomId) ?? rooms[0];
+  // Empty on the server, like the stay page's calendar
+  const today = useSyncExternalStore(noSubscribe, todayISO, () => "");
+  // The same nights the stay page crosses out, with this booking's own nights left open
+  const blockedOffsets = calendarBlockedOffsets(rooms, { adults, children }, otherStays, today, { moreRoomsMayAppear: booking.livePrices });
   const currentRoom = rooms.find((r) => r.id === current.roomId);
   const changed = checkIn !== current.checkIn || checkOut !== current.checkOut || !sameGuests || roomId !== current.roomId;
   // Any change is repriced at today's nightly price (the API does the same), so until something
@@ -213,8 +217,9 @@ export function ChangeBooking({
     const clash = findOverlap(otherStays, checkIn, checkOut);
     if (clash) return { field: "dates", message: overlapMessage(clash) };
     if (lookingUp) return { field: "dates", message: "Still checking which rooms are free on those dates. Try again in a moment." };
-    if (room.bookedForDates) return { field: "guests", message: `${displayRoomName(room.name)} is booked for those dates. Pick another room or change your dates.` };
-    if (guests > room.sleeps) return { field: "guests", message: `${displayRoomName(room.name)} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
+    const taken = roomProblem(room);
+    if (taken) return { field: "guests", message: taken };
+    if (guests > room.sleeps) return { field: "guests", message: `${room.name} sleeps up to ${room.sleeps}. Pick a bigger room or fewer guests.` };
     return null;
   }
 
@@ -343,7 +348,7 @@ export function ChangeBooking({
                     {formatStayDates(current.checkIn, current.checkOut)} · {nightsLabel(nightsBetween(current.checkIn, current.checkOut))}
                   </p>
                   <p>
-                    {displayRoomName(currentRoom.name)} · {guestsLabel(current)} · {money(current.total)}
+                    {currentRoom.name} · {partyLabel(current.guests, current.children)} · {money(current.total)}
                   </p>
                 </div>
               </div>
@@ -356,7 +361,8 @@ export function ChangeBooking({
                   setCheckOut(b);
                   setErrors(({ guests: g }) => ({ guests: g }));
                 }}
-                blockedOffsets={[]}
+                blockedOffsets={blockedOffsets}
+                blockedNote={BLOCKED_NOTE}
                 open={datesOpen}
                 onOpenChange={setDatesOpen}
                 error={errors.dates}
@@ -503,7 +509,7 @@ function BookingPropertyHeading({ booking, listingType = "", allowFavorite = fal
     <div className="mt-6">
       <div className="flex items-start justify-between gap-4">
         <h1 className="min-w-0 flex-1 break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[56px] sm:leading-[64px]">{bookingDisplayName(booking.hotelName)}</h1>
-        {allowFavorite && <div className="shrink-0 pt-2"><SaveHotelButton hotelId={booking.hotelId} /></div>}
+        {allowFavorite && <div className="shrink-0 pt-2"><SaveHotelButton hotelId={booking.hotelId} hotelName={booking.hotelName} /></div>}
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-base text-slate">
         {booking.location && <p>{booking.location}</p>}
@@ -577,7 +583,7 @@ function StayDetails({ roomName, stay }: { roomName: string | null; stay: Stay }
     roomName && ["Room", roomName],
     ["Check-in", formatDate(stay.checkIn)],
     ["Check-out", formatDate(stay.checkOut)],
-    ["Guests", guestsLabel(stay)],
+    ["Guests", partyLabel(stay.guests, stay.children)],
     ["Total", money(stay.total)],
   ].filter(Boolean) as [string, string][];
   return (

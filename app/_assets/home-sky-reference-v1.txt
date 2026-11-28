@@ -1,0 +1,6 @@
+Asset: home-sky-reference-v1.png
+Created: November 22, 2026, using built-in image generation.
+Reference: the user's supplied LikeHome homepage reference screenshot, used for the sky's style and composition only. No third-party stock images were used for this asset.
+
+Final generation prompt:
+Use case: photorealistic-natural. Asset type: a photographic sky background for a travel website desktop hero, NOT a UI mockup. The attached image is a STYLE/COMPOSITION REFERENCE ONLY: use only its natural pale blue sky and soft white cloud treatment. Generate a brand-new very wide panoramic 3:1 sky backdrop, ideally 1800x600. Light powder-blue sky with fine, realistic, sunlit white cumulus and wispy cloud edges concentrated at far left and far right near the upper corners. Smaller soft cloud tufts with fine natural texture, translucent feathered edges and subtle tonal depth, like the reference. Leave the central 60% calm clear blue for website text. Airy understated daytime lighting. The lower half gradually gets much lighter toward a warm off-white #faf7f2 at the bottom. Avoid massive solid cloud banks, cutout/cartoon shapes, flat vector blobs, hard outlines, heavy gray clouds, oversaturation. Absolutely NO text, letters, headings, watermarks, UI, buttons, cards, buildings, landscapes, horizon lines or objects. Output only the empty natural sky background.
