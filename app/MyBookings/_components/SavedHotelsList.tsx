@@ -1,12 +1,10 @@
 "use client";
 
-import { stayDisplayName } from "@/app/_components/stayDisplayName";
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { Button, Card } from "@/app/_components/ui";
-import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
 import { useSavedHotels } from "@/app/_components/savedHotelsStore";
 import { useAccountChanged } from "@/app/_components/useAccountChanged";
+import { SearchResultCard } from "@/app/search/components/SearchResultCard";
 
 export interface SavedHotel {
     id: string;
@@ -17,6 +15,9 @@ export interface SavedHotel {
     photoUrl?: string | null;
     pricePerNight?: number | null;
     tags?: string[] | null;
+    description?: string | null;
+    maxCapacity?: number | null;
+    roomOptions?: number | null;
 }
 
 function ListNotice({ title, body, children }: { title: string; body: string; children?: React.ReactNode }) {
@@ -29,10 +30,87 @@ function ListNotice({ title, body, children }: { title: string; body: string; ch
     );
 }
 
+type SortChoice = "recent" | "name_asc" | "name_desc";
+
+const SORT_CHOICES: { value: SortChoice; label: string }[] = [
+    { value: "recent", label: "Recently saved" },
+    { value: "name_asc", label: "Name: A to Z" },
+    { value: "name_desc", label: "Name: Z to A" },
+];
+
+// Same menu treatment as the search-results SortSelect. Sorting remains local
+// to the saved-hotel list; it must not navigate away or reset the favorites store.
+function SavedSortMenu({ value, onChange }: { value: SortChoice; onChange: (value: SortChoice) => void }) {
+    const [open, setOpen] = useState(false);
+    const rootRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const selected = SORT_CHOICES.find((option) => option.value === value) ?? SORT_CHOICES[0];
+
+    useEffect(() => {
+        if (!open) return;
+        const closeOutside = (event: PointerEvent) => {
+            if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setOpen(false);
+                triggerRef.current?.focus({ preventScroll: true });
+            }
+        };
+        document.addEventListener("pointerdown", closeOutside);
+        document.addEventListener("keydown", closeOnEscape);
+        return () => {
+            document.removeEventListener("pointerdown", closeOutside);
+            document.removeEventListener("keydown", closeOnEscape);
+        };
+    }, [open]);
+
+    return (
+        <div ref={rootRef} className="relative shrink-0" onBlur={(event) => {
+            if (event.relatedTarget && !rootRef.current?.contains(event.relatedTarget)) setOpen(false);
+        }}>
+            <button
+                ref={triggerRef}
+                type="button"
+                aria-label={`Sort saved hotels: ${selected.label}`}
+                aria-expanded={open}
+                aria-controls="saved-hotels-sort-options"
+                onClick={() => setOpen((previous) => !previous)}
+                className="inline-flex min-w-[12rem] items-center justify-between gap-3 rounded-xl border border-edge bg-surface px-3.5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-blue/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
+            >
+                <span><span className="mr-1 font-medium text-slate">Sort:</span>{selected.label}</span>
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            </button>
+            {open && (
+                <div id="saved-hotels-sort-options" className="absolute right-0 top-full z-30 mt-2 w-56 rounded-2xl border border-edge bg-surface p-2 shadow-[0_20px_50px_-15px_rgba(10,20,50,0.45)]">
+                    {SORT_CHOICES.map((option) => (
+                        <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={value === option.value}
+                            onClick={() => {
+                                onChange(option.value);
+                                setOpen(false);
+                                triggerRef.current?.focus({ preventScroll: true });
+                            }}
+                            className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${value === option.value ? "bg-blue/10 font-semibold text-blue-dark" : "text-ink hover:bg-blue/5"}`}
+                        >
+                            {option.label}
+                            {value === option.value && <span aria-hidden="true">✓</span>}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // `hotels` is the account's saved list from the server, newest first. A heart cleared on this page hides its card;
 // the store's list can be older than the server's, so it hides nothing else.
 export function SavedHotelsList({ hotels }: { hotels: SavedHotel[] }) {
-    const [sortBy, setSortBy] = useState<"recent" | "name_asc" | "name_desc">("recent");
+    const [sortBy, setSortBy] = useState<SortChoice>("recent");
     const saved = useSavedHotels();
     const accountChanged = useAccountChanged();
 
@@ -68,96 +146,37 @@ export function SavedHotelsList({ hotels }: { hotels: SavedHotel[] }) {
     }
 
     return (
-        <div className="space-y-4">
-            {/* Top Bar: Saved Count + Alphabetical Sorting Dropdown */}
-            <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-slate">
-                    {savedHotels.length} {savedHotels.length === 1 ? "saved hotel" : "saved hotels"}
+        <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge pb-4">
+                <p className="text-sm text-slate" aria-live="polite">
+                    <span className="font-semibold tabular-nums text-ink">{savedHotels.length}</span> {savedHotels.length === 1 ? "hotel saved" : "hotels saved"}
                 </p>
-
-                <div className="relative inline-block text-left">
-                    <select
-                        value={sortBy}
-                        onChange={(e) =>
-                            setSortBy(e.target.value as typeof sortBy)
-                        }
-                        className="appearance-none rounded-control border border-edge bg-surface px-3 py-1.5 pr-8 text-xs font-medium text-slate shadow-sm transition-colors hover:border-slate/40 focus:outline-none cursor-pointer"
-                    >
-                        <option value="recent">Recently saved</option>
-                        <option value="name_asc">Name: A to Z</option>
-                        <option value="name_desc">Name: Z to A</option>
-                    </select>
-                    <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate">
-            ▼
-          </span>
-                </div>
+                <SavedSortMenu value={sortBy} onChange={setSortBy} />
             </div>
-
-            {/* Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pt-6">
-                {savedHotels.map((hotel) => {
-                    const locationText = [hotel.city, hotel.region || hotel.country].filter(Boolean).join(", ");
-                    const tag1 = hotel.tags?.[0] || "Parking";
-                    const tag2 = hotel.tags?.[1] || "Free Wi-Fi";
-
-                    return (
-                        <div
-                            key={hotel.id}
-                            className="group flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface shadow-sm transition-all hover:shadow-md"
-                        >
-                            {/* Photo Container */}
-                            <div className="relative aspect-[16/10] w-full overflow-hidden bg-paper">
-                                {hotel.photoUrl ? (
-                                    <img
-                                        src={hotel.photoUrl}
-                                        alt={hotel.name}
-                                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                                    />
-                                ) : (
-                                    <div className="flex h-full w-full items-center justify-center bg-paper text-slate text-xs">
-                                        No image available
-                                    </div>
-                                )}
-
-                                <SaveHotelButton hotelId={hotel.id} hotelName={hotel.name} saved className="absolute top-3 right-3 z-10" />
-                            </div>
-
-                            {/* Card Details */}
-                            <div className="flex flex-1 flex-col p-4 space-y-2">
-                                <div>
-                                    <h3 className="font-semibold text-ink text-sm truncate">{stayDisplayName(hotel.name)}</h3>
-                                    {locationText && <p className="text-xs text-slate mt-0.5 truncate">{locationText}</p>}
-                                </div>
-
-                                <div className="flex items-center justify-between text-[11px] text-slate pt-1">
-                                    <span>{tag1}</span>
-                                    <span>{tag2}</span>
-                                </div>
-
-                                <div className="mt-auto pt-3 border-t border-edge flex items-center justify-between">
-                                    <div>
-                                        {hotel.pricePerNight ? (
-                                            <>
-                                                <span className="font-bold text-ink text-sm">${hotel.pricePerNight}</span>
-                                                <span className="text-xs text-slate"> / night</span>
-                                            </>
-                                        ) : (
-                                            <span className="text-xs text-slate italic">Contact for pricing</span>
-                                        )}
-                                    </div>
-
-                                    <Link
-                                        href={`/reserve/${hotel.id}`}
-                                        className="text-xs font-semibold text-blue-dark hover:underline flex items-center gap-1"
-                                    >
-                                        View stay &rarr;
-                                    </Link>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+            <ul className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))" }}>
+                {savedHotels.map((hotel) => (
+                    <li key={hotel.id} className="min-w-0 [&>article]:h-full">
+                        <SearchResultCard
+                            stay={{
+                                id: hotel.id,
+                                name: hotel.name,
+                                city: hotel.city,
+                                region: hotel.region,
+                                country: hotel.country,
+                                photo_urls: hotel.photoUrl ? [hotel.photoUrl] : [],
+                                min_price: hotel.pricePerNight,
+                                price_status: hotel.pricePerNight == null ? "needs-dates" : undefined,
+                                tags: hotel.tags,
+                                description: hotel.description,
+                                max_capacity: hotel.maxCapacity,
+                                room_options: hotel.roomOptions,
+                            }}
+                            headingLevel="h3"
+                            initiallySaved
+                        />
+                    </li>
+                ))}
+            </ul>
         </div>
     );
 }

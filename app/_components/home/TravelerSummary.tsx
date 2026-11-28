@@ -110,7 +110,7 @@ function TripCard({ href, photo, label, title, body, action }: { href: string; p
   const text = (
     <>
       <h3 className={cardLabel}>{label}</h3>
-      <p className="mt-1.5 font-serif text-[26px] leading-8 text-ink [overflow-wrap:anywhere]">{title}</p>
+      <p className="mt-1.5 font-bold text-[26px] leading-8 text-ink [overflow-wrap:anywhere]">{title}</p>
       <p className="mt-1.5 text-[15px] leading-6 text-slate">{body}</p>
       <CardAction>{action}</CardAction>
     </>
@@ -146,7 +146,7 @@ async function Points({ accountId }: { accountId: string }) {
   return (
     <Link href={PAGE_ROUTES.REWARDS} className={`${tintLink} flex flex-col p-5 sm:px-[22px]`}>
       <h3 className={cardLabel}>Your points</h3>
-      {value !== null && <p className="mt-1.5 font-serif text-[40px] leading-[44px] text-ink">{value}</p>}
+      {value !== null && <p className="mt-1.5 font-bold text-[40px] leading-[44px] text-ink">{value}</p>}
       <p className="mt-1.5 text-[15px] leading-6 text-slate">{line}</p>
       <CardAction>See your rewards</CardAction>
     </Link>

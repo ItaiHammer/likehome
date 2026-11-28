@@ -100,7 +100,14 @@
 
 body {
   color: var(--ink);
-  background: var(--paper);
+  /* A subtle blue-to-paper fallback for routes without a full SkyBackground hero.
+     Pages with a sky keep their stronger, locally rendered gradient. */
+  background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--blue) 13%, var(--paper)) 0,
+      var(--paper) 380px
+    ) no-repeat,
+    var(--paper);
 }
 
 /* Tailwind v4 resets buttons to the arrow cursor; bring back the pointer for anything clickable.

@@ -25,7 +25,7 @@ export function EditorHeader({ saved, cover, isNew }: { saved: HotelInfo; cover?
     <div className="flex min-w-0 items-center gap-5">
       {!isNew && <ListingCover photo={cover} sizes="128px" className="hidden aspect-[16/10] w-32 border border-edge sm:block" />}
       <div className="min-w-0">
-        {isNew && <p className="mb-2 text-xs font-medium uppercase tracking-normal text-blue">Property setup</p>}
+        {isNew && <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-blue">Property setup</p>}
         <h1 className="truncate font-serif text-[40px] leading-[48px] text-ink">{isNew ? "New property" : saved.name}</h1>
         <p className="mt-1 text-slate">{isNew ? "Add your property details" : formatLocation(saved)}</p>
       </div>

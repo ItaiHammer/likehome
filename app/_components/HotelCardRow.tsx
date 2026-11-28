@@ -1,10 +1,11 @@
-import { HotelPhoto } from "@/app/MyBookings/_components/HotelPhoto";
-import { SaveHotelButton } from "@/app/_components/SaveHotelButton";
-import { ArrowIcon, arrowSlideClass, Card, cardLiftClass, photoZoomClass, SectionHeading, swipeItemClass, swipeRowClass } from "@/app/_components/ui";
+import Link from "next/link";
+import { SearchResultCard } from "@/app/search/components/SearchResultCard";
+import { SectionHeading, arrowSlideClass, ArrowIcon } from "@/app/_components/ui";
 import type { HotelCard } from "@/lib/recently-viewed";
+import { RecommendedCarousel } from "./RecommendedCarousel";
 import styles from "./home/HomeLayout.module.css";
 
-// A homepage row of hotel cards (photo, name, location), four across, swiping sideways on phones
+/** History and saved stays use the same card design as recommendations/search. */
 export function HotelCardRow({
   titleId,
   title,
@@ -12,6 +13,8 @@ export function HotelCardRow({
   action,
   cards,
   saveable = false,
+  showFavorites = true,
+  carousel = false,
   more,
 }: {
   titleId: string;
@@ -19,43 +22,49 @@ export function HotelCardRow({
   subtitle?: string;
   action?: React.ReactNode;
   cards: HotelCard[];
-  /** A heart on each photo */
   saveable?: boolean;
-  /** A last tile linking to the full list */
+  showFavorites?: boolean;
+  carousel?: boolean;
   more?: { href: string; label: string };
 }) {
+  const items: React.ReactNode[] = cards.map((hotel) => (
+    <li key={hotel.id} className="min-w-0 [&>article]:h-full">
+      <SearchResultCard
+        stay={{
+          id: hotel.id,
+          name: hotel.name,
+          address: hotel.location,
+          description: hotel.description ?? null,
+          photo_urls: hotel.photo ? [hotel.photo] : [],
+          tags: hotel.tags,
+          min_price: hotel.priceFrom,
+          max_capacity: hotel.maxCapacity,
+          room_options: hotel.roomOptions,
+          price_status: hotel.priceFrom == null ? "needs-dates" : undefined,
+        }}
+        headingLevel="h3"
+        initiallySaved={saveable}
+        showFavorites={showFavorites}
+      />
+    </li>
+  ));
+
+  if (more) items.push(
+    <li key="see-all" className="min-w-0">
+      <Link href={more.href} className="flex h-full min-h-56 items-center justify-center gap-2 rounded-2xl border border-dashed border-edge bg-surface p-6 text-center text-base font-semibold text-blue focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue">
+        {more.label}<ArrowIcon className={arrowSlideClass} />
+      </Link>
+    </li>,
+  );
+
   return (
     <section aria-labelledby={titleId} className={styles.hotelRow}>
       <SectionHeading id={titleId} title={title} subtitle={subtitle} action={action} />
-      {/* On phones the padding keeps a focused card's ring and the entrance slide inside the scroll box, and the margin takes it back */}
-      <ul className={`mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 ${swipeRowClass()} max-sm:-mb-3 max-sm:mt-5 max-sm:pb-3 max-sm:pt-1`}>
-        {/* The hover lift is on each item, so a heart beside its link lifts with the card */}
-        {cards.map((hotel, i) => (
-          <li key={hotel.id} className={`card-in grid ${swipeItemClass} ${cardLiftClass} max-sm:w-[240px]${saveable ? " relative" : ""}`} style={{ "--i": i } as React.CSSProperties}>
-            <Card href={hotel.href} padding="none" className="overflow-hidden">
-              <div className="overflow-hidden">
-                <HotelPhoto url={hotel.photo} className={`aspect-[16/10] w-full rounded-none ${photoZoomClass}`} />
-              </div>
-              <div className="px-5 py-4 sm:px-4 sm:py-3">
-                <h3 title={hotel.name} className="truncate font-serif text-xl leading-7 text-ink">{hotel.name}</h3>
-                {hotel.location && <p title={hotel.location} className="truncate text-sm leading-6 text-slate">{hotel.location}</p>}
-              </div>
-            </Card>
-            {/* Beside the link, not in it: a button can't sit inside a link */}
-            {saveable && <SaveHotelButton hotelId={hotel.id} hotelName={hotel.name} saved className="absolute right-3 top-3 z-10" />}
-          </li>
-        ))}
-        {more && (
-          <li className={`card-in grid ${swipeItemClass} max-sm:w-[240px]`} style={{ "--i": cards.length } as React.CSSProperties}>
-            <Card href={more.href} className="border-dashed">
-              <span className="flex h-full min-h-24 items-center justify-center gap-1.5 text-center text-base font-semibold text-blue">
-                {more.label}
-                <ArrowIcon className={arrowSlideClass} />
-              </span>
-            </Card>
-          </li>
-        )}
-      </ul>
+      {carousel ? (
+        <RecommendedCarousel label={title}>{items}</RecommendedCarousel>
+      ) : (
+        <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{items}</ul>
+      )}
     </section>
   );
 }

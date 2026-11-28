@@ -4,10 +4,10 @@ const palettes: Record<
   SceneVariant,
   { wall: string; reveal: string; skyTop: string; skyBottom: string; nightTop: string; nightBottom: string }
 > = {
-  sea: { wall: "#f3e8d8", reveal: "#e6d4bb", skyTop: "#4a86d6", skyBottom: "#cfe3f7", nightTop: "#27306b", nightBottom: "#6a6fb3" },
-  mountain: { wall: "#e9dccb", reveal: "#d7c3a7", skyTop: "#6fa3df", skyBottom: "#e3eef9", nightTop: "#2a2f66", nightBottom: "#7477b8" },
-  desert: { wall: "#f4e2cf", reveal: "#e5c9aa", skyTop: "#f19a6a", skyBottom: "#fbe0b4", nightTop: "#2e2a63", nightBottom: "#8a6fa8" },
-  city: { wall: "#efe4e0", reveal: "#dccbc4", skyTop: "#8ea8de", skyBottom: "#f6c9ae", nightTop: "#2b2d68", nightBottom: "#8573ad" },
+  sea: { wall: "#e6edf7", reveal: "#c8d7ec", skyTop: "#4a86d6", skyBottom: "#cfe3f7", nightTop: "#27306b", nightBottom: "#6a6fb3" },
+  mountain: { wall: "#e2ebf6", reveal: "#c4d6ee", skyTop: "#6fa3df", skyBottom: "#e3eef9", nightTop: "#2a2f66", nightBottom: "#7477b8" },
+  desert: { wall: "#e6ecf5", reveal: "#cad7e8", skyTop: "#f19a6a", skyBottom: "#c6dff5", nightTop: "#2e2a63", nightBottom: "#8a6fa8" },
+  city: { wall: "#e4eaf4", reveal: "#c9d5e8", skyTop: "#8ea8de", skyBottom: "#f6c9ae", nightTop: "#2b2d68", nightBottom: "#8573ad" },
 };
 
 // Lit windows at night: [x, y, width, height] in scene units, drawn over the dimmed view.
@@ -41,7 +41,7 @@ function View({ variant }: { variant: SceneVariant }) {
           </g>
           <path d="M150 172 V156 L159 172Z" fill="#fff" />
           <path d="M190 210 Q196 160 225 150 V210Z" fill="#6c9a4f" />
-          <rect x="200" y="164" width="12" height="9" fill="#f7efe3" />
+          <rect x="200" y="164" width="12" height="9" fill="#e9f1fa" />
           <path d="M198 165 L206 159 L214 165Z" fill="#d9824f" />
           <ellipse cx="196" cy="168" rx="3" ry="14" fill="#2f5e3a" />
         </>
@@ -84,12 +84,12 @@ function View({ variant }: { variant: SceneVariant }) {
           <rect x="95" y="168" width="130" height="42" fill="#5d86c8" />
           <g>
             {[
-              [100, 132, 18, "#f6e3c7"],
-              [120, 120, 16, "#f3c8b5"],
-              [138, 138, 20, "#fbeedd"],
+              [100, 132, 18, "#d6e5f7"],
+              [120, 120, 16, "#b8d0ed"],
+              [138, 138, 20, "#e8f1fa"],
               [160, 112, 14, "#e9d2ea"],
-              [176, 128, 20, "#f6e3c7"],
-              [198, 136, 22, "#f3c8b5"],
+              [176, 128, 20, "#d6e5f7"],
+              [198, 136, 22, "#b8d0ed"],
             ].map(([x, y, w, c]) => (
               <g key={x as number}>
                 <rect x={x as number} y={y as number} width={w as number} height={170 - (y as number)} fill={c as string} />
@@ -155,7 +155,7 @@ export function WindowScene({ variant, id }: { variant: SceneVariant; id: string
           ))}
         </g>
       </g>
-      <rect x="76" y="200" width="168" height="10" rx="2" fill="#fbf5ec" />
+      <rect x="76" y="200" width="168" height="10" rx="2" fill="#e9f1fa" />
       <rect x="0" y="210" width="320" height="30" fill="#000" opacity="0.04" />
       {/* Vase on the sill */}
       <path d="M222 178 h14 l-2 22 h-10z" fill="#3f67c9" />

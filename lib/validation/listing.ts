@@ -1,3 +1,4 @@
+import { travelerTypes } from "../../app/search/types.ts";
 import {
   AMENITIES,
   PROPERTY_TYPES,
@@ -7,6 +8,8 @@ import {
   type ListingDraft,
   type ListingPhoto,
   type ListingRoom,
+  ROOM_AMENITIES,
+  type RoomAmenity,
   type PropertyType,
 } from "../../types/listing.ts";
 
@@ -67,11 +70,24 @@ export function readAmenities(input: unknown): Amenity[] {
   return AMENITIES.filter((amenity) => picked.includes(amenity));
 }
 
+// Only known traveler categories can enter the saved hotel tags. Keep canonical spelling
+// and stable order for editor dirty tracking, regardless of the browser's input.
+export function readIdealFor(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const have = new Set(input.filter((value): value is string => typeof value === "string").map((value) => value.trim().toLowerCase()));
+  return travelerTypes.filter((category) => have.has(category.toLowerCase()));
+}
+
 // --- Rooms ---
 
 // What the Edit room form holds: text exactly as typed.
-export type RoomForm = Record<"roomType" | "bedConfiguration" | "maxGuests" | "roomCount" | "nightlyRate" | "description", string>;
-export type RoomFormErrors = Partial<Record<keyof RoomForm, string>>;
+export type RoomTextField = "roomType" | "bedConfiguration" | "maxGuests" | "roomCount" | "nightlyRate" | "description";
+export type RoomForm = Record<RoomTextField, string> & { amenities: RoomAmenity[] };
+export function readRoomAmenities(input: unknown): RoomAmenity[] {
+  const picked = Array.isArray(input) ? input : [];
+  return ROOM_AMENITIES.filter((a) => picked.includes(a));
+}
+export type RoomFormErrors = Partial<Record<RoomTextField, string>>;
 
 // "189", "$189.5" or "1,189.50" → 118950. Text, not float math, so no rounding surprises. null if it isn't an amount.
 export function dollarsToCents(text: string): number | null {
@@ -86,7 +102,7 @@ export function centsToDollarText(cents: number) {
 }
 
 export function roomToForm(room?: ListingRoom): RoomForm {
-  if (!room) return { roomType: "", bedConfiguration: "", maxGuests: "2", roomCount: "", nightlyRate: "", description: "" };
+  if (!room) return { roomType: "", bedConfiguration: "", maxGuests: "2", roomCount: "", nightlyRate: "", description: "", amenities: [] };
   return {
     roomType: room.roomType,
     bedConfiguration: room.bedConfiguration,
@@ -94,6 +110,7 @@ export function roomToForm(room?: ListingRoom): RoomForm {
     roomCount: String(room.roomCount),
     nightlyRate: centsToDollarText(room.nightlyRateCents),
     description: room.description,
+    amenities: readRoomAmenities(room.amenities),
   };
 }
 
@@ -126,7 +143,7 @@ export function checkRoomForm(form: RoomForm): { errors: RoomFormErrors; room: O
   if (Object.keys(errors).length > 0 || maxGuests === null || roomCount === null || nightlyRateCents === null) {
     return { errors, room: null };
   }
-  return { errors, room: { roomType, bedConfiguration, maxGuests, roomCount, nightlyRateCents, description } };
+  return { errors, room: { roomType, bedConfiguration, maxGuests, roomCount, nightlyRateCents, description, amenities: readRoomAmenities(form.amenities) } };
 }
 
 // Server side: the same rules as the form, applied to saved rooms. null if anything is off.
@@ -147,6 +164,7 @@ export function readRooms(input: unknown): ListingRoom[] | null {
       roomCount: whole(r.roomCount),
       nightlyRate: typeof cents === "number" && Number.isInteger(cents) && cents >= 0 ? centsToDollarText(cents) : "",
       description: asText(r.description),
+      amenities: readRoomAmenities(r.amenities),
     });
     if (!room) return null;
     rooms.push({ id: r.id, ...room });
@@ -186,7 +204,7 @@ export function readListingDraft(input: unknown): ListingDraft | null {
   const rooms = readRooms(source.rooms);
   const photos = readPhotos(source.photos);
   if (!rooms || !photos) return null;
-  return { ...readHotelInfo(source), amenities: readAmenities(source.amenities), photos, rooms };
+  return { ...readHotelInfo(source), amenities: readAmenities(source.amenities), idealFor: readIdealFor(source.idealFor), photos, rooms };
 }
 
 // A trusted Listing (from our own data layer) as the editor's draft.
@@ -197,7 +215,7 @@ export function draftFromListing(listing: Listing): ListingDraft {
   if (/^[A-Za-z]{2}$/.test(info.country) && ISO_COUNTRY_CODES.has(info.country.toUpperCase())) {
     info.country = regionNames.of(info.country.toUpperCase()) ?? info.country;
   }
-  return { ...info, amenities: listing.amenities, photos: listing.photos, rooms: listing.rooms };
+  return { ...info, amenities: listing.amenities, idealFor: readIdealFor(listing.idealFor), photos: listing.photos, rooms: listing.rooms };
 }
 
 // Country validation for the plain text field, shared by browser and server.

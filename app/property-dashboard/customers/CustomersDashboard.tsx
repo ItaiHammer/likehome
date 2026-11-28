@@ -1,9 +1,8 @@
 "use client";
 
 import {useEffect, useMemo, useState} from "react";
-import type {HotelBooking, HotelCustomer, HotelCustomerHistory} from "@/lib/hotel-customers";
-import {summarizeOwner} from "@/lib/hotel-customers";
-import {filterMockCustomerData} from "./mockCustomerData";
+import type {HotelCustomerHistory} from "@/lib/hotel-customers";
+import {customerFromBookings, sampleHistory} from "./mockCustomerData";
 import {PropertyPicker} from "../_components/PropertyPicker";
 
 const PAGE_SIZE = 10;
@@ -60,104 +59,15 @@ function Pagination({page, pages, onChange}: {
     );
 }
 
-// Use the same booking records for overview totals, property-specific stats, and booking history.
-// These rules mirror get_hotel_customer_history: completed/in-progress stays count toward nights
-// and first/last stay, while the soonest UPCOMING check-in provides nextStay.
-function customerFromBookings(customer: HotelCustomer, bookings: HotelBooking[]): HotelCustomer {
-    const stays = bookings.filter((b) => b.stage === "past" || b.stage === "in-stay");
-    const upcoming = bookings.filter((b) => b.stage === "upcoming");
-    const stayDates = stays.map((b) => b.checkIn).sort();
-    const upcomingDates = upcoming.map((b) => b.checkIn).sort();
-    const total = bookings.reduce((sum, b) => sum + b.amountPaid - b.amountRefunded, 0);
-
-    return {
-        ...customer,
-        bookings: bookings.length,
-        cancelled: bookings.filter((b) => b.stage === "cancelled").length,
-        upcoming: upcoming.length,
-        nightsStayed: stays.reduce((sum, b) => sum + b.nights, 0),
-        totalSpent: Math.round(total * 100) / 100,
-        firstStay: stayDates[0] ?? null,
-        lastStay: stayDates[stayDates.length - 1] ?? null,
-        nextStay: upcomingDates[0] ?? null,
-        isRepeat: bookings.filter((b) => b.stage !== "cancelled").length >= 2,
-        listings: [...new Set(bookings.map((b) => b.hotelName))].sort(),
-    };
-}
-
-// Development-only preview. Move one of Sarah's EXISTING stays to Pacific Terrace,
-// keeping her original booking count and total payments unchanged.
-function sampleHistory(propertyId: string): HotelCustomerHistory {
-    const base = filterMockCustomerData("");
-    const addedBookings: HotelBooking[] = [];
-    const addedCustomers: HotelCustomer[] = [];
-
-    for (let i = 1; i <= 75; i++) {
-        const harbor = i % 2 === 0;
-        const hotelId = harbor ? "mock-harbor" : "mock-terrace";
-        const hotelName = harbor ? "Harbor House" : "Pacific Terrace";
-        const stage: HotelBooking["stage"] = i % 4 === 0 ? "cancelled" : i % 4 === 1 ? "past" : "upcoming";
-        const paid = 240 + (i % 5) * 20;
-        const refunded = stage === "cancelled" ? paid - 25 : 0;
-        const guestId = `test-guest-${i}`;
-        const checkIn = stage === "upcoming" ? "2026-12-20" : "2026-10-20";
-
-        const booking: HotelBooking = {
-            id: `test-reservation-${i}`, code: `TEST-${String(i).padStart(4, "0")}`,
-            hotelId, hotelName, roomType: harbor ? "Coastal king" : "Ocean queen",
-            guestId, guestName: `Test Guest ${String(i).padStart(2, "0")}`,
-            guestEmail: `guest${i}@example.com`, checkIn,
-            checkOut: stage === "upcoming" ? "2026-12-22" : "2026-10-22",
-            nights: 2, guests: 2, children: 0, stage, totalPrice: paid,
-            amountPaid: paid, amountRefunded: refunded,
-            cancellationFee: stage === "cancelled" ? 25 : null,
-            hasInsurance: false, bookedAt: "2026-09-15",
-            cancelledAt: stage === "cancelled" ? "2026-10-01" : null,
-        };
-        addedBookings.push(booking);
-        addedCustomers.push({
-            id: guestId, name: booking.guestName, email: booking.guestEmail,
-            bookings: 1, cancelled: 0, upcoming: 0, nightsStayed: 0,
-            totalSpent: 0, firstStay: null, lastStay: null, nextStay: null,
-            isRepeat: false, listings: [hotelName],
-        });
-    }
-
-    const originalBookings = base.bookings.map((booking) =>
-        booking.id === "mock-reservation-3"
-            ? {...booking, hotelId: "mock-terrace", hotelName: "Pacific Terrace", roomType: "Ocean queen"}
-            : booking
-    );
-
-    const allBookings = [...originalBookings, ...addedBookings];
-    const filteredBookings = propertyId
-        ? allBookings.filter((booking) => booking.hotelId === propertyId)
-        : allBookings;
-
-    const customers = [...base.customers, ...addedCustomers]
-        .map((customer) => {
-            const stays = filteredBookings.filter((booking) => booking.guestId === customer.id);
-            return stays.length ? customerFromBookings(customer, stays) : null;
-        })
-        .filter((customer): customer is HotelCustomer => customer !== null);
-
-    return {
-        listings: base.listings,
-        customers,
-        bookings: filteredBookings,
-        summary: summarizeOwner(customers),
-    };
-}
-
 export function CustomersDashboard() {
-    const [demo, setDemo] = useState(process.env.NODE_ENV === "development");
+    const [demo, setDemo] = useState(false);
     const [property, setProperty] = useState("");
     const [query, setQuery] = useState("");
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [customerProperty, setCustomerProperty] = useState("");
     const [page, setPage] = useState(1);
     const [liveData, setLiveData] = useState<HotelCustomerHistory | null>(null);
-    const [loading, setLoading] = useState(process.env.NODE_ENV !== "development");
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [retry, setRetry] = useState(0);
 

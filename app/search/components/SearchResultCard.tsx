@@ -18,6 +18,8 @@ export type HotelSearchResult = {
   min_price?: number | string | null;
   max_capacity?: number | string | null;
   available_rooms?: number | string | null;
+  /** Number of listed room types, not a date-specific availability claim. */
+  room_options?: number | string | null;
   rating?: number | string | null;
   tags?: string[] | null;
   num_beds?: number | string | null;
@@ -65,6 +67,7 @@ function formatLocation(stay: HotelSearchResult) {
 }
 
 function asNumber(value: HotelSearchResult["min_price"]) {
+  if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -80,6 +83,8 @@ export function SearchResultCard({
   businessAccount = false,
   hideDescription = false,
   compactOnPhones = false,
+  initiallySaved = false,
+  showFavorites = true,
 }: {
   stay: HotelSearchResult;
   eager?: boolean;
@@ -88,11 +93,14 @@ export function SearchResultCard({
   businessAccount?: boolean;
   hideDescription?: boolean;
   compactOnPhones?: boolean;
+  initiallySaved?: boolean;
+  showFavorites?: boolean;
 }) {
   const photo = stay.photo_urls?.find(Boolean);
   const price = asNumber(stay.min_price);
   const capacity = asNumber(stay.max_capacity);
   const availableRooms = asNumber(stay.available_rooms);
+  const roomOptions = asNumber(stay.room_options);
   // A LiteAPI hotel that isn't saved yet opens by its LiteAPI id
   const slug = stay.id ?? stay.liteapi_id;
   const href = slug ? `/reserve/${slug}${search ? `?${search}` : ""}` : null;
@@ -121,10 +129,11 @@ export function SearchResultCard({
           {media}
 
           {/* Account-based favorites from dev; only database hotels can be saved. */}
-          {stay.id && !businessAccount && (
+          {stay.id && !businessAccount && showFavorites && (
               <SaveHotelButton
                   hotelId={stay.id}
                   hotelName={stay.name}
+                  saved={initiallySaved}
                   className="absolute top-3 right-3 z-20"
               />
           )}
@@ -143,26 +152,21 @@ export function SearchResultCard({
             </div>
 
           </div>
-        {!hideDescription && stay.description && <p className={`mt-4 line-clamp-2 text-sm leading-6 text-slate${phoneHidden}`}>{stay.description}</p>}
-        {stay.tags && stay.tags.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {stay.tags.slice(0, 3).map((tag) => (
-              <span key={tag} className="rounded-full border border-blue/20 bg-blue/5 px-2.5 py-1 text-xs font-medium text-blue-dark">
-                {tag}
-              </span>
-            ))}
-          </div>
+        {!hideDescription && (
+          <p className={`mt-4 min-h-12 line-clamp-2 text-sm leading-6 text-slate${phoneHidden}`}>
+            {stay.description?.trim() || "Explore room options and property details."}
+          </p>
         )}
 
-        <div className={`mt-4 flex flex-wrap gap-2 text-xs font-medium text-slate${phoneHidden}`}>
+        <div className={`mt-4 flex min-h-8 flex-wrap content-start gap-2 text-xs font-medium text-slate${phoneHidden}`}>
           {capacity !== null && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-paper/40 px-2.5 py-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-blue/5 px-2.5 py-1.5">
               <UsersIcon /> Up to {capacity} guests
             </span>
           )}
-          {availableRooms !== null && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-paper/40 px-2.5 py-1.5">
-              <BedIcon /> {availableRooms} available
+          {(availableRooms !== null || roomOptions !== null) && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-blue/5 px-2.5 py-1.5">
+              <BedIcon /> {availableRooms !== null ? `${availableRooms} available` : `${roomOptions} room ${roomOptions === 1 ? "type" : "types"}`}
             </span>
           )}
         </div>

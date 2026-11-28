@@ -1,8 +1,11 @@
-import { Field, Select, TextArea } from "@/app/_components/ui";
+import { Field, TextArea } from "@/app/_components/ui";
+import { PropertyPicker } from "@/app/property-dashboard/_components/PropertyPicker";
 import { PROPERTY_TYPE_LABELS } from "@/lib/listing-display";
 import { MAX_LENGTH, type HotelInfoErrors } from "@/lib/validation/listing";
 import { PROPERTY_TYPES, type HotelInfo } from "@/types/listing";
 import { FormSection } from "./FormSection";
+import { Checkbox } from "./Checkbox";
+import { travelerTypes } from "@/app/search/types";
 
 const PROPERTY_TYPE_OPTIONS = [
   { value: "", label: "Choose a property type" },
@@ -15,9 +18,11 @@ type Props = {
   info: HotelInfo;
   errors: HotelInfoErrors;
   onChange: (field: keyof HotelInfo, value: string) => void;
+  idealFor: readonly string[];
+  onToggleIdealFor: (category: string, checked: boolean) => void;
 };
 
-export function HotelInfoForm({ info, errors, onChange }: Props) {
+export function HotelInfoForm({ info, errors, onChange, idealFor, onToggleIdealFor }: Props) {
   const control = (field: keyof HotelInfo) => ({
     id: fieldId(field),
     value: info[field],
@@ -31,7 +36,7 @@ export function HotelInfoForm({ info, errors, onChange }: Props) {
       <FormSection title="Property details" description="Introduce your property to guests.">
         <div className="grid gap-6 sm:grid-cols-2">
           <Field label="Property name" maxLength={MAX_LENGTH.name} {...control("name")} />
-          <Select label="Property type" options={PROPERTY_TYPE_OPTIONS} {...control("propertyType")} />
+          <PropertyPicker id={fieldId("propertyType")} label="Property type" options={PROPERTY_TYPE_OPTIONS} value={info.propertyType} onChange={(value) => onChange("propertyType", value)} error={errors.propertyType} />
         </div>
       </FormSection>
 
@@ -53,6 +58,20 @@ export function HotelInfoForm({ info, errors, onChange }: Props) {
               value={info.country}
             />
           </div>
+        </div>
+      </FormSection>
+
+      <FormSection title="Ideal for (optional)" description="Which travelers is this property a good fit for? Select all that apply. This appears on the public listing and in preview.">
+        <div role="group" aria-label="Ideal for" className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+          {travelerTypes.map((category) => (
+            <Checkbox
+              key={category}
+              id={`ideal-for-${category.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+              label={category}
+              checked={idealFor.includes(category)}
+              onChange={(checked) => onToggleIdealFor(category, checked)}
+            />
+          ))}
         </div>
       </FormSection>
 

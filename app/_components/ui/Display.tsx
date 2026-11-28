@@ -116,7 +116,7 @@ export function SectionHeading({
         <Heading id={id} className="font-serif text-[40px] leading-[48px] text-ink">
           {title}
         </Heading>
-        {subtitle && <p className="mt-1 text-base text-slate">{subtitle}</p>}
+        {subtitle && <p className="mt-2 text-base text-slate">{subtitle}</p>}
       </div>
       {action}
     </div>

@@ -9,10 +9,12 @@ import { calculateTotalPrice, MAX_NIGHTS, todayInTimeZone } from "@/utils/reserv
 import { browserTimeZone, formatDate, nightsBetween, todayISO } from "../../_components/dates";
 import { isMotionReduced } from "../../_components/motion";
 import { buttonPrimary, buttonSecondary, FormError, Stepper } from "../../_components/ui";
-import type { Room } from "../../_data/stays";
+import type { Offer, Room } from "../../_data/stays";
 import { DateRangePicker } from "../../reserve/[slug]/DateRangePicker";
 import { GuestsField } from "../../reserve/[slug]/GuestsField";
 import { RoomOptions } from "../../reserve/[slug]/RoomOptions";
+import { StayOffers } from "../../reserve/[slug]/StayOffers";
+import { IdealFor } from "../../reserve/[slug]/IdealFor";
 import { useBookedNightsLookup } from "../../reserve/[slug]/useBookedNightsLookup";
 import { blockedOffsets as calendarBlockedOffsets, BLOCKED_NOTE, freeUnitId, markBookedRooms, mergeBookedNights, roomProblem, withoutStay, type BookedWindow } from "@/lib/room-availability";
 import { HotelPhoto } from "../_components/HotelPhoto";
@@ -58,7 +60,8 @@ export function ChangeBooking({
   listingPhotos = [],
   listingDescription = "",
   listingType = "",
-  listingAmenities = [],
+  listingOffers = [],
+  listingGoodFor = [],
 }: {
   booking: BookingToChange;
   /** The hotel's rooms; the booking can move to any of them */
@@ -73,7 +76,8 @@ export function ChangeBooking({
   listingPhotos?: string[];
   listingDescription?: string;
   listingType?: string;
-  listingAmenities?: string[];
+  listingOffers?: Offer[];
+  listingGoodFor?: string[];
 }) {
   const router = useRouter();
   // From the first load only: the refresh after a save mustn't swap the confirmation for the read-only view
@@ -202,7 +206,8 @@ export function ChangeBooking({
         photos={listingPhotos}
         description={listingDescription}
         listingType={listingType}
-        amenities={listingAmenities}
+        offers={listingOffers}
+        goodFor={listingGoodFor}
         rooms={listedRooms}
         allowFavorite={!sample && Boolean(booking.hotelId)}
       />
@@ -325,6 +330,7 @@ export function ChangeBooking({
             }}
             locked={locked}
             party={{ adults, children }}
+            propertyAmenities={listingOffers.filter((offer) => !offer.someRooms).map((offer) => offer.label)}
             note={(r) =>
               [r.id === current.roomId && "Your room now", nights > 0 && `${money(priceFor(r))} for ${nightsLabel(nights)}`]
                 .filter(Boolean)
@@ -333,14 +339,14 @@ export function ChangeBooking({
           />
         </fieldset>
 
-        <aside ref={cardRef} aria-label="Change your booking" className={`scroll-mt-6 rounded-2xl border border-edge bg-surface p-5 sm:p-6 lg:p-7 ${datesOpen ? "relative z-[100]" : done ? "" : "lg:sticky lg:top-6"}`}>
+        <aside ref={cardRef} aria-label="Change your booking" className={`scroll-mt-6 rounded-2xl border border-edge bg-surface p-5 sm:p-6 lg:p-7 ${done ? "" : "lg:sticky lg:top-6"} ${datesOpen ? "z-[100]" : ""}`}>
           {!done ? (
             <div className="space-y-5">
               <h2 ref={headingRef} tabIndex={-1} className="text-[32px] font-bold leading-10 text-ink outline-none">
                 Change your booking
               </h2>
 
-              <div className="flex gap-4 rounded-control border border-edge bg-paper p-4">
+              <div className="flex gap-4 rounded-control border border-blue/20 bg-blue/5 p-4">
                 <HotelPhoto url={booking.photoUrl} className="aspect-square w-16" />
                 <div className="min-w-0 text-sm text-slate">
                   <p className="text-base font-semibold leading-5 text-ink">Booked now</p>
@@ -381,18 +387,14 @@ export function ChangeBooking({
                   open={guestsOpen}
                   onOpenChange={setGuestsOpen}
                   sleeps={room.sleeps}
+                  maxGuests={maxGuests}
                   error={errors.guests}
                 />
               </div>
 
               <div className="flex items-center justify-between gap-3 text-base">
                 <span className="text-slate">Room</span>
-                <span className="flex items-baseline gap-3">
-                  <span className="font-semibold text-ink">{displayRoomName(room.name)}</span>
-                  <a href="#rooms" className="text-base font-semibold text-blue hover:text-blue-dark">
-                    Change
-                  </a>
-                </span>
+                <span className="min-w-0 font-semibold text-ink">{displayRoomName(room.name)}</span>
               </div>
 
               {!changed ? (
@@ -478,12 +480,14 @@ export function ChangeBooking({
           )}
         </aside>
       </div>
-      {listingAmenities.length > 0 && (
+      <IdealFor categories={listingGoodFor} className="mt-6" />
+      {listingOffers.some((offer) => !offer.someRooms) && (
         <section className="mt-10 rounded-2xl border border-edge bg-surface p-6 sm:p-8">
           <h2 className="text-2xl font-semibold text-ink">Amenities</h2>
-          <ul className="mt-5 grid gap-x-6 gap-y-3 text-slate sm:grid-cols-2 lg:grid-cols-3">
-            {listingAmenities.map((amenity) => <li key={amenity}>✓ {amenity}</li>)}
-          </ul>
+          <StayOffers offers={listingOffers.filter((offer) => !offer.someRooms)} goodFor={[]} />
+          <p className="mt-4 text-right text-xs text-slate sm:whitespace-nowrap">
+            All amenities listed here are available property-wide. Room-specific amenities appear with each room.
+          </p>
         </section>
       )}
     </>
@@ -519,9 +523,9 @@ function BookingPropertyHeading({ booking, listingType = "", allowFavorite = fal
   );
 }
 
-function ReadOnlyBooking({ booking, backHref, roomName, reason, photos, description, listingType, amenities, rooms, allowFavorite = false }: {
+function ReadOnlyBooking({ booking, backHref, roomName, reason, photos, description, listingType, offers, goodFor, rooms, allowFavorite = false }: {
   booking: BookingToChange; backHref: string; roomName: string | null; reason: string;
-  photos: string[]; description: string; listingType: string; amenities: string[]; rooms: Room[]; allowFavorite?: boolean;
+  photos: string[]; description: string; listingType: string; offers: Offer[]; goodFor: string[]; rooms: Room[]; allowFavorite?: boolean;
 }) {
   return (
     <>
@@ -544,6 +548,7 @@ function ReadOnlyBooking({ booking, backHref, roomName, reason, photos, descript
               onSelect={() => {}}
               locked
               party={{ adults: Math.max(1, booking.guests - booking.children), children: booking.children }}
+              propertyAmenities={offers.filter((offer) => !offer.someRooms).map((offer) => offer.label)}
               note={() => ""}
             />
           ) : (
@@ -566,12 +571,14 @@ function ReadOnlyBooking({ booking, backHref, roomName, reason, photos, descript
         </Link>
       </section>
       </div>
-      {amenities.length > 0 && (
+      <IdealFor categories={goodFor} className="mt-6" />
+      {offers.some((offer) => !offer.someRooms) && (
         <section className="mt-10 rounded-2xl border border-edge bg-surface p-6 sm:p-8">
           <h2 className="text-2xl font-semibold text-ink">Amenities</h2>
-          <ul className="mt-5 grid gap-x-6 gap-y-3 text-slate sm:grid-cols-2 lg:grid-cols-3">
-            {amenities.map((amenity) => <li key={amenity}>✓ {amenity}</li>)}
-          </ul>
+          <StayOffers offers={offers.filter((offer) => !offer.someRooms)} goodFor={[]} />
+          <p className="mt-4 text-right text-xs text-slate sm:whitespace-nowrap">
+            All amenities listed here are available property-wide. Room-specific amenities appear with each room.
+          </p>
         </section>
       )}
     </>

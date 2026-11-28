@@ -199,8 +199,8 @@ function initialPreviewMessages(): Message[] {
             const harbor = index % 2 === 0;
 
             const hotelId = harbor
-                ? "mock-harbor"
-                : "mock-terrace";
+                ? "mock-harbor-house"
+                : "mock-pacific-terrace";
 
             const hotelName = harbor
                 ? "Harbor House"
@@ -279,9 +279,7 @@ export function OwnerMessagesDashboard({
     hotels: Hotel[];
     initialView?: View;
 }) {
-    const [preview, setPreview] = useState(
-        process.env.NODE_ENV === "development"
-    );
+    const [preview, setPreview] = useState(false);
 
     const [now] = useState(() => Date.now());
 
@@ -322,10 +320,7 @@ export function OwnerMessagesDashboard({
         setSelectedRecipientKeys,
     ] = useState<string[]>([]);
 
-    const [loading, setLoading] = useState(
-        process.env.NODE_ENV !== "development" &&
-        hotels.length > 0
-    );
+    const [loading, setLoading] = useState(hotels.length > 0);
 
     const [sending, setSending] = useState(false);
     const [error, setError] = useState("");

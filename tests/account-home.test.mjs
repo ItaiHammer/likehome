@@ -38,7 +38,7 @@ test('personal: next trip, points and shortcuts first, then their own history an
         { label: 'Messages', hint: 'From the hotels you booked', href: '/messages', unread: true },
       ],
     },
-    recommendedCards: 3,
+    recommendedCards: 6,
     sections: ['traveler-summary', 'recently-viewed', 'saved-hotels', 'recommended', 'destinations'],
   })
 })
@@ -57,7 +57,7 @@ test('business: guests, properties and how they are doing, before the shared sec
         { label: 'Add property', hint: 'List a new place', href: '/listings/new', icon: 'add' },
       ],
     },
-    recommendedCards: 3,
+    recommendedCards: 6,
     sections: ['owner-today', 'owner-week', 'owner-properties', 'owner-stats', 'recommended', 'destinations'],
   })
 })
@@ -66,7 +66,7 @@ test('unknown (the account read failed): signed in, a neutral hero, no welcome b
   assert.deepEqual(homeContentFor('unknown'), {
     hero: { title: 'Where to next?', line: 'Find a place that feels like yours.' },
     welcome: null,
-    recommendedCards: 3,
+    recommendedCards: 6,
     sections: ['recommended', 'destinations'],
   })
 })

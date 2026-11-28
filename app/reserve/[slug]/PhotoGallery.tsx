@@ -148,7 +148,7 @@ function Photo({ src, alt = "" }: { src: string; alt?: string }) {
     }
   }, [src]);
   return (
-    <span key={src} className="absolute inset-0 block overflow-hidden bg-paper">
+    <span key={src} className="absolute inset-0 block overflow-hidden bg-surface">
       {!loaded && !failed && (
         <span role="status" aria-label="Loading photo" className="absolute inset-0 flex items-center justify-center bg-edge/40">
           <span className="h-7 w-7 animate-spin rounded-full border-2 border-blue/20 border-t-blue" />

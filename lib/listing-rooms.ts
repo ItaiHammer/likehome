@@ -3,7 +3,7 @@
 // per physical room, and bookings point at those rows. Saving used to delete every row and insert new
 // ones, which deleted every booking with them (audit F1). planRoomChanges works out what actually
 // changed so the database can update rooms in place (save_listing).
-import type { ListingRoom } from "../types/listing.ts";
+import { ROOM_AMENITIES, type ListingRoom, type RoomAmenity } from "../types/listing.ts";
 
 export type RoomRow = {
   id: string;
@@ -23,6 +23,7 @@ export type RoomFields = {
   capacity: number;
   num_beds: number;
   bed_size: string | null;
+  tags: string[];
 };
 
 export type RoomChanges = {
@@ -55,11 +56,12 @@ function rowToListingRoom(room: RoomRow): ListingRoom {
     roomCount: 1,
     nightlyRateCents: Math.round(Number(room.price_per_night) * 100),
     description: "",
+    amenities: roomAmenitiesFromTags(room.tags),
   };
 }
 
 const groupKey = (row: RoomRow) =>
-  [row.room_type, Number(row.price_per_night), Number(row.capacity), row.num_beds, row.bed_size ?? ""].join("|");
+  [row.room_type, Number(row.price_per_night), Number(row.capacity), row.num_beds, row.bed_size ?? "", [...(row.tags ?? [])].sort().join(",")].join("|");
 
 /**
  * Identical rows become one editor room type. Each group's id is its first row's id (rows come
@@ -80,7 +82,26 @@ export function groupRoomRows(rows: RoomRow[]): { room: ListingRoom; ids: string
   return [...groups.values()];
 }
 
-export function roomFields(room: ListingRoom): RoomFields {
+// Canonical persisted keys intentionally retain old DB/search spellings.
+const MANAGED_ROOM_TAGS = new Set<string>([
+  ...ROOM_AMENITIES, 'Accessible', 'Accessible room', 'Kitchen / Kitchenette',
+]);
+const ROOM_ALIASES: Partial<Record<RoomAmenity, string[]>> = {
+  'Kitchen': ['Kitchen / Kitchenette'], 'ADA Compliant': ['Accessible', 'Accessible room'],
+};
+
+export function roomAmenitiesFromTags(tags: readonly string[] | null | undefined): RoomAmenity[] {
+  const have = new Set((tags ?? []).map((tag) => tag.toLowerCase()));
+  return ROOM_AMENITIES.filter((tag) => [tag, ...(ROOM_ALIASES[tag] ?? [])].some((key) => have.has(key.toLowerCase())));
+}
+
+export function mergeRoomAmenityTags(existing: readonly string[] | null | undefined, selected: readonly RoomAmenity[]): string[] {
+  const managed = new Set([...MANAGED_ROOM_TAGS].map((tag) => tag.toLowerCase()));
+  const kept = (existing ?? []).filter((tag) => !managed.has(tag.toLowerCase()));
+  return [...kept, ...ROOM_AMENITIES.filter((tag) => selected.includes(tag))];
+}
+
+export function roomFields(room: ListingRoom, oldTags: readonly string[] = []): RoomFields {
   const bed = parseBedConfiguration(room.bedConfiguration);
   return {
     room_type: room.roomType,
@@ -88,6 +109,7 @@ export function roomFields(room: ListingRoom): RoomFields {
     capacity: room.maxGuests,
     num_beds: bed.num_beds,
     bed_size: bed.bed_size,
+    tags: mergeRoomAmenityTags(oldTags, room.amenities ?? roomAmenitiesFromTags(oldTags)),
   };
 }
 
@@ -96,7 +118,8 @@ const sameFields = (a: RoomFields, b: RoomFields) =>
   a.price_per_night === b.price_per_night &&
   a.capacity === b.capacity &&
   a.num_beds === b.num_beds &&
-  a.bed_size === b.bed_size;
+  a.bed_size === b.bed_size &&
+  JSON.stringify([...a.tags].sort()) === JSON.stringify([...b.tags].sort());
 
 /**
  * What saving `draft` changes, given the rows in the database now.
@@ -111,9 +134,10 @@ export function planRoomChanges(rows: RoomRow[], draft: ListingRoom[]): RoomChan
   const kept = new Set<string>();
 
   for (const room of draft) {
-    const fields = roomFields(room);
     const count = Math.max(1, Math.floor(room.roomCount));
     const group = groups.get(room.id);
+    const originalTags = group ? rows.find((row) => row.id === group.ids[0])?.tags ?? [] : [];
+    const fields = roomFields(room, originalTags);
 
     if (!group || kept.has(room.id)) {
       for (let i = 0; i < count; i++) changes.insert.push(fields);
@@ -121,7 +145,7 @@ export function planRoomChanges(rows: RoomRow[], draft: ListingRoom[]): RoomChan
     }
     kept.add(room.id);
 
-    if (!sameFields(fields, roomFields(group.room))) {
+    if (!sameFields(fields, roomFields(group.room, originalTags))) {
       changes.update.push({ ...fields, ids: group.ids });
     }
     if (count > group.ids.length) {

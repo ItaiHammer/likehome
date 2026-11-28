@@ -22,7 +22,7 @@ import { getViewer } from "@/utils/viewer";
 type RawParams = Record<string, string | string[] | undefined>;
 type SortValue = "recommended" | "price-low" | "price-high";
 
-const PAGE_SIZE = 21;
+const PAGE_SIZE = 20;
 
 function pageHref(params: RawParams, page: number) {
   const query = new URLSearchParams();
@@ -179,7 +179,6 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
         <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 lg:px-10">
           <div className={barColumn}>
-            <p className="mb-3 text-sm font-semibold text-ink">Find your next stay</p>
             {/* Keyed by the search, so a new search (e.g. from AI mode) refills the bar */}
             <SearchExperience
               key={searchKey(navigationParams)}

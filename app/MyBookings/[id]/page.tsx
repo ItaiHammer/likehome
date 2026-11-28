@@ -36,7 +36,7 @@ async function loadBooking(id: string, today: string) {
   return { booking, rooms, otherStays, hotelId: r.hotel_id, bookedWindow: stay?.bookedWindow,
     listingPhotos: stay?.photos ?? [], listingDescription: record?.description ?? "",
     listingType: stay ? `${stay.rating !== null && Number.isFinite(stay.rating) && stay.rating >= 1 && stay.rating <= 5 ? `${Math.floor(stay.rating)}-star ` : ""}${record?.property_type?.replaceAll("_", " ") ?? stay.type}` : "",
-    listingAmenities: stay?.offers?.map((offer) => offer.label) ?? stay?.tags ?? [] };
+    listingOffers: stay?.offers ?? [], listingGoodFor: stay?.goodFor ?? [] };
 }
 
 export default async function BookingPage(props: PageProps<"/MyBookings/[id]">) {
@@ -47,7 +47,7 @@ export default async function BookingPage(props: PageProps<"/MyBookings/[id]">) 
   const { sample } = await props.searchParams;
   const showSample = process.env.NODE_ENV === "development" && sample !== undefined;
   const sampleData = showSample ? getSampleBooking(id, today) : null;
-  const data = showSample ? sampleData && { ...sampleData, hotelId: undefined, bookedWindow: undefined, listingPhotos: sampleData.booking.photoUrl ? [sampleData.booking.photoUrl] : [], listingDescription: "", listingType: "", listingAmenities: [] } : await loadBooking(id, today);
+  const data = showSample ? sampleData && { ...sampleData, hotelId: undefined, bookedWindow: undefined, listingPhotos: sampleData.booking.photoUrl ? [sampleData.booking.photoUrl] : [], listingDescription: "", listingType: "", listingOffers: [], listingGoodFor: [] } : await loadBooking(id, today);
   if (!data) notFound();
 
   return (
@@ -65,7 +65,8 @@ export default async function BookingPage(props: PageProps<"/MyBookings/[id]">) 
         listingPhotos={data.listingPhotos}
         listingDescription={data.listingDescription}
         listingType={data.listingType}
-        listingAmenities={data.listingAmenities}
+        listingOffers={data.listingOffers}
+        listingGoodFor={data.listingGoodFor}
       />
     </main>
     </div>

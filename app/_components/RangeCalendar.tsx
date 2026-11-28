@@ -240,12 +240,15 @@ export function RangeCalendar({
       )}
 
       {shortcuts.length > 0 && (
-        <div role="group" aria-label="Quick dates" className="cascade mb-3 flex flex-wrap gap-2" style={cascadeAt(Number(tabs))}>
-          {shortcuts.map((r) => (
-            <Chip key={r.label} active={r.checkIn === checkIn && r.checkOut === checkOut} onClick={() => pickShortcut(r)} className="max-sm:min-h-11">
-              {r.label}
-            </Chip>
-          ))}
+        <div role="group" aria-label="Quick dates" className="cascade mb-3 flex flex-col gap-1.5" style={cascadeAt(Number(tabs))}>
+          <span className="text-xs font-semibold text-slate">Quick dates</span>
+          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
+            {shortcuts.map((r) => (
+              <Chip key={r.label} active={r.checkIn === checkIn && r.checkOut === checkOut} onClick={() => pickShortcut(r)} className="min-h-9 shrink-0 whitespace-nowrap !px-3 !py-1.5 !text-xs">
+                {r.label}
+              </Chip>
+            ))}
+          </div>
         </div>
       )}
 

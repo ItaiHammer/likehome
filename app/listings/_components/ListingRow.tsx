@@ -23,7 +23,7 @@ export function ListingRow({ listing, index, isSample = false, headingLevel: Hea
 
   return (
     <li className="tile-in" style={{ "--i": index } as React.CSSProperties}>
-      <article className="group relative flex flex-col gap-5 rounded-lg border border-edge bg-gradient-to-r from-surface to-blue/5 p-4 transition-[border-color,box-shadow] duration-300 hover:border-blue/50 hover:shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] focus-within:border-blue sm:flex-row sm:p-5">
+      <article className="group relative flex flex-col gap-5 rounded-lg border border-edge bg-surface p-4 hover:bg-blue/5 transition-[border-color,box-shadow] duration-300 hover:border-blue/50 hover:shadow-[0_18px_50px_-30px_rgba(7,13,47,0.4)] focus-within:border-blue sm:flex-row sm:p-5">
         {/* The full card is clickable; action links sit above this overlay. */}
         <Link
           href={cardHref}
@@ -32,13 +32,13 @@ export function ListingRow({ listing, index, isSample = false, headingLevel: Hea
         />
         <ListingCover photo={listing.photos[0]} sizes="(min-width: 640px) 256px, 100vw" zoom eager={index === 0} className="aspect-[3/2] w-full border border-edge sm:w-64" />
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <div className="grid min-w-0 grid-cols-1 items-start gap-x-6 gap-y-2 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div className="min-w-0">
-              <Heading className="max-w-[min(60vw,440px)] truncate font-serif text-[32px] leading-[38px] text-ink" title={listing.name}>{listing.name}</Heading>
+              <Heading className="break-words [overflow-wrap:anywhere] text-balance text-[24px] font-semibold leading-[32px] text-ink" title={listing.name}>{listing.name}</Heading>
               <p className="mt-1 text-slate">{formatLocation(listing)}</p>
             </div>
             {rate !== null && (
-              <p className="text-ink">
+              <p className="whitespace-nowrap text-ink lg:text-right">
                 <span className="font-semibold">From {formatPrice(rate)}</span>
                 <span className="text-slate"> / night</span>
               </p>

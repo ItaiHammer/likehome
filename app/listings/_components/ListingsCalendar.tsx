@@ -4,10 +4,11 @@ import { Card } from "@/app/_components/ui";
 import { calendarProperties, calendarStayParam, calendarStays } from "@/lib/owner-calendar";
 import type { Listing } from "@/types/listing";
 import { BookingCalendar } from "./BookingCalendar";
+import { SampleListingsCalendar } from "./SampleListingsCalendar";
 
 const frame = "px-5 py-5 sm:px-[26px] sm:py-6";
 
-// My Listings' calendar card. Sample listings have no bookings, so their calendar is empty.
+// My Listings calendar. Sample mode uses the same fictional reservations as sample customer history.
 export async function ListingsCalendar({
   listings,
   today,
@@ -22,8 +23,11 @@ export async function ListingsCalendar({
   stay?: string;
   sample: boolean;
 }) {
-  const history = sample ? null : await loadOwnerHistory();
-  if (!sample && !history) {
+  if (sample) {
+    return <SampleListingsCalendar listings={listings} today={today} date={date} stay={stay} />;
+  }
+  const history = await loadOwnerHistory();
+  if (!history) {
     return (
       <Card as="section" padding="none" className={frame}>
         <h2 className="font-serif text-[32px] leading-10 text-ink">Calendar</h2>
@@ -31,7 +35,7 @@ export async function ListingsCalendar({
       </Card>
     );
   }
-  const stays = history ? calendarStays(history.bookings) : [];
+  const stays = calendarStays(history.bookings);
   return (
     <Card as="section" padding="none" className={frame}>
       <BookingCalendar

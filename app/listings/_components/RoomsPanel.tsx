@@ -1,7 +1,7 @@
 import { Button } from "@/app/_components/ui";
 import { formatPrice, plural } from "@/lib/listing-display";
-import { MAX_ROOMS, type RoomForm as RoomFormValues, type RoomFormErrors } from "@/lib/validation/listing";
-import type { ListingRoom } from "@/types/listing";
+import { MAX_ROOMS, type RoomFormErrors, type RoomTextField } from "@/lib/validation/listing";
+import type { ListingRoom, RoomAmenity } from "@/types/listing";
 import type { RoomEditor } from "./editor-state";
 import { PanelHeading } from "./PanelHeading";
 import { RoomForm } from "./RoomForm";
@@ -10,7 +10,8 @@ type Props = {
   rooms: ListingRoom[];
   editor: RoomEditor | null;
   onOpen: (room?: ListingRoom) => void;
-  onChange: (field: keyof RoomFormValues, value: string) => void;
+  onChange: (field: RoomTextField, value: string) => void;
+  onToggleAmenity: (amenity: RoomAmenity, checked: boolean) => void;
   onInvalid: (errors: RoomFormErrors) => void;
   onApply: (room: ListingRoom) => void;
   onCancel: () => void;
@@ -21,13 +22,14 @@ type Props = {
 const COLUMNS = "sm:grid-cols-[2fr_1.5fr_0.8fr_0.8fr_1fr_3.5rem] sm:gap-4"; // fixed last column, so the cards and labels share widths
 
 // The Rooms tab: room types as clickable cards laid out like a table, or the form for adding or editing one.
-export function RoomsPanel({ rooms, editor, onOpen, onChange, onInvalid, onApply, onCancel, onRemove }: Props) {
+export function RoomsPanel({ rooms, editor, onOpen, onChange, onToggleAmenity, onInvalid, onApply, onCancel, onRemove }: Props) {
   if (editor) {
     const room = rooms.find((r) => r.id === editor.roomId);
     return (
       <RoomForm
         editor={editor}
         onChange={onChange}
+        onToggleAmenity={onToggleAmenity}
         onInvalid={onInvalid}
         onApply={onApply}
         onCancel={onCancel}
@@ -49,6 +51,7 @@ export function RoomsPanel({ rooms, editor, onOpen, onChange, onInvalid, onApply
           </Button>
         }
       />
+      <p className="mt-3 text-sm text-slate"><span className="font-semibold text-ink">Required:</span> At least one room type.</p>
       {atLimit && <p className="mt-4 text-sm text-slate">Listings can have up to {MAX_ROOMS} room types.</p>}
       {rooms.length === 0 ? (
         <p className="mt-8 text-slate">No rooms yet. Add the room types guests can book.</p>

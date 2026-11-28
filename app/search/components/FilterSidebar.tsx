@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { bedSizes, propertyAmenities, roomAmenities, travelerTypes } from "../types";
+import { bedSizes, displayAmenityLabel, propertyAmenities, roomAmenities, travelerTypes } from "../types";
 
 type RawParams = Record<string, string | string[] | undefined>;
 
@@ -113,7 +113,7 @@ function PriceInput({ label, value, placeholder, onCommit }: { label: string; va
     if (clean !== value && /^\d*$/.test(clean)) onCommit(clean);
   };
   return (
-    <label className="rounded-xl border border-edge bg-paper/40 px-3 py-2 focus-within:border-blue focus-within:ring-1 focus-within:ring-blue">
+    <label className="rounded-xl border border-edge bg-surface px-3 py-2 focus-within:border-blue focus-within:ring-1 focus-within:ring-blue">
       <span className="block text-xs font-medium text-slate">{label}</span>
       <span className="mt-0.5 flex items-center gap-1 text-sm text-ink">
         <span aria-hidden>$</span>
@@ -197,7 +197,7 @@ function FilterSections({ values, apply, radioGroup }: ReturnType<typeof useFilt
       <Section title="Amenities">
         {amenities.map((tag) => (
           <CheckRow key={tag} checked={values.tags.includes(tag)} onChange={() => toggleTag(tag)}>
-            {tag}
+            {displayAmenityLabel(tag)}
           </CheckRow>
         ))}
         <button type="button" onClick={() => setShowAll(!showAll)} className="mt-2 text-sm font-semibold text-blue-dark hover:underline">

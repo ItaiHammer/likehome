@@ -25,7 +25,7 @@ export async function RecommendedStays({ title = TITLE, excludeStayId, count = R
 
   let result: Awaited<ReturnType<typeof getRecommendedStays>>;
   try {
-    result = await getRecommendedStays(timeZone, count);
+    result = await getRecommendedStays(timeZone, count + (excludeStayId ? 1 : 0));
   } catch (error) {
     console.error("Recommended stays failed", error);
     return null;
@@ -37,9 +37,9 @@ export async function RecommendedStays({ title = TITLE, excludeStayId, count = R
     return null;
   }
 
-  const cards = toRecommendedCards(output.results.data, liveRatesEnabled(), count).filter(
-    (card) => !excludeStayId || (card.id !== excludeStayId && card.liteapi_id !== excludeStayId)
-  );
+  const cards = toRecommendedCards(output.results.data, liveRatesEnabled(), count + (excludeStayId ? 1 : 0))
+    .filter((card) => !excludeStayId || (card.id !== excludeStayId && card.liteapi_id !== excludeStayId))
+    .slice(0, count);
   const moreHref = `/search?${new URLSearchParams({ where: place.where })}`;
 
   return (
@@ -61,7 +61,7 @@ export async function RecommendedStays({ title = TITLE, excludeStayId, count = R
         <RecommendedCarousel>
           {cards.map((stay, i) => (
             <li key={stay.id ?? stay.liteapi_id ?? i} className="card-in min-w-0" style={{ "--i": i } as React.CSSProperties}>
-              <SearchResultCard stay={stay} headingLevel="h3" eager={i < 3} businessAccount={role === "business"} compactOnPhones />
+              <SearchResultCard stay={stay} headingLevel="h3" eager={i < 3} businessAccount={role === "business"} />
             </li>
           ))}
         </RecommendedCarousel>

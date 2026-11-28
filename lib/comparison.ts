@@ -11,6 +11,7 @@ export type ComparisonListing = {
   location: string
   photo: string | null
   rating: number | null
+  propertyType: string | null
   priceFrom: number
   sleepsUpTo: number
   amenities: { label: string; status: AmenityStatus }[]
@@ -32,6 +33,7 @@ export type ComparisonHotelRow = {
   country: string | null
   photo_urls: string[] | null
   rating: number | string | null
+  property_type?: string | null
   tags: string[] | null
   liteapi_deleted_at: string | null
   rooms: ComparisonRoomRow[] | null
@@ -68,6 +70,7 @@ export function toComparisonListing(hotel: ComparisonHotelRow | null, viewedAt: 
     location: hotelLocation(hotel),
     photo: hotelPhoto(hotel),
     rating: Number.isFinite(rating) ? rating : null,
+    propertyType: typeof hotel.property_type === "string" && hotel.property_type.trim() ? hotel.property_type.trim() : null,
     priceFrom: Math.min(...rooms.map((r) => Number(r.price_per_night))),
     sleepsUpTo: Math.max(...rooms.map((r) => r.capacity ?? 2)),
     amenities: [...propertyAmenities, ...roomAmenities].map((label) => ({ label, status: status(label) })),

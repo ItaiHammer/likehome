@@ -2,10 +2,12 @@
 export function stayDisplayName(name: string): string {
   const original = name.trim();
   const withoutPromo = original
-    .replace(/^(?:(?:new|just listed|hot deal|special offer)\s*!?\s*[-:–—]?\s*)+/i, "")
+    // A bare "New" can be part of a real name (e.g. New York Marriott Marquis).
+    .replace(/^(?:(?:new|just listed|hot deal|special offer)\b\s*(?:!+\s*[-:–—]?|[-:–—])\s*)+/i, "")
     .replace(/!+/g, "")
-    .replace(/\s+(?:perfect|ideal|great|wonderful|excellent|lovely)\s+for\s+.+$/i, "")
-    .replace(/\s+[-–—|:]\s*(?:perfect|ideal|great|wonderful|excellent|lovely|close to|near|steps from)\b.+$/i, "")
+    // Strip actual promotional taglines, never location qualifiers like "- Near Airport".
+    .replace(/\s+[-–—|:]\s*(?:perfect|ideal|great|wonderful|excellent|lovely)\s+for\b.*$/i, "")
+    .replace(/\s+(?:perfect|ideal|great|wonderful|excellent|lovely)\s+for\b.*$/i, "")
     .trim();
   const candidate = withoutPromo || original;
   // Normalize shouting, but preserve acronyms inside normal title-cased names.

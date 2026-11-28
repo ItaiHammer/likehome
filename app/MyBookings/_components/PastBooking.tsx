@@ -25,7 +25,7 @@ export function PastBooking({ booking, sample = false }: { booking: Booking; sam
       <div className="flex items-center gap-3">
       {!cancelled && !booking.unlisted && (
         <RebookButton
-          bookingId={booking.id}
+          hotelId={booking.hotelId}
           hotelName={booking.hotelName}
           sample={sample}
         />

@@ -1,6 +1,6 @@
 import { getHotel } from "@/utils/hotels";
 import { getBookedNights, getRoomsByHotel } from "@/utils/rooms";
-import { roomAmenityList, stayOffers } from "@/lib/stay-filters";
+import { propertyWideOffers, roomAmenityList, stayOffers } from "@/lib/stay-filters";
 import { getRoomRates, liveRatesEnabled, quoteForRoom, type StayQuery } from "@/lib/liteapi/rates";
 import { saveOfferedRooms } from "@/lib/liteapi/save";
 import { nightsByRoom } from "@/lib/room-availability";
@@ -125,7 +125,12 @@ export async function getHotelStay(id: string): Promise<Stay | null> {
     liteapiId: hotel.liteapi_id,
     liteapiConfigured: liveRatesEnabled(),
   };
-  return { ...stay, ...stayOffers(tags, rows.map((r) => r.tags)) };
+  return {
+    ...stay,
+    // The property's Amenities section must not claim features offered by only some rooms.
+    offers: propertyWideOffers(tags, rows.map((r) => r.tags)),
+    goodFor: stayOffers(tags, rows.map((r) => r.tags)).goodFor,
+  };
 }
 
 /** The stay with each room's live price for these dates and guests. Owner hotels come back unchanged. */

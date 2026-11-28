@@ -1,42 +1,37 @@
-import { AMENITY_LABELS, PROPERTY_TYPE_LABELS, formatLocation, formatPrice } from "@/lib/listing-display";
+import { PROPERTY_TYPE_LABELS, formatPrice } from "@/lib/listing-display";
 import type { ListingDraft } from "@/types/listing";
-import { ListingCover } from "./ListingCover";
+import { PhotoGallery } from "@/app/reserve/[slug]/PhotoGallery";
+import { StayOffers } from "@/app/reserve/[slug]/StayOffers";
+import { stayDisplayName } from "@/app/_components/stayDisplayName";
+import { IdealFor } from "@/app/reserve/[slug]/IdealFor";
+import { displayAmenityLabel } from "@/app/search/types";
+import { propertyWideOffers, roomOnlyAmenities } from "@/lib/stay-filters";
+import { amenitiesToTags, countryToStored } from "@/lib/listing-storage";
 
 // A visual-only version of the public listing. It never books, favorites or changes draft data.
 export function ListingPreview({ draft, backLink }: { draft: ListingDraft; backLink: React.ReactNode }) {
-  const [cover, ...others] = draft.photos;
-  const selected = draft.rooms[0];
-  const location = formatLocation(draft);
+  const roomsByPrice = [...draft.rooms].sort((a, b) => a.nightlyRateCents - b.nightlyRateCents);
+  const selected = roomsByPrice[0];
+  // The public stay page uses the stored city, region, and country, in that order.
+  const location = [draft.city, draft.region, countryToStored(draft.country)].filter(Boolean).join(", ");
+  const editorTags = amenitiesToTags(draft.amenities);
+  const listedOffers = propertyWideOffers(editorTags, draft.rooms.map((room) => room.amenities ?? []));
+  const propertyOffers = [
+    ...listedOffers,
+    // The public listing also includes owner-added amenities outside the search filter catalog.
+    ...editorTags.filter((label) => !listedOffers.some((offer) => offer.label === label)).map((label) => ({ label })),
+  ];
+  const propertyVisible = propertyOffers.map((offer) => offer.label);
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
       <div className="mb-6">{backLink}</div>
       <p className="mb-6 text-sm text-slate"><span className="font-semibold text-ink">Preview only.</span> Unsaved changes are included. Booking and favorites are disabled.</p>
 
-      {draft.photos.length <= 1 ? (
-        <ListingCover
-          photo={cover}
-          sizes="(min-width: 1024px) 1152px, 100vw"
-          eager
-          className="aspect-[16/9] w-full border border-edge md:h-[390px] md:aspect-auto"
-        />
-      ) : (
-        <div className="grid gap-3 md:h-[390px] md:grid-cols-[2fr_1fr]">
-          <ListingCover photo={cover} sizes="(min-width: 768px) 700px, 100vw" eager className="aspect-[16/10] w-full border border-edge md:aspect-auto md:h-full" />
-          {draft.photos.length === 2 ? (
-            <ListingCover photo={others[0]} sizes="(min-width: 768px) 350px, 100vw" className="aspect-[16/10] w-full border border-edge md:aspect-auto md:h-full" />
-          ) : (
-            <div className="grid grid-rows-2 gap-3">
-              {others.slice(0, 2).map((photo) => (
-                <ListingCover key={photo.id} photo={photo} sizes="(min-width: 768px) 350px, 100vw" className="aspect-[16/10] w-full border border-edge md:aspect-auto md:h-full" />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <PhotoGallery stayName={draft.name || "Untitled property"} photos={draft.photos.map((photo) => photo.url)} />
 
       <header className="mt-7">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="min-w-0 flex-1 break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[52px] sm:leading-[60px]">{draft.name || "Untitled property"}</h1>
+          <h1 className="min-w-0 flex-1 break-words text-balance font-serif text-[40px] leading-[48px] text-ink sm:text-[52px] sm:leading-[60px]">{stayDisplayName(draft.name) || "Untitled property"}</h1>
           <span aria-label="Favorite unavailable in preview" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-edge bg-surface text-slate opacity-60">♡</span>
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-base text-slate">
@@ -52,15 +47,24 @@ export function ListingPreview({ draft, backLink }: { draft: ListingDraft; backL
         </section>
       )}
 
+      {draft.idealFor.length > 0 && <IdealFor categories={draft.idealFor} className="mt-5" />}
+
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
         <fieldset disabled className="min-w-0">
           <legend className="text-[32px] font-bold leading-10 text-ink">Choose a room</legend>
           <div className="mt-5 space-y-4">
-            {draft.rooms.map((room, i) => (
+            {roomsByPrice.map((room, i) => (
               <div key={room.id} className={`flex items-center gap-4 rounded-control border bg-surface p-4 sm:gap-6 sm:px-5 ${i === 0 ? "border-blue ring-1 ring-blue" : "border-edge"}`}>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-ink">{room.roomType || "Room type"}</p>
                   <p className="mt-1 text-sm text-slate">{room.bedConfiguration ? `${room.bedConfiguration} · ` : ""}Sleeps {room.maxGuests}</p>
+                  {roomOnlyAmenities(room.amenities, propertyVisible).length > 0 && (
+                    <ul className="mt-2 flex flex-wrap gap-2">
+                      {roomOnlyAmenities(room.amenities, propertyVisible).map((tag) => (
+                        <li key={tag} className="rounded-full border border-edge px-2 py-0.5 text-xs text-blue">{displayAmenityLabel(tag)}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="font-semibold text-ink">{formatPrice(room.nightlyRateCents)}</p>
@@ -86,6 +90,7 @@ export function ListingPreview({ draft, backLink }: { draft: ListingDraft; backL
           </label>
           <div className="mt-5 flex items-center justify-between gap-3 text-base"><span className="text-slate">Room</span><span className="font-semibold text-ink">{selected?.roomType || "Not selected"}</span></div>
           <p className="mt-5 text-sm text-slate">Add your dates to see the total for your stay.</p>
+          <p className="mt-5 flex min-h-8 items-center justify-center text-center text-sm font-bold text-ink">Non-refundable unless insured</p>
           <div className="mt-5 rounded-control border border-blue/30 bg-blue/5 p-4 text-sm text-ink">
             <p className="font-semibold">Business accounts are unable to book stays.</p>
             <p className="mt-1 text-slate">Reservations require a personal account.</p>
@@ -93,12 +98,11 @@ export function ListingPreview({ draft, backLink }: { draft: ListingDraft; backL
         </aside>
       </div>
 
-      {draft.amenities.length > 0 && (
+      {propertyVisible.length > 0 && (
         <section className="mt-10 rounded-2xl border border-edge bg-surface p-6 sm:p-8">
           <h2 className="text-2xl font-semibold text-ink">Amenities</h2>
-          <ul className="mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-            {draft.amenities.map((amenity) => <li key={amenity} className="flex items-start gap-2 text-slate"><span aria-hidden className="text-blue">✓</span>{AMENITY_LABELS[amenity]}</li>)}
-          </ul>
+          <p className="mt-2 text-sm leading-5 text-slate">All amenities listed here are available property-wide. Room-specific amenities appear with each room.</p>
+          <StayOffers offers={propertyOffers} goodFor={[]} />
         </section>
       )}
       <section className="mt-12">

@@ -7,6 +7,7 @@ import { Button } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
 import type { Listing } from "@/types/listing";
 import { getCurrentUser } from "@/utils/current-user";
+import { getViewer } from "@/utils/viewer";
 import { getAccount } from "@/utils/accounts";
 import { getMyListings } from "@/utils/listings";
 import { guestToday } from "@/utils/guest-today";
@@ -15,7 +16,7 @@ import { OwnerSidebar } from "@/app/property-dashboard/_components/OwnerSidebar"
 import { EmptyListings } from "./_components/EmptyListings";
 import { ListingsCalendar, ListingsCalendarSkeleton } from "./_components/ListingsCalendar";
 import { ListingCreationToast } from "./_components/ListingCreationToast";
-import { ListingPreview } from "./_components/ListingPreview";
+import { MockListingPreview } from "./_components/MockListingPreview";
 import { ListingRow } from "./_components/ListingRow";
 import { MockListingRows } from "./_components/MockListingRows";
 
@@ -28,6 +29,9 @@ type Props = {
 export default async function MyListingsPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect(PAGE_ROUTES.LOGIN);
+  const viewer = await getViewer();
+  if (viewer.role === "unchosen") redirect(PAGE_ROUTES.ACCOUNT_TYPE);
+  if (viewer.role !== "business") redirect(PAGE_ROUTES.AUTHORIZATION_ERROR);
 
   const { sample, id, created, date, stay } = await searchParams;
   const isDevelopment = process.env.NODE_ENV === "development";
@@ -52,7 +56,8 @@ export default async function MyListingsPage({ searchParams }: Props) {
   const ownerEmail = typeof account?.email === "string" ? account.email : null;
 
   if (isSample && sample === "preview") {
-    const selectedListing = listings.find((listing) => listing.id === id) ?? listings[0];
+    const selectedListing = listings.find((listing) => listing.id === id);
+    const previewId = id ?? listings[0]?.id;
     return (
       <main className="flex flex-1 flex-col">
         <div className="mx-auto grid w-full max-w-6xl flex-1 items-start gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[248px_minmax(0,1fr)] lg:gap-8">
@@ -61,14 +66,7 @@ export default async function MyListingsPage({ searchParams }: Props) {
             <p className="rounded-control border border-blue/20 bg-blue/10 px-4 py-3 text-sm text-ink">
               <strong>SAMPLE DATA</strong> - This listing is fictional and has not been saved or published.
             </p>
-            <ListingPreview
-              draft={selectedListing}
-              backLink={
-                <Link href="/listings?sample=1" className="inline-flex items-center gap-2 text-sm font-semibold text-blue hover:text-blue-dark">
-                  <span aria-hidden="true">←</span> Back to My listings
-                </Link>
-              }
-            />
+            {previewId && <MockListingPreview listingId={previewId} fallback={selectedListing} />}
           </div>
         </div>
       </main>
@@ -93,9 +91,9 @@ export default async function MyListingsPage({ searchParams }: Props) {
           <SkyBackground />
         </div>
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <p className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-blue">Property management</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-blue">Property management</p>
           <h1 className="font-serif text-[44px] leading-[52px] text-ink sm:text-[56px] sm:leading-[64px]">My listings</h1>
-          <p className="mt-2 text-xl leading-7 text-ink">Manage your properties and keep their details up to date.</p>
+          <p className="mt-2 text-lg leading-7 text-slate">Manage your properties and keep their details up to date.</p>
         </div>
       </section>
 
@@ -115,7 +113,7 @@ export default async function MyListingsPage({ searchParams }: Props) {
                 <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 rounded-control border border-blue/20 bg-blue/5 px-4 py-3 text-sm">
                   <p className="min-w-0 text-ink">
                     {isSample
-                      ? "SAMPLE DATA - Three fictional properties. Changes are stored in this browser only."
+                      ? "SAMPLE DATA - Sample properties. Changes are stored in this browser only."
                       : "Preview My listings with test properties without creating any."}
                   </p>
                   <Link href={isSample ? "/listings" : "/listings?sample=1"} className="shrink-0 font-semibold text-blue hover:text-blue-dark">

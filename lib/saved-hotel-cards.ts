@@ -1,7 +1,7 @@
 // No Supabase / Next.js imports here so it can be unit tested with `npm test`.
 import { toHotelCards, type HotelCard } from './recently-viewed.ts'
 
-export const SAVED_HOTEL_CARDS = 3
+export const SAVED_HOTEL_CARDS = 12
 
 export type SavedHotelCards = { cards: HotelCard[]; more: boolean }
 

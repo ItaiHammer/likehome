@@ -83,12 +83,12 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
             <path d="M5 12.5l4.5 4.5L19 7.5" />
           </svg>
         </div>
-        <p className="mt-4 text-sm font-semibold uppercase tracking-[0.08em] text-blue-dark">Booking confirmed</p>
+        <p className="mt-4 text-sm font-semibold uppercase tracking-[0.08em] text-blue">Booking confirmed</p>
         <h1 className="mt-2 text-balance break-words font-serif text-[32px] leading-10 text-ink sm:text-[40px] sm:leading-[48px]">
           You’re going to {stayDisplayName(booking.hotelName)}!
         </h1>
         <p className="mt-2 text-base text-slate">Your booking is saved. You can view or change it any time in My Bookings.</p>
-        <div className="mt-6 inline-flex flex-wrap items-center justify-center gap-x-2 rounded-lg border border-edge bg-paper px-4 py-2">
+        <div className="mt-6 inline-flex flex-wrap items-center justify-center gap-x-2 rounded-lg border border-edge bg-blue/5 px-4 py-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate">Confirmation code</span>
           <span className="font-mono text-lg font-bold text-blue-dark">{bookingCode(booking.id)}</span>
         </div>
@@ -168,7 +168,7 @@ export default async function BookingConfirmedPage(props: PageProps<"/MyBookings
 function RewardsUsed({ used, balance, shortfall, paid, href }: { used: number; balance: number; shortfall: number; paid: number | null; href: string }) {
   return (
     <Card as="section" tone="tint" className="mt-6">
-      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-blue-dark">Your rewards</p>
+      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-blue">Your rewards</p>
       <h2 className="mt-2 font-serif text-[28px] leading-9 text-ink">
         {used > 0 ? `You saved ${money(pointsToDollars(used))} with points` : "Your points"}
       </h2>

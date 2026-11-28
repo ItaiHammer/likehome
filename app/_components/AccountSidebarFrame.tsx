@@ -20,7 +20,7 @@ function SidebarContents({
             <div className="flex items-center gap-3 p-2">
         <span
             aria-hidden="true"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-edge bg-paper text-sm font-semibold text-blue-dark"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#3d66a6] text-sm font-semibold text-white"
         >
           {initials(name, email)}
         </span>
@@ -73,7 +73,7 @@ export function AccountSidebarFrame({
           <span className="flex min-w-0 items-center gap-3">
             <span
                 aria-hidden="true"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-edge bg-paper text-xs font-semibold text-blue-dark"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#3d66a6] text-xs font-semibold text-white"
             >
               {initials(name, email)}
             </span>

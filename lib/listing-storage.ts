@@ -4,6 +4,7 @@
 // ("USA" / full country names, tags like "Free Wi-Fi"). These translate on save and on load,
 // so owner-created listings are found by location and amenity filters (audit F2).
 import { AMENITIES, type Amenity } from '../types/listing.ts'
+import { travelerTypes } from '../app/search/types.ts'
 
 // How the hotels table spells each editor country. The US is stored as "USA" (seed and import
 // data, and search maps "United States" to it); other countries by their full English name.
@@ -52,33 +53,41 @@ export function countryFromStored(value: string | null | undefined): string {
 // equivalent use that exact tag; the rest are stored as readable labels so the stay page can
 // still list them (search simply has no filter for them yet).
 const AMENITY_TAG: Record<Amenity, string> = {
-  wifi: 'Free Wi-Fi',
-  parking: 'Parking',
-  pool: 'Pool',
-  fitness_center: 'Gym',
-  family_rooms: 'Families',
-  restaurant: 'Restaurant',
-  air_conditioning: 'Air conditioning',
-  step_free_entrance: 'Step-free entrance',
-  elevator: 'Elevator',
-  accessible_parking: 'Accessible parking',
+  wifi: 'Free Wi-Fi', parking: 'Parking', restaurant: 'Restaurant',
+  pool: 'Pool', fitness_center: 'Gym', air_conditioning: 'Air conditioning',
+  step_free_entrance: 'Step-free entrance', elevator: 'Elevator',
+  accessible_parking: 'Accessible parking', family_rooms: 'Family rooms',
+}
+
+const OLD_AMENITY_NAMES: Partial<Record<Amenity, string[]>> = {
+  wifi: ['Wi-Fi'], fitness_center: ['Fitness center'], family_rooms: [],
 }
 
 export function amenitiesToTags(amenities: readonly Amenity[]): string[] {
   return AMENITIES.filter((a) => amenities.includes(a)).map((a) => AMENITY_TAG[a])
 }
 
-// Tags → editor amenities, in AMENITIES order. Also accepts the raw ids older saves used ("wifi").
-// Tags with no editor amenity (e.g. imported "EV Charging") are left alone by the editor.
 export function amenitiesFromTags(tags: readonly string[] | null | undefined): Amenity[] {
   const have = new Set((tags ?? []).map((t) => t.toLowerCase()))
-  return AMENITIES.filter((a) => have.has(a) || have.has(AMENITY_TAG[a].toLowerCase()))
+  return AMENITIES.filter((a) => [a, AMENITY_TAG[a], ...(OLD_AMENITY_NAMES[a] ?? [])].some((tag) => have.has(tag.toLowerCase())))
 }
 
-// Saving the amenities tab must not drop tags the editor doesn't manage (imported or set
-// elsewhere): keep those, and replace only the ones the editor owns.
 export function mergeAmenityTags(existing: readonly string[] | null | undefined, amenities: readonly Amenity[]): string[] {
-  const managed = new Set<string>(AMENITIES.flatMap((a) => [a, AMENITY_TAG[a]]).map((t) => t.toLowerCase()))
+  const managed = new Set<string>(AMENITIES.flatMap((a) => [a, AMENITY_TAG[a], ...(OLD_AMENITY_NAMES[a] ?? [])]).map((t) => t.toLowerCase()))
   const kept = (existing ?? []).filter((t) => !managed.has(t.toLowerCase()))
   return [...kept, ...amenitiesToTags(amenities)]
+}
+
+// Replace only traveler categories the editor owns; preserve unrelated imported tags.
+// Use the SAME unprefixed tags used by search and the public stay page.
+export function mergeIdealForTags(existing: readonly string[] | null | undefined, categories: readonly string[]): string[] {
+  const recognized = new Set<string>(travelerTypes.map((t) => t.toLowerCase()))
+  const selected = new Set(categories.map((t) => t.trim().toLowerCase()))
+  const kept = (existing ?? []).filter((tag) => !recognized.has(tag.toLowerCase()))
+  return [...kept, ...travelerTypes.filter((category) => selected.has(category.toLowerCase()))]
+}
+
+export function idealForFromTags(tags: readonly string[] | null | undefined): string[] {
+  const have = new Set((tags ?? []).map((tag) => tag.toLowerCase()))
+  return travelerTypes.filter((category) => have.has(category.toLowerCase()))
 }

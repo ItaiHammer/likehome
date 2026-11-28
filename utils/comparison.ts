@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
 import { comparisonIds, inIdOrder, toComparisonListing, type ComparisonHotelRow, type ComparisonListing } from '@/lib/comparison'
 
-const LISTING_FIELDS = 'id, name, city, region, country, photo_urls, rating, tags, liteapi_deleted_at, rooms(price_per_night, capacity, tags)'
+const LISTING_FIELDS = 'id, name, city, region, country, property_type, photo_urls, rating, tags, liteapi_deleted_at, rooms(price_per_night, capacity, tags)'
 
 type ViewedRow = { viewed_at: string; hotels: ComparisonHotelRow | null }
 

@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import { POPULAR_DESTINATIONS } from "@/app/_data/destinations";
-import coastalDoorway from "@/app/_assets/coastal-doorway-reference-v1.png";
 import { HotelPhoto } from "@/app/MyBookings/_components/HotelPhoto";
 import { ArrowIcon, arrowSlideClass, Button, Card, SectionHeading, sectionLinkClass } from "@/app/_components/ui";
 import { PAGE_ROUTES } from "@/constants/routes";
@@ -20,11 +19,17 @@ export function TravelWelcome({ title, body }: { title: string; body: string }) 
   return (
     <section aria-labelledby="travel-welcome-title" className="overflow-hidden rounded-lg border border-edge bg-surface lg:flex lg:items-center">
       <div className={`relative hidden h-36 w-52 shrink-0 lg:block ${styles.welcomeImage}`}>
-        <Image src={coastalDoorway} alt="" fill sizes="(min-width: 1024px) 200px, 208px" className="object-cover" />
+        <Image
+            src="/login/likehome-coastal-room-signin.png"
+            alt=""
+            fill
+            sizes="(min-width: 1024px) 200px, 208px"
+            className="object-cover object-center"
+        />
       </div>
       <div className={`flex flex-1 flex-wrap items-center justify-between gap-5 px-6 py-6 lg:gap-6 lg:px-7 ${styles.welcomeContent}`}>
         <div className="min-w-0 lg:border-l lg:border-edge lg:pl-7">
-          <h2 id="travel-welcome-title" className={`font-serif text-[32px] leading-10 text-ink ${styles.welcomeTitle}`}>{title}</h2>
+          <h2 id="travel-welcome-title" className={`text-[28px] font-bold leading-9 text-ink ${styles.welcomeTitle}`}>{title}</h2>
           <p className="mt-1 text-base leading-6 text-slate">{body}</p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-3">
@@ -40,7 +45,7 @@ export function TravelWelcome({ title, body }: { title: string; body: string }) 
 export function TravelOverview({ accountId, shortcuts }: { accountId: string; shortcuts: HomeShortcut[] }) {
   return (
     <section aria-labelledby="travel-overview-title">
-      <SectionHeading id="travel-overview-title" title="Your travel overview" />
+      <SectionHeading id="travel-overview-title" title="Your travel overview" subtitle="Your next trip, rewards, and quick links at a glance." />
       <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <Suspense fallback={<OverviewSkeleton />}><TripOverview /></Suspense>
         <Suspense fallback={<OverviewSkeleton />}><PointsOverview accountId={accountId} /></Suspense>
@@ -89,7 +94,7 @@ async function TripOverview() {
         )}
         <div className="flex min-w-0 flex-1 flex-col p-5">
           <h3 className="text-sm font-semibold text-blue-dark">{trip ? tripLabel(trip.checkIn, result!.today) : "Next trip"}</h3>
-          <p className="mt-2 font-serif text-2xl leading-8 text-ink [overflow-wrap:anywhere]">{trip ? trip.hotelName : result ? "Plan your first trip" : "Your trips"}</p>
+          <p className="mt-2 text-2xl font-semibold leading-8 text-ink [overflow-wrap:anywhere]">{trip ? trip.hotelName : result ? "Plan your first trip" : "Your trips"}</p>
           <p className="mt-2 text-sm leading-6 text-slate">{trip ? bookingSummary(trip) : result ? "When you book a stay, it shows up here." : "We couldn’t load your next trip just now."}</p>
           <span className={`${sectionLinkClass} mt-auto pt-5 text-sm`}>{action}<ArrowIcon className={arrowSlideClass} /></span>
         </div>
@@ -111,7 +116,7 @@ async function PointsOverview({ accountId }: { accountId: string }) {
   return (
     <Card href={PAGE_ROUTES.REWARDS} padding="none" className="flex flex-col p-5">
       <h3 className="text-sm font-semibold text-blue-dark">Your points</h3>
-      {value !== null && <p className="mt-2 font-serif text-[40px] leading-[48px] text-ink">{value}</p>}
+      {value !== null && <p className="mt-2 text-[40px] font-bold leading-[48px] text-ink">{value}</p>}
       <p className="mt-2 text-sm leading-6 text-slate">{line}</p>
       <span className={`${sectionLinkClass} mt-auto pt-5 text-sm`}>See your rewards<ArrowIcon className={arrowSlideClass} /></span>
     </Card>

@@ -72,7 +72,7 @@ function DayTile({ day, today, selected, onSelect }: { day: CalendarDay; today: 
       }`}
     >
       <span className="block text-[13px] leading-5 text-slate">{dayName(day.date, today)}</span>
-      <span className="mt-0.5 block font-serif text-[28px] leading-[34px] text-ink">{Number(day.date.slice(8))}</span>
+      <span className="mt-0.5 block font-bold text-[28px] leading-[34px] text-ink">{Number(day.date.slice(8))}</span>
       <span className={`block text-[13px] font-semibold leading-5 ${full ? "text-danger" : "text-ink"}`}>{bookedLabel(day)}</span>
       <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-disabled">
         <span className={`block h-full ${full ? "bg-danger" : "bg-blue"}`} style={{ width: `${bookedPercent(day)}%` }} />

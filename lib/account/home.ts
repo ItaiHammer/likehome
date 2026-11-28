@@ -39,7 +39,7 @@ export type HomeContent = {
 
 export type HomeRole = Exclude<ViewerRole, 'unchosen'>
 
-const SIGNED_IN_CARDS = 3
+const SIGNED_IN_CARDS = 6
 // Shown to everyone, after the account's own sections
 export const SHARED_SECTIONS: HomeSection[] = ['recommended', 'destinations']
 

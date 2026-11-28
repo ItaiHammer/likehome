@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { guestLabel } from "@/lib/bookings";
+import { exceedsHotelGuestLimit } from "@/lib/room-eligibility";
 import { buttonPrimary, iconButton, labelClass } from "../../_components/ui";
 
 const ROWS = [
@@ -15,6 +16,7 @@ export function GuestsField({
   open,
   onOpenChange,
   sleeps,
+  maxGuests,
   error,
 }: {
   adults: number;
@@ -24,11 +26,17 @@ export function GuestsField({
   onOpenChange: (open: boolean) => void;
   /** How many the selected room sleeps */
   sleeps: number;
+  /** Maximum across available room types; exceeding it should explain the disabled increase. */
+  maxGuests?: number;
   error?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  // Only highlight the note after the guest actually presses + beyond the hotel's maximum.
+  const [limitAttemptKey, setLimitAttemptKey] = useState<string | null>(null);
+  const currentLimitKey = `${adults}:${childCount}:${maxGuests ?? "none"}`;
+  const limitAttempted = limitAttemptKey === currentLimitKey;
 
   // Done and Escape send focus back to the field (if it was in the panel).
   // An outside click just closes, leaving focus where the click put it.
@@ -55,8 +63,16 @@ export function GuestsField({
   }, [open, onOpenChange]);
 
   const counts = { adults, children: childCount };
-  const set = (key: (typeof ROWS)[number]["key"], value: number) =>
-    key === "adults" ? onChange(value, childCount) : onChange(adults, value);
+  const set = (key: (typeof ROWS)[number]["key"], value: number) => {
+    const nextAdults = key === "adults" ? value : adults;
+    const nextChildren = key === "children" ? value : childCount;
+    if (exceedsHotelGuestLimit(nextAdults, nextChildren, maxGuests)) {
+      setLimitAttemptKey(currentLimitKey);
+      return;
+    }
+    setLimitAttemptKey(null);
+    onChange(nextAdults, nextChildren);
+  };
 
   return (
     <div ref={ref} className="relative">
@@ -128,7 +144,10 @@ export function GuestsField({
           </div>
         ))}
         <div className="cascade pt-3" style={{ "--i": ROWS.length } as React.CSSProperties}>
-          <p className="text-sm text-slate">This room sleeps up to {sleeps}.</p>
+          <p role={limitAttempted ? "alert" : undefined} className={`text-sm ${limitAttempted ? "font-semibold text-danger" : "text-slate"}`}>
+            This room sleeps up to {sleeps}.
+            {limitAttempted && maxGuests !== sleeps && ` The hotel's largest room sleeps up to ${maxGuests}.`}
+          </p>
           <button
             type="button"
             onClick={() => {

@@ -1,5 +1,6 @@
-import { draftFromListing, HOTEL_INFO_FIELDS, roomToForm, type HotelInfoErrors, type RoomForm, type RoomFormErrors } from "@/lib/validation/listing";
-import { AMENITIES, type Amenity, type HotelInfo, type Listing, type ListingDraft, type ListingPhoto, type ListingRoom } from "@/types/listing";
+import { draftFromListing, HOTEL_INFO_FIELDS, roomToForm, type HotelInfoErrors, type RoomForm, type RoomFormErrors, type RoomTextField } from "../../../lib/validation/listing.ts";
+import { travelerTypes } from "../../search/types.ts";
+import { AMENITIES, ROOM_AMENITIES, type RoomAmenity, type Amenity, type HotelInfo, type Listing, type ListingDraft, type ListingPhoto, type ListingRoom } from "../../../types/listing.ts";
 
 export const EDITOR_TABS = ["info", "photos", "amenities", "rooms"] as const;
 export type EditorTab = (typeof EDITOR_TABS)[number];
@@ -18,6 +19,7 @@ export const EMPTY_DRAFT: ListingDraft = {
   country: "",
   description: "",
   amenities: [],
+  idealFor: [],
   photos: [],
   rooms: [],
 };
@@ -42,8 +44,10 @@ export type EditorState = {
 export type EditorAction =
   | { type: "edit"; field: keyof HotelInfo; value: string }
   | { type: "toggleAmenity"; amenity: Amenity; checked: boolean }
+  | { type: "toggleIdealFor"; category: string; checked: boolean }
   | { type: "openRoom"; room?: ListingRoom }
-  | { type: "editRoom"; field: keyof RoomForm; value: string }
+  | { type: "editRoom"; field: RoomTextField; value: string }
+  | { type: "toggleRoomAmenity"; amenity: RoomAmenity; checked: boolean }
   | { type: "roomInvalid"; errors: RoomFormErrors }
   | { type: "roomSaveInvalid"; errors: RoomFormErrors }
   | { type: "closeRoom" }
@@ -68,10 +72,11 @@ const sameList = <T,>(a: T[], b: T[], same: (x: T, y: T) => boolean) => a.length
 
 // One comparison per tab, so the sidebar can mark which tabs have unsaved changes.
 const SAME_BY_TAB: Record<EditorTab, (a: ListingDraft, b: ListingDraft) => boolean> = {
-  info: (a, b) => HOTEL_INFO_FIELDS.every((field) => a[field] === b[field]),
+  info: (a, b) => HOTEL_INFO_FIELDS.every((field) => a[field] === b[field]) && sameList(a.idealFor, b.idealFor, (x, y) => x === y),
   photos: (a, b) => sameList(a.photos, b.photos, (x, y) => x.id === y.id && x.url === y.url && x.caption === y.caption),
   amenities: (a, b) => sameList(a.amenities, b.amenities, (x, y) => x === y), // always kept in AMENITIES order
-  rooms: (a, b) => sameList(a.rooms, b.rooms, (x, y) => (Object.keys(x) as (keyof ListingRoom)[]).every((key) => x[key] === y[key])),
+  rooms: (a, b) => sameList(a.rooms, b.rooms, (x, y) => (Object.keys(x) as (keyof ListingRoom)[]).every((key) => key === 'amenities'
+    ? JSON.stringify(x.amenities ?? []) === JSON.stringify(y.amenities ?? []) : x[key] === y[key])),
 };
 
 export function sameDraft(a: ListingDraft, b: ListingDraft) {
@@ -82,7 +87,9 @@ export function sameDraft(a: ListingDraft, b: ListingDraft) {
 export function hasRoomEdits({ roomEditor, draft }: EditorState) {
   if (!roomEditor) return false;
   const start = roomToForm(draft.rooms.find((room) => room.id === roomEditor.roomId));
-  return (Object.keys(start) as (keyof RoomForm)[]).some((field) => start[field] !== roomEditor.form[field]);
+  return (Object.keys(start) as (keyof RoomForm)[]).some((field) => field === 'amenities'
+    ? JSON.stringify(start.amenities) !== JSON.stringify(roomEditor.form.amenities)
+    : start[field] !== roomEditor.form[field]);
 }
 
 export function changedTabs(state: EditorState): EditorTab[] {
@@ -124,6 +131,13 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         amenities: AMENITIES.filter((a) => (a === amenity ? checked : state.draft.amenities.includes(a))),
       });
     }
+    case "toggleIdealFor": {
+      const { category, checked } = action;
+      if (!travelerTypes.some((t) => t === category)) return state;
+      return changeDraft(state, {
+        idealFor: travelerTypes.filter((t) => t === category ? checked : state.draft.idealFor.includes(t)),
+      });
+    }
     case "openRoom":
       return { ...state, roomEditor: { roomId: action.room?.id ?? null, form: roomToForm(action.room), errors: {} } };
     case "editRoom": {
@@ -135,6 +149,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         ...state,
         roomEditor: { ...state.roomEditor, form: { ...state.roomEditor.form, [action.field]: action.value }, errors },
         problem: state.problem === "invalid" && !hasErrors ? "none" : state.problem,
+      };
+    }
+    case "toggleRoomAmenity": {
+      if (!state.roomEditor) return state;
+      const { amenity, checked } = action;
+      return {
+        ...state,
+        roomEditor: {
+          ...state.roomEditor,
+          form: { ...state.roomEditor.form, amenities: ROOM_AMENITIES.filter((a) => a === amenity ? checked : state.roomEditor!.form.amenities.includes(a)) },
+        },
+        problem: "none",
       };
     }
     case "roomInvalid":

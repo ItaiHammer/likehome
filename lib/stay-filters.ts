@@ -4,6 +4,7 @@
 // every chosen tag is on the hotel or on that same room.
 import { bedSizes, propertyAmenities, roomAmenities, tags as filterTags, travelerTypes } from '../app/search/types.ts'
 import type { Offer } from '../app/_data/stays.ts'
+import { ROOM_AMENITIES } from '../types/listing.ts'
 
 // The search's own keys, carried from a search result to the stay page and back to the same search
 // (tz too, so date checks keep using the guest's "today" after the round trip)
@@ -56,7 +57,7 @@ export function readRoomFilters(params: Params, guests: number, party?: Pick<Roo
 }
 
 /** Whether the room holds these guests, by its own limits where it has them */
-export const roomFits = (r: FilterableRoom, guests: number, adults?: number, children?: number) =>
+export const roomFits = (r: Pick<FilterableRoom, 'sleeps' | 'maxAdults' | 'maxChildren'>, guests: number, adults?: number, children?: number) =>
   r.sleeps >= guests &&
   (adults === undefined || r.maxAdults == null || r.maxAdults >= adults) &&
   (children === undefined || r.maxChildren == null || r.maxChildren >= children)
@@ -76,10 +77,38 @@ export function matchingRoom<R extends FilterableRoom>(rooms: R[], hotelTags: st
 
 /** A room's own amenities, in the filters' order */
 export function roomAmenityList(tags: string[] | null | undefined): string[] {
-  return roomAmenities.filter((t) => !!tags?.includes(t))
+  return [...new Set([...roomAmenities, ...ROOM_AMENITIES])].filter((t) => !!tags?.includes(t))
 }
 
-/** What a stay offers: every filter tag on the hotel or any of its rooms, in the filters' order and with their names */
+/** Features shown in the property's Amenities list must not also appear on room cards. */
+export function roomOnlyAmenities(
+  roomTags: string[] | null | undefined,
+  propertyWideLabels: readonly string[],
+): string[] {
+  const propertyWide = new Set(propertyWideLabels)
+  return roomAmenityList(roomTags).filter((label) => !propertyWide.has(label))
+}
+
+/** Room-level amenities found on *every* listed room type can be described at property level.
+ * An empty room list is not evidence that an amenity is available everywhere.
+ */
+export function commonRoomAmenities(roomTags: (string[] | null | undefined)[]): string[] {
+  if (roomTags.length === 0) return []
+  return [...new Set([...roomAmenities, ...ROOM_AMENITIES])].filter((tag) => roomTags.every((tags) => tags?.includes(tag)))
+}
+
+/** Property-level tags plus features verified on every room type, without duplicates. */
+export function propertyWideOffers(
+  hotelTags: string[],
+  roomTags: (string[] | null | undefined)[] = [],
+): Offer[] {
+  const shared = commonRoomAmenities(roomTags)
+  return [...new Set([...propertyAmenities, ...roomAmenities, ...ROOM_AMENITIES]) ]
+    .filter((tag) => hotelTags.includes(tag) || shared.includes(tag))
+    .map((label) => ({ label }))
+}
+
+/** All tags a search can match, across the hotel and its rooms. Use propertyWideOffers for the Amenities tab. */
 export function stayOffers(hotelTags: string[], roomTags: (string[] | null | undefined)[]): { offers: Offer[]; goodFor: string[] } {
   const offer = (tag: string): Offer | null => {
     if (hotelTags.includes(tag)) return { label: tag }
@@ -87,7 +116,7 @@ export function stayOffers(hotelTags: string[], roomTags: (string[] | null | und
     return withTag === 0 ? null : { label: tag, someRooms: withTag < roomTags.length }
   }
   return {
-    offers: [...propertyAmenities, ...roomAmenities].map(offer).filter((o): o is Offer => o !== null),
+    offers: [...new Set([...propertyAmenities, ...roomAmenities, ...ROOM_AMENITIES])].map(offer).filter((o): o is Offer => o !== null),
     goodFor: travelerTypes.filter((t) => offer(t) !== null),
   }
 }

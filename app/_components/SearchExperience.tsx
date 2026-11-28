@@ -103,11 +103,12 @@ function AskAiButton({
       type="button"
       aria-pressed="false"
       onClick={onClick}
-      className={`flex shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#8B5CF6,#4C79BD,#49B6C8,#F09A8A)] p-[3px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-2xl border-2 border-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue ${className}`}
+      style={{ background: "linear-gradient(var(--surface), var(--surface)) padding-box, linear-gradient(135deg, #6971E9 0%, #48A8D2 40%, #72BDB2 65%, #EDAA8F 100%) border-box" }}
       title="Search with AI"
     >
       <span
-        className={`flex h-full w-full items-center justify-center rounded-[13px] bg-surface font-semibold text-blue ${stacked ? "flex-col gap-0.5 text-xs" : "gap-2 text-base"}`}
+        className={`flex h-full w-full items-center justify-center font-semibold text-blue ${stacked ? "flex-col gap-0.5 text-xs" : "gap-2 text-base"}`}
       >
         <SparklesIcon />
         <span className={stacked ? undefined : "lg:sr-only"}>Ask AI</span>

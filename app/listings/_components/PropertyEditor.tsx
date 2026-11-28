@@ -36,6 +36,7 @@ import { PhotosPanel } from "./PhotosPanel";
 import { RoomsPanel } from "./RoomsPanel";
 import { useLeaveGuard } from "./useLeaveGuard";
 import { usePhotoUploads } from "./usePhotoUploads";
+import { saveSampleListing } from "./sample-listings";
 
 const arrowLink = "inline-flex items-center gap-2 text-sm font-semibold text-blue hover:text-blue-dark";
 const backArrow = (
@@ -200,34 +201,34 @@ export function PropertyEditor({
     startSaving(async () => {
       if (isSample) {
         // Mock edits are local development-only state. Never call Supabase or server actions.
-        if (listing) {
-          try {
-            // Store computer-picked sample photos as data URLs so they survive a refresh.
-            // This is browser-only and never uploads to Supabase Storage.
-            const photos = await Promise.all(sent.photos.map(async (photo) => {
-              const pending = pendingPhotos.current.get(photo.id);
-              if (!pending) return photo;
-              const url = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(String(reader.result));
-                reader.onerror = () => reject(new Error("Could not read image"));
-                reader.readAsDataURL(pending.file);
-              });
-              return {...photo, url};
-            }));
-            const locallySaved = { ...listing, ...sent, photos };
-            window.localStorage.setItem(`likehome:mock-listing:${listing.id}`, JSON.stringify(locallySaved));
-          } catch {
-            setFailMessage("Unable to save sample changes in this browser.");
-            dispatch({ type: "saveFailed", reason: "failed" });
-            return;
-          }
-          await guard.release();
-          guard.replace("/listings?sample=1");
-        } else {
-          await guard.release();
-          guard.replace("/listings?sample=1&created=sample");
+        try {
+          // Sample creation and editing use the same draft validation and form flow
+          // as real properties, but store only in this browser (never Supabase).
+          const photos = await Promise.all(sent.photos.map(async (photo) => {
+            const pending = pendingPhotos.current.get(photo.id);
+            if (!pending) return photo;
+            const url = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result));
+              reader.onerror = () => reject(new Error("Could not read image"));
+              reader.readAsDataURL(pending.file);
+            });
+            return {...photo, url};
+          }));
+          const id = listing?.id ?? `mock-created-${crypto.randomUUID()}`;
+          saveSampleListing({
+            ...sent,
+            photos,
+            id,
+            ownerId: listing?.ownerId ?? "mock-preview-only",
+          }, !listing);
+        } catch {
+          setFailMessage("Unable to save sample changes in this browser. Check available storage and try again.");
+          dispatch({ type: "saveFailed", reason: "failed" });
+          return;
         }
+        await guard.release();
+        guard.replace(listing ? "/listings?sample=1" : "/listings?sample=1&created=sample");
         return;
       }
 
@@ -288,10 +289,10 @@ export function PropertyEditor({
         eyebrow: isSample ? "SAMPLE CREATION" : "PUBLISH PROPERTY",
         title: "Publish this property?",
         description: isSample
-          ? "This will simulate creating a public listing. No property will be saved or made available for booking."
+          ? "This creates a sample property in your browser only. It will not be published or available for booking."
           : "Creating this property will make it visible on LikeHome and available for reservations.",
         cancelLabel: "Keep editing",
-        confirmLabel: isSample ? "Test creation" : "Create property",
+        confirmLabel: isSample ? "Create sample property" : "Create property",
         onConfirm: performSave,
       });
       return;
@@ -441,6 +442,8 @@ export function PropertyEditor({
                   info={state.draft}
                   errors={state.errors}
                   onChange={(field, value) => dispatch({ type: "edit", field, value })}
+                  idealFor={state.draft.idealFor}
+                  onToggleIdealFor={(category, checked) => dispatch({ type: "toggleIdealFor", category, checked })}
                 />
               </div>
             </>
@@ -481,6 +484,7 @@ export function PropertyEditor({
               editor={state.roomEditor}
               onOpen={(room) => dispatch({ type: "openRoom", room })}
               onChange={(field, value) => dispatch({ type: "editRoom", field, value })}
+              onToggleAmenity={(amenity, checked) => dispatch({ type: "toggleRoomAmenity", amenity, checked })}
               onInvalid={(errors) => dispatch({ type: "roomInvalid", errors })}
               onApply={(room) => dispatch({ type: "saveRoom", room })}
               onCancel={() => dispatch({ type: "closeRoom" })}

@@ -219,6 +219,7 @@ export function PhotosPanel({ photos, instantPhotos = false, uploads, onStartUpl
   return (
     <>
       <PanelHeading title="Photos" subtitle="Choose a cover photo and arrange the rest of your gallery." />
+      <p className="mt-3 text-sm text-slate"><span className="font-semibold text-ink">Required:</span> At least one property photo.</p>
       {photos.length >= MAX_PHOTOS && (
         <p className="mt-4 text-sm text-slate">Listings can have up to {MAX_PHOTOS} photos. Remove one to add another.</p>
       )}

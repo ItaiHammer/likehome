@@ -24,3 +24,9 @@ Destination tile photos, all from Unsplash under the free Unsplash License (http
 - lisbon.webp: Matthew Foulds, https://unsplash.com/photos/6mjLGsCRGXg
 - bali.webp: Alexa West, https://unsplash.com/photos/OOTEpsO2eV0
 - banff.webp: David Wirzba, https://unsplash.com/photos/wxalerEiUVQ
+
+Additional destination tile photos served directly from Unsplash (under the Unsplash License):
+
+- Napa Valley: Lisha Riabinina, https://unsplash.com/photos/rows-of-plants-in-a-field-fxeLTfIhtj4
+- New Orleans: Jimmy Hu, https://unsplash.com/photos/a-street-lined-with-colorful-buildings-with-a-blue-sky-in-the-background-UZ-UWBad7gw
+- Tokyo: Louie Martinez, https://unsplash.com/photos/tokyo-tower-illuminated-at-dusk-with-city-skyline-IocJwyqRv3M

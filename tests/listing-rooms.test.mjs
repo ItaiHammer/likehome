@@ -72,7 +72,7 @@ test('a deleted room type is removed entirely; a new one is inserted', () => {
   const plan = planRoomChanges(rows, draft)
   assert.deepEqual(plan.remove, [{ ids: ['t1'], count: 1, room_type: 'Twin' }])
   assert.equal(plan.insert.length, 2)
-  assert.deepEqual(plan.insert[0], { room_type: 'Suite', price_per_night: 300, capacity: 4, num_beds: 2, bed_size: 'Queen' })
+  assert.deepEqual(plan.insert[0], { room_type: 'Suite', price_per_night: 300, capacity: 4, num_beds: 2, bed_size: 'Queen', tags: [] })
 })
 
 test('a duplicated id in the draft is treated as a new room, never as a second edit of the same rows', () => {
